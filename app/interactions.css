@@ -52,3 +52,23 @@ button:focus-visible,input:focus-visible{outline:3px solid #78c29d;outline-offse
 @keyframes loading{0%{transform:translateX(-100%)}50%{transform:translateX(90%)}100%{transform:translateX(285%)}}
 @media(min-width:760px){body:has(.admin-view) .app-shell{max-width:860px}.admin-metrics{grid-template-columns:repeat(4,1fr)}.admin-view{padding:8px 10px}.admin-panel{padding:22px}}
 
+/* Local-first MVP */
+.local-mark{display:inline-flex;align-items:center;gap:6px}.local-mark::before{content:"";width:6px;height:6px;border-radius:50%;background:#a9dfc0;box-shadow:0 0 0 4px #ffffff14}
+.sheet{max-height:min(760px,calc(100dvh - 36px));overflow-y:auto;overscroll-behavior:contain}
+.onboarding-card{max-height:calc(100dvh - 36px);overflow-y:auto;overscroll-behavior:contain}
+.onboarding-kinds{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:0 0 8px}
+.onboarding-kinds button{display:grid;min-height:62px;place-items:center;gap:5px;padding:8px 3px;border:1px solid #dfe6e1;border-radius:14px;background:#f7f9f7;color:#5c6962;font-size:10px}
+.onboarding-kinds button b{display:grid;width:25px;height:25px;place-items:center;border-radius:9px;background:#e8efea;color:#43745b;font-size:10px}
+.onboarding-kinds .selected{border-color:#6bae8b;background:#e8f3ec;color:var(--green);font-weight:700;box-shadow:0 0 0 2px #4a9a7020}
+.onboarding-kinds .selected b{background:var(--green);color:#fff}
+.kind-note{display:block;margin:0 0 15px;color:#748078;font-size:9px;line-height:1.5}
+.local-data-card{display:grid;width:100%;grid-template-columns:42px 1fr auto;gap:12px;align-items:center;margin-top:18px;padding:15px;border:1px solid #dfe7e1;border-radius:18px;background:#fff;color:var(--ink);text-align:left;box-shadow:0 10px 26px #2b4d3910}
+.local-data-icon{display:grid;width:40px;height:40px;place-items:center;border-radius:13px;background:#e0f0e7;color:var(--green);font-size:12px;font-weight:800}
+.local-data-card>span:nth-child(2){min-width:0}.local-data-card b,.local-data-card small{display:block}.local-data-card b{font-size:12px}.local-data-card small{margin-top:5px;color:#66756d;font-size:9px}.local-data-card>i{color:var(--green);font-size:10px;font-style:normal;font-weight:700}
+.local-privacy{position:relative;padding:17px 70px 17px 16px;border-radius:17px;background:#e7f2eb;color:#244e3a}
+.local-privacy b,.local-privacy p{margin:0}.local-privacy b{font-size:12px}.local-privacy p{margin-top:6px;color:#4c6659;font-size:10px;line-height:1.55}.local-privacy span{position:absolute;right:14px;top:15px;padding:6px 8px;border-radius:9px;background:#fff9;color:#35664f;font-size:9px;font-weight:700}
+.data-section{margin-top:18px}.data-section>span{display:block;margin-bottom:8px;color:#65736b;font-size:10px}.data-kinds{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.data-kinds button{min-height:38px;border:1px solid #e0e6e1;border-radius:11px;background:#f8faf8;color:#65716a;font-size:10px}.data-kinds .selected{border-color:#66a986;background:#e7f3ec;color:var(--green);font-weight:700}
+.data-actions{display:grid;gap:7px;margin-top:18px}.data-actions button,.data-actions label{position:relative;display:block;min-height:58px;padding:12px 42px 10px 14px;border:1px solid #e1e7e2;border-radius:13px;background:#fafbfa;color:var(--ink);text-align:left;cursor:pointer}.data-actions button::after,.data-actions label::after{content:"›";position:absolute;right:16px;top:50%;transform:translateY(-50%);color:#779084;font-size:20px}.data-actions b,.data-actions span{display:block}.data-actions b{font-size:11px}.data-actions span{margin-top:5px;color:#6a776f;font-size:9px}.data-actions input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}.data-actions label:focus-within{outline:3px solid #78c29d;outline-offset:3px}
+.clear-data{width:100%;min-height:42px;margin-top:14px;border:0;background:transparent;color:#92504a;font-size:10px;text-decoration:underline;text-decoration-color:#dfbbb6;text-underline-offset:4px}
+@media(max-width:360px){.onboarding-wrap{padding:14px}.onboarding-card{padding:24px 19px 16px}.onboarding-visual{height:88px;margin-bottom:14px}.onboarding-copy{margin:8px auto 14px}.sheet{padding-inline:18px}.local-privacy{padding-right:16px}.local-privacy span{position:static;display:inline-block;margin-top:9px}.toast{max-width:calc(100vw - 28px);white-space:normal;text-align:center}}
+

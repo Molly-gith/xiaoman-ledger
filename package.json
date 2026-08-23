@@ -11,7 +11,7 @@
     "build:github": "vite build --config vite.github.config.ts",
     "start": "vinext start",
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern github-dist",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
