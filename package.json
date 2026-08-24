@@ -10,7 +10,7 @@
     "build": "vinext build",
     "build:github": "vite build --config vite.github.config.ts",
     "start": "vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/classification.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern github-dist",
     "db:generate": "drizzle-kit generate"
   },

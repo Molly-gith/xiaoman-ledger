@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { CATEGORY_ICONS, EXPENSE_CATEGORIES, classifyTransaction, type LedgerCategory } from "../lib/classify";
 
 type Tab = "home" | "bills" | "stats" | "goals";
 type Period = "day" | "week" | "month" | "year";
@@ -129,16 +130,6 @@ function inPeriod(tx: Transaction, period: Period) {
   return date.getFullYear() === now.getFullYear();
 }
 
-function categoryFor(text: string, type: TxnType): [string, string] {
-  if (type === "income") return ["收入", "收"];
-  if (/餐|饭|早餐|午餐|晚餐|咖啡|奶茶/.test(text)) return ["餐饮", "餐"];
-  if (/车|地铁|公交|打车|出行|油/.test(text)) return ["交通", "行"];
-  if (/房|租|水电/.test(text)) return ["居住", "住"];
-  if (/买|购物|衣|鞋|淘宝/.test(text)) return ["购物", "购"];
-  if (/药|医院|健康/.test(text)) return ["健康", "医"];
-  return ["其他", "其"];
-}
-
 function downloadFile(content: string, type: string, filename: string) {
   const url = URL.createObjectURL(new Blob([content], { type }));
   const link = document.createElement("a");
@@ -212,12 +203,15 @@ export default function Home() {
     localStorage.setItem(ONBOARDING_KEY, "true"); setShowOnboarding(false);
     if (startNow) setTimeout(() => openEntry(), 180);
   }
-  function saveEntry(event: FormEvent) {
+  function saveEntry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const parsedAmount = Number(entryAmount || entryText.match(/\d+(?:\.\d+)?/)?.[0]);
     if (!entryText.trim() || !parsedAmount || parsedAmount <= 0) { setToast("请补充事项和正确金额"); return; }
     const autoType = /收入|工资|奖金|到账|收款/.test(entryText) ? "income" : entryType;
-    const [category, icon] = categoryFor(entryText, autoType);
+    const automatic = classifyTransaction(entryText, autoType);
+    const chosen = String(new FormData(event.currentTarget).get("category") ?? "");
+    const category = autoType === "income" ? automatic.category : EXPENSE_CATEGORIES.includes(chosen as LedgerCategory) ? chosen as LedgerCategory : automatic.category;
+    const icon = CATEGORY_ICONS[category];
     const cleanNote = entryText.replace(/\d+(?:\.\d+)?\s*(元|块)?/, "").replace(/[，,。]/g, "").trim() || category;
     const payload = { type: autoType, category, note: cleanNote, amount: parsedAmount, source: entrySource };
     if (editingId) {
@@ -301,8 +295,12 @@ export default function Home() {
   );
 }
 
-function EntryForm({ modal, entryType, entryText, entryAmount, listening, onType, onText, onAmount, onVoice, onSubmit }: { modal: "add" | "edit"; entryType: TxnType; entryText: string; entryAmount: string; listening: boolean; onType: (type: TxnType) => void; onText: (value: string) => void; onAmount: (value: string) => void; onVoice: () => void; onSubmit: (event: FormEvent) => void }) {
-  return <form onSubmit={onSubmit}><div className="sheet-head"><span>{modal === "edit" ? "改" : "记"}</span><div><p>{modal === "edit" ? "调整这笔记录" : "快速记账"}</p><h2>{modal === "edit" ? "编辑账目" : "今天花了什么？"}</h2></div></div><div className="type-tabs"><button type="button" className={entryType === "expense" ? "selected" : ""} onClick={() => onType("expense")}>支出</button><button type="button" className={entryType === "income" ? "selected" : ""} onClick={() => onType("income")}>收入</button></div><label>事项<input value={entryText} onChange={(event) => onText(event.target.value)} placeholder="例如：午餐 38 元" /></label><label>金额（可不填，自动识别）<div className="amount-field"><span>¥</span><input inputMode="decimal" value={entryAmount} onChange={(event) => onAmount(event.target.value)} placeholder="0.00" /></div></label>{modal === "add" && <button type="button" className={`voice-button ${listening ? "listening" : ""}`} onClick={onVoice}><span className="voice-label">声</span>{listening ? "正在听，请说…" : "用语音说一句记账"}</button>}<button className="primary" type="submit">{modal === "edit" ? "保存修改" : "确认记账"}</button></form>;
+function EntryForm({ modal, entryType, entryText, entryAmount, listening, onType, onText, onAmount, onVoice, onSubmit }: { modal: "add" | "edit"; entryType: TxnType; entryText: string; entryAmount: string; listening: boolean; onType: (type: TxnType) => void; onText: (value: string) => void; onAmount: (value: string) => void; onVoice: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  const [manualCategory, setManualCategory] = useState<LedgerCategory | null>(null);
+  const automaticCategory = classifyTransaction(entryText, entryType).category;
+  const selectedCategory = entryType === "income" ? "收入" : manualCategory ?? automaticCategory;
+  const categories = entryType === "income" ? ["收入" as LedgerCategory] : EXPENSE_CATEGORIES;
+  return <form onSubmit={onSubmit}><div className="sheet-head"><span>{modal === "edit" ? "改" : "记"}</span><div><p>{modal === "edit" ? "调整这笔记录" : "快速记账"}</p><h2>{modal === "edit" ? "编辑账目" : "今天花了什么？"}</h2></div></div><div className="type-tabs"><button type="button" className={entryType === "expense" ? "selected" : ""} onClick={() => { setManualCategory(null); onType("expense"); }}>支出</button><button type="button" className={entryType === "income" ? "selected" : ""} onClick={() => { setManualCategory(null); onType("income"); }}>收入</button></div><label>事项<input maxLength={100} value={entryText} onChange={(event) => { setManualCategory(null); onText(event.target.value); }} placeholder="例如：指甲油 37.8 元" /></label><fieldset className="category-field"><legend>分类 <span>{entryType === "expense" ? "已自动判断，可修改" : "根据收支类型"}</span></legend><input type="hidden" name="category" value={selectedCategory} /><div className="category-picker">{categories.map((category) => <button type="button" aria-pressed={selectedCategory === category} className={selectedCategory === category ? "selected" : ""} key={category} onClick={() => setManualCategory(category)}>{CATEGORY_ICONS[category]}<span>{category}</span></button>)}</div></fieldset><label>金额（可不填，自动识别）<div className="amount-field"><span>¥</span><input inputMode="decimal" value={entryAmount} onChange={(event) => onAmount(event.target.value)} placeholder="0.00" /></div></label>{modal === "add" && <button type="button" className={`voice-button ${listening ? "listening" : ""}`} onClick={onVoice}><span className="voice-label">声</span>{listening ? "正在听，请说…" : "用语音说一句记账"}</button>}<button className="primary" type="submit">{modal === "edit" ? "保存修改" : "确认记账"}</button></form>;
 }
 function LoadingScreen({ text }: { text: string }) { return <main className="loading-screen"><span className="brand-seal">满</span><p>{text}</p><i /></main>; }
 function TransactionRow({ item, onEdit, onDelete, removingId }: { item: Transaction; onEdit: (item: Transaction) => void; onDelete: (item: Transaction) => void; removingId: string | null }) { const date = new Date(item.date); const isToday = date.toDateString() === new Date().toDateString(); return <article className={`tx-row ${removingId === item.id ? "removing" : ""}`}><button className="tx-main" onClick={() => onEdit(item)} aria-label={`编辑${item.note}`}><span className={`tx-icon ${item.type}`}>{item.icon}</span><span className="tx-copy"><b>{item.note}</b><small>{item.category} · {isToday ? `今天 ${date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}` : `${date.getMonth() + 1}月${date.getDate()}日`}</small></span><strong className={item.type}>{item.type === "income" ? "+" : "-"}{money(item.amount)}</strong></button><span className="tx-actions"><button onClick={() => onEdit(item)}>编辑</button><button onClick={() => onDelete(item)}>删除</button></span></article>; }

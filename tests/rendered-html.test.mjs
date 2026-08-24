@@ -37,6 +37,8 @@ test("keeps local persistence, portable backups, and GitHub Pages publishing wir
   assert.match(page, /导入备份/);
   assert.match(page, /导出表格/);
   assert.match(page, /只保存在这台设备/);
+  assert.match(page, /已自动判断，可修改/);
+  assert.match(page, /classifyTransaction/);
   assert.match(page, /key: "all"/);
   assert.doesNotMatch(page, /示例账目|SAMPLE_TRANSACTIONS/);
   assert.doesNotMatch(page, /supabase|signInWithPassword|signUp|loadAdminData/);
