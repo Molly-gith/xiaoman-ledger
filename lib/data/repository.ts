@@ -20,7 +20,14 @@ export function validateLedger(state: LedgerState): LedgerState {
     if (tx.cycleId) {
       const cycle = normalized.cycles.find(c => c.id === tx.cycleId)!;
       const day = transactionDay(tx);
-      if (day < cycle.startDate || day > cycle.endDate) throw new Error("账目日期不属于所选周期");
+      if (tx.dateNeedsConfirmation) {
+        // Preserve the previously confirmed cycle and original instant. Missing
+        // source timezone cannot be reconstructed safely; ask for a calendar date.
+        const instant = Date.parse(tx.date);
+        const first = Date.parse(`${cycle.startDate}T00:00:00Z`) - 14 * 3600000;
+        const last = Date.parse(`${cycle.nextSalaryDate}T00:00:00Z`) + 12 * 3600000;
+        if (instant < first || instant >= last) throw new Error("旧账时间与原财务周期不一致，请核对备份");
+      } else if (day < cycle.startDate || day > cycle.endDate) throw new Error("账目日期不属于所选周期");
     }
   }
   for (const cycle of normalized.cycles) {
@@ -42,6 +49,8 @@ export function createRepository(store: LedgerStore): LedgerRepository {
       cycles: [...state.cycles.filter(c => c.id !== cycle.id), cycle], budgets: [...state.budgets.filter(b => b.cycleId !== cycle.id), plan] })),
     saveTransaction: (value, revision, editing = false) => mutate(revision, state => {
       const tx = normalizeTransaction(value);
+      tx.date = transactionDay(tx);
+      delete tx.dateNeedsConfirmation;
       const exists = state.transactions.some(item => item.id === tx.id);
       if (editing !== exists) throw new Error(editing ? "账目已不存在" : "账目编号重复");
       if (!tx.cycleId || (tx.type === "expense" && (!tx.nature || !tx.spendKind))) throw new Error("请确认财务周期、消费性质和支出来源");

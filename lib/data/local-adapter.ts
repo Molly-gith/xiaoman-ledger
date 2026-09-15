@@ -4,6 +4,10 @@ import type { LedgerState } from "../domain/types.ts";
 
 const DB_NAME = "xiaoman-ledger-db", STORE_NAME = "ledger", STATE_KEY = "current";
 const FALLBACK_KEY = "xiaoman-ledger-local-v1";
+function isAdoptedFallback(raw: string | null): boolean {
+  try { return raw !== null && JSON.parse(raw)?.version === 2; }
+  catch { return false; }
+}
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, 1);
@@ -22,15 +26,16 @@ function legacyState(): LedgerState {
     settings: { monthlyBudget: old.budget ?? 15000, savingsCurrent: old.saved ?? 0, savingsGoal: old.goal ?? 100000 } });
 }
 export function createLocalStore(): LedgerStore {
-  // A prior fallback is authoritative, so recovery never resurrects a stale IDB snapshot.
+  // v2 fallback denotes an adopted fallback ledger. v1 used IDB-first reads and
+  // could leave a stale fallback behind after IDB recovered; preserve that priority.
   let mode: "idb" | "fallback" | null = null;
   return {
     async read() {
       const fallback = localStorage.getItem(FALLBACK_KEY);
-      if (fallback !== null) { mode = "fallback"; return normalizeBackup(JSON.parse(fallback)); }
+      if (isAdoptedFallback(fallback)) { mode = "fallback"; return normalizeBackup(JSON.parse(fallback!)); }
       let db: IDBDatabase;
       try { db = await openDatabase(); }
-      catch { mode = "fallback"; return legacyState(); }
+      catch { throw new Error("本机数据库暂时无法打开，原有账本已保留。请重新载入，勿清理浏览器数据。"); }
       mode = "idb";
       try {
         const stored = await new Promise<unknown>((resolve, reject) => {
@@ -39,7 +44,9 @@ export function createLocalStore(): LedgerStore {
           tx.onabort = () => reject(tx.error ?? new Error("本机账本读取失败"));
           tx.onerror = () => reject(tx.error);
         });
-        return stored === undefined ? legacyState() : normalizeBackup(stored);
+        if (stored !== undefined) return normalizeBackup(stored);
+        if (fallback !== null) { mode = "fallback"; return normalizeBackup(JSON.parse(fallback)); }
+        return legacyState();
       } finally { db.close(); }
     },
     async commit(state, expectedRevision) {
@@ -62,7 +69,8 @@ export function createLocalStore(): LedgerStore {
           request.onsuccess = () => {
             try {
               const current = request.result === undefined ? legacyState() : normalizeBackup(request.result);
-              if (localStorage.getItem(FALLBACK_KEY) !== null || current.revision !== expectedRevision) throw new Error("账本已在其他页面更新，请重新载入");
+              const fallback = localStorage.getItem(FALLBACK_KEY);
+              if (isAdoptedFallback(fallback) || current.revision !== expectedRevision) throw new Error("账本已在其他页面更新，请重新载入");
               store.put(state, STATE_KEY);
             } catch (error) { failure = error; tx.abort(); }
           };

@@ -32,6 +32,7 @@ export function normalizeTransaction(value: unknown, legacy = false): Transactio
     source: v.source === "voice" || v.source === "import" ? v.source : "text",
     cycleId: legacy || v.cycleId === null ? null : string(v.cycleId), nature, spendKind };
   if (!tx.id || tx.amount <= 0) throw new Error("账目编号或金额无效");
+  if (tx.cycleId && date.length > 10) tx.dateNeedsConfirmation = true;
   if (v.aiSuggestion !== undefined) {
     const suggestion = record(v.aiSuggestion);
     if (!["消费", "浪费", "投资"].includes(String(suggestion.nature)) || typeof suggestion.confidence !== "number" || !Number.isFinite(suggestion.confidence) || suggestion.confidence < 0 || suggestion.confidence > 1) throw new Error("AI 建议格式无效");

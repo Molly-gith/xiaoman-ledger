@@ -1,15 +1,21 @@
 const CACHE = "xiaoman-shell-v2";
+async function cacheShell(response, root) {
+  // Clone before the first await: the navigation response may already be
+  // consumed by the browser while this background cache task is running.
+  const snapshot = response.clone();
+  const cache = await caches.open(CACHE);
+  const html = await snapshot.clone().text();
+  const assets = [...html.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/g)].map(match => new URL(match[1], root)).filter(url => url.origin === root.origin);
+  // Publish the new offline HTML only after all its fingerprinted assets exist.
+  await cache.addAll(assets.map(url => url.href));
+  await cache.put(root, snapshot);
+}
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
-    const cache = await caches.open(CACHE);
     const root = new URL("./", self.registration.scope);
     const response = await fetch(root);
     if (!response.ok) throw new Error("App shell unavailable");
-    await cache.put(root, response.clone());
-    // GitHub Pages shell assets are fingerprinted. Precache those only; never API responses.
-    const html = await response.text();
-    const assets = [...html.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/g)].map(match => new URL(match[1], root)).filter(url => url.origin === root.origin);
-    await cache.addAll(assets.map(url => url.href));
+    await cacheShell(response, root);
     await self.skipWaiting();
   })());
 });
@@ -22,7 +28,9 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET" || url.origin !== self.location.origin || !url.href.startsWith(self.registration.scope)) return;
   const root = new URL("./", self.registration.scope);
   if (event.request.mode === "navigate" && url.pathname === root.pathname) {
-    event.respondWith(fetch(event.request).catch(async () => (await caches.open(CACHE)).match(root).then(response => response || Response.error())));
+    const network = fetch(event.request);
+    event.waitUntil(network.then(response => response.ok ? cacheShell(response, root) : undefined).catch(() => {}));
+    event.respondWith(network.catch(async () => (await caches.open(CACHE)).match(root).then(response => response || Response.error())));
   } else if (/\.(?:js|css)$/.test(url.pathname)) {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE), stored = await cache.match(event.request);

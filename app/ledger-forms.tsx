@@ -58,7 +58,7 @@ export function EntryForm({ today, item, cycles, onSave }: { today: string; item
       if (type === "expense" && !nature) throw new Error("请选择消费、浪费或投资");
       const selectedCategory = type === "income" ? "收入" : category;
       onSave({ ...item, id: item?.id ?? crypto.randomUUID(), type, amount: value, category: selectedCategory,
-        note: note.trim() || selectedCategory, date: item && transactionDay(item) === date ? item.date : date,
+        note: note.trim() || selectedCategory, date,
         icon: CATEGORY_ICONS[selectedCategory as LedgerCategory] ?? selectedCategory.slice(0, 1), source,
         cycleId: chosenCycle.id, nature: type === "expense" ? nature as ExpenseNature : null, spendKind: type === "expense" ? spendKind : null });
       setError("");
@@ -85,6 +85,7 @@ export function EntryForm({ today, item, cycles, onSave }: { today: string; item
     <label>支出来源<select name="spendKind" value={spendKind} onChange={e => setSpendKind(e.target.value as SpendKind)}><option value="variable">可变支出 · 扣减安心可花</option><option value="reserved">使用必要预留 · 不重复扣减</option></select></label></> : <p className="helper">本笔收入仅作记录。请在周期预算中确认可用收入，避免工资被重复计入。</p>}
     <label>备注（可选）<input name="note" maxLength={100} value={note} onChange={e => { setNote(e.target.value); setSource("text"); }} placeholder="这笔钱用在了哪里" /></label>
     {note && type === "expense" && suggested !== category && <button type="button" className="category-suggestion" onClick={() => setCategory(suggested)}>关键词建议：{suggested} · 点击采用</button>}
+    {item?.dateNeedsConfirmation && <p className="error-message">旧账保留了原始时间 {item.date}，请确认记账日期；原财务周期 {cycles.find(c => c.id === item.cycleId)?.startDate} 起。</p>}
     <label>日期<input name="date" type="date" required max={today} value={date} onChange={e => setDate(e.target.value)} /></label>
     <p className="helper">{chosenCycle ? `所属周期 ${chosenCycle.startDate} — ${chosenCycle.endDate}` : "该日期尚无财务周期"}</p>
     {!item && <button className="voice-button" type="button" disabled={listening} onClick={startVoice}>{listening ? "正在听…" : "用语音填写备注"}</button>}

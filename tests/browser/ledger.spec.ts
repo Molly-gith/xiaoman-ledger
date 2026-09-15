@@ -123,3 +123,18 @@ test('failed durable write retains the form and does not report success',async({
   await expect(page.locator('[name="availableIncome"]')).toHaveValue('100');await expect(page.getByTestId('safe-to-spend')).toHaveCount(0);
   expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('xiaoman-ledger-local-v1')!).revision)).toBe(0);
 });
+test('online navigation refreshes an older offline shell after an app update',async({page})=>{
+  await open(page);
+  await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
+  await page.reload();await expect(page.locator('[name="salaryDay"]')).toBeVisible();
+  await page.evaluate(async()=>{
+    const registration=await navigator.serviceWorker.ready, cache=await caches.open('xiaoman-shell-v2');
+    await cache.put(new URL('./',registration.scope),new Response('<html>old-release-marker</html>',{headers:{'content-type':'text/html'}}));
+  });
+  await page.reload();await expect(page.locator('[name="salaryDay"]')).toBeVisible();
+  await expect.poll(()=>page.evaluate(async()=>{
+    const registration=await navigator.serviceWorker.ready, cache=await caches.open('xiaoman-shell-v2');
+    return (await (await cache.match(new URL('./',registration.scope)))!.text()).includes('old-release-marker');
+  })).toBe(false);
+  await page.context().setOffline(true);await page.reload();await expect(page.locator('[name="salaryDay"]')).toBeVisible();
+});

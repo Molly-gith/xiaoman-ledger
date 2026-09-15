@@ -40,6 +40,7 @@ export function transactionDay(tx: Transaction): string {
   return tx.date.length === 10 ? iso(parseDate(tx.date)) : localDate(new Date(tx.date));
 }
 export function inCycle(tx: Transaction, cycle: FinancialCycle): boolean {
+  if (tx.dateNeedsConfirmation) return tx.cycleId === cycle.id;
   const day = transactionDay(tx);
   return tx.cycleId === cycle.id && day >= cycle.startDate && day <= cycle.endDate;
 }
@@ -54,7 +55,10 @@ export function calculateFinance(cycle: FinancialCycle, plan: BudgetPlan, transa
     const amount = sumMoney(expenses.filter(tx => tx.nature === nature).map(tx => tx.amount));
     return { nature, amount, percent: totalExpense ? amount / totalExpense * 100 : 0 };
   });
-  const unresolved = transactions.filter(tx => tx.type === "expense" && transactionDay(tx) >= cycle.startDate && transactionDay(tx) <= cycle.endDate && (!tx.cycleId || !tx.spendKind));
+  const unresolved = transactions.filter(tx => tx.type === "expense" && (
+    (tx.dateNeedsConfirmation && tx.cycleId === cycle.id) ||
+    (transactionDay(tx) >= cycle.startDate && transactionDay(tx) <= cycle.endDate && (!tx.cycleId || !tx.spendKind))
+  ));
   return { safeToSpend: (budget - cents(variable)) / 100, variableBudget: budget / 100, variableSpend: variable,
     reservedSpend: reserved, reserveRemaining: (cents(plan.necessaryReserve) - cents(reserved)) / 100,
     totalExpense, natureMix, unresolvedCount: unresolved.length,

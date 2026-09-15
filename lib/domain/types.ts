@@ -9,6 +9,8 @@ export type Transaction = {
   id: string; type: "expense" | "income"; amount: number; date: string;
   category: string; note: string; icon: string; source: "text" | "voice" | "import";
   cycleId: string | null; nature: ExpenseNature | null; spendKind: SpendKind | null;
+  /** Pre-date-only records retain their original timestamp/cycle until date confirmation. */
+  dateNeedsConfirmation?: boolean;
   aiSuggestion?: { nature: ExpenseNature; confidence: number; reason: string; modelVersion: string; promptVersion: string };
 };
 export type LedgerState = {
