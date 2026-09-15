@@ -25,20 +25,21 @@ test("server-renders the branded local-ledger loading state", async () => {
 });
 
 test("keeps local persistence, portable backups, and GitHub Pages publishing wired", async () => {
-  const [page, workflow, manifest, packageJson] = await Promise.all([
+  const [page, workflow, manifest, packageJson, adapter, components] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../.github/workflows/deploy-pages.yml", import.meta.url), "utf8"),
     readFile(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../lib/data/local-adapter.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/ledger-components.tsx", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /indexedDB\.open/);
-  assert.match(page, /导出完整备份/);
-  assert.match(page, /导入备份/);
-  assert.match(page, /导出表格/);
-  assert.match(page, /只保存在这台设备/);
-  assert.match(page, /已自动判断，可修改/);
-  assert.match(page, /classifyTransaction/);
+  assert.match(adapter, /indexedDB\.open/);
+  assert.doesNotMatch(page, /indexedDB|localStorage/);
+  assert.match(components, /导出完整备份/);
+  assert.match(components, /导入备份/);
+  assert.match(components, /导出表格/);
+  assert.match(components, /只保存在这台设备/);
   assert.match(page, /key: "all"/);
   assert.doesNotMatch(page, /示例账目|SAMPLE_TRANSACTIONS/);
   assert.doesNotMatch(page, /supabase|signInWithPassword|signUp|loadAdminData/);

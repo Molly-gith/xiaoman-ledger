@@ -1,8 +1,8 @@
-export type LedgerCategory = "餐饮" | "购物" | "交通" | "居住" | "健康" | "收入" | "其他";
+export type LedgerCategory = "餐饮" | "购物" | "交通" | "居住" | "健康" | "医疗" | "学习" | "娱乐" | "收入" | "其他";
 
-export const EXPENSE_CATEGORIES: LedgerCategory[] = ["餐饮", "购物", "交通", "居住", "健康", "其他"];
+export const EXPENSE_CATEGORIES: LedgerCategory[] = ["餐饮", "交通", "购物", "娱乐", "居住", "医疗", "学习", "其他"];
 
-export const CATEGORY_ICONS: Record<LedgerCategory, string> = { 餐饮: "餐", 购物: "购", 交通: "行", 居住: "住", 健康: "医", 收入: "收", 其他: "其" };
+export const CATEGORY_ICONS: Record<LedgerCategory, string> = { 餐饮: "餐", 购物: "购", 交通: "行", 居住: "住", 健康: "医", 医疗: "医", 学习: "学", 娱乐: "乐", 收入: "收", 其他: "其" };
 
 const RULES: { category: Exclude<LedgerCategory, "收入" | "其他">; icon: string; pattern: RegExp }[] = [
   {

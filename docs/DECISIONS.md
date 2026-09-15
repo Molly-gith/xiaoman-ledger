@@ -71,3 +71,22 @@
 **Decision**: Engineering may propose product changes but may not silently reinterpret approved product rules.
 
 **Why**: Product truth and implementation decisions must remain traceable. Ambiguity is escalated through explicit decisions.
+
+## D-013 — Alpha salary and spending semantics
+
+**Status**: Product Owner explicitly approved in the implementation task on 2026-09-15: “采用这组 Alpha 规则”.
+
+- Salary days 29–31 clamp to the month's last day when necessary. Each following month uses the originally selected salary day again.
+- Available cycle income is explicitly confirmed in the budget. Income transactions are records only and do not increase safe-to-spend automatically, avoiding double-counted salary.
+- Expense allocation is separate from subjective nature: variable spending reduces safe-to-spend; spending from necessary reserve uses an amount already deducted in the budget and is not deducted twice.
+
+## D-014 — Sprint 1 implementation boundaries
+
+**Engineering decision**: Keep React/vinext, Pages entry, IndexedDB database/store/key, visual system and backup flows. No monorepo, Drizzle migration or live Supabase changes.
+
+- Domain arithmetic uses integer fen; persisted amounts remain yuan for compatibility. Salary rules use date-only strings and UTC calendar arithmetic; the UI determines today's local date.
+- A versioned repository snapshot contains profile, cycles, budgets, transactions and preserved legacy preferences. A future cloud adapter implements the same operations. Mutations validate data and commit before updating UI; revisions reject stale writers.
+- Legacy records retain unknown nature/allocation/cycle until user confirmation. Relevant unassigned expenses suppress the safe-to-spend headline, avoiding an overstated balance. Migration does not erase presumed sample records.
+- Reserve allocation cannot exceed the confirmed reserve: the form retains the entry and asks the user to adjust the reserve or split the excess into variable spending. No silent reallocation. Automatic split behavior remains a future product decision.
+- A new cycle requires explicit income/budget confirmation; old records and cycles remain. Changing the next salary day cannot create overlapping periods.
+- AI remains disabled by default; adapter/eval plumbing does not imply a measured model baseline.

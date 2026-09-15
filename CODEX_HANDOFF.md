@@ -4,6 +4,16 @@
 
 Implement the first Web Alpha sprint without changing product intent. Start from the existing repository and evolve it incrementally.
 
+## 沟通与审核责任 / Communication and review ownership
+
+- 面向 Product Owner 的新文档、PR 说明和交付总结使用中英双语，中文在前。
+- AI 负责代码审核、财务计算、存储可靠性、测试和缺陷修复；不要要求 Product Owner 审核其不熟悉的研发细节。
+- Product Owner 负责目标、产品体验、优先级和关键业务规则。说明可运行成果、已验证范围和重要限制，避免只交付技术文件。
+
+- New Product Owner-facing documents, PR descriptions and delivery summaries are bilingual, with Chinese first.
+- AI owns code review, financial correctness, storage reliability, testing and defect fixes. Do not delegate unfamiliar engineering review to the Product Owner.
+- The Product Owner owns goals, product experience, priorities and key business rules. Explain runnable outcomes, verified scope and material limits, rather than delivering technical files alone.
+
 Read first, in order:
 
 1. `XIAOMAN_PROJECT_MASTER.md`
