@@ -1,4 +1,4 @@
-const CACHE = "xiaoman-shell-v2";
+const CACHE = "xiaoman-shell-v3";
 async function cacheShell(response, root) {
   // Clone before the first await: the navigation response may already be
   // consumed by the browser while this background cache task is running.
@@ -7,7 +7,7 @@ async function cacheShell(response, root) {
   const html = await snapshot.clone().text();
   const assets = [...html.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/g)].map(match => new URL(match[1], root)).filter(url => url.origin === root.origin);
   // Publish the new offline HTML only after all its fingerprinted assets exist.
-  await cache.addAll(assets.map(url => url.href));
+  await cache.addAll([...assets.map(url => url.href), new URL('art/xiaoman-forest.png', root).href]);
   await cache.put(root, snapshot);
 }
 self.addEventListener("install", (event) => {
@@ -31,9 +31,12 @@ self.addEventListener("fetch", (event) => {
     const network = fetch(event.request);
     event.waitUntil(network.then(response => response.ok ? cacheShell(response, root) : undefined).catch(() => {}));
     event.respondWith(network.catch(async () => (await caches.open(CACHE)).match(root).then(response => response || Response.error())));
-  } else if (/\.(?:js|css)$/.test(url.pathname)) {
+  } else if (/\.(?:js|css|png|woff2)$/.test(url.pathname)) {
     event.respondWith((async () => {
-      const cache = await caches.open(CACHE), stored = await cache.match(event.request);
+      // These same-origin public assets are identical regardless of Origin.
+      // Preview servers add Vary: Origin, while preload and module requests
+      // can send different Origin headers. Preserve their offline identity.
+      const cache = await caches.open(CACHE), stored = await cache.match(event.request, { ignoreVary: true });
       if (stored) return stored;
       const response = await fetch(event.request);
       if (response.ok) await cache.put(event.request, response.clone());

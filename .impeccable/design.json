@@ -1,0 +1,414 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-15T09:31:15.294Z",
+  "title": "Design System: 小满 / Xiaoman",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "neutral",
+        "displayName": "ink",
+        "tonalRamp": [
+          "oklch(15.00% 0.0357 138.79)",
+          "oklch(26.43% 0.0357 138.79)",
+          "oklch(37.86% 0.0357 138.79)",
+          "oklch(49.29% 0.0357 138.79)",
+          "oklch(60.71% 0.0357 138.79)",
+          "oklch(72.14% 0.0357 138.79)",
+          "oklch(83.57% 0.0357 138.79)",
+          "oklch(95.00% 0.0357 138.79)"
+        ],
+        "note": "面板示意色阶，由源色合成；不是应用中的额外颜色。 / Synthesized panel ramp; not additional application tokens."
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "muted",
+        "tonalRamp": [
+          "oklch(15.00% 0.0371 132.59)",
+          "oklch(26.43% 0.0371 132.59)",
+          "oklch(37.86% 0.0371 132.59)",
+          "oklch(49.29% 0.0371 132.59)",
+          "oklch(60.71% 0.0371 132.59)",
+          "oklch(72.14% 0.0371 132.59)",
+          "oklch(83.57% 0.0371 132.59)",
+          "oklch(95.00% 0.0371 132.59)"
+        ],
+        "note": "面板示意色阶，由源色合成；不是应用中的额外颜色。 / Synthesized panel ramp; not additional application tokens."
+      },
+      "green": {
+        "role": "primary",
+        "displayName": "green",
+        "tonalRamp": [
+          "oklch(15.00% 0.0734 146.61)",
+          "oklch(26.43% 0.0734 146.61)",
+          "oklch(37.86% 0.0734 146.61)",
+          "oklch(49.29% 0.0734 146.61)",
+          "oklch(60.71% 0.0734 146.61)",
+          "oklch(72.14% 0.0734 146.61)",
+          "oklch(83.57% 0.0734 146.61)",
+          "oklch(95.00% 0.0734 146.61)"
+        ],
+        "note": "面板示意色阶，由源色合成；不是应用中的额外颜色。 / Synthesized panel ramp; not additional application tokens."
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "paper",
+        "tonalRamp": [
+          "oklch(15.00% 0.0093 99.98)",
+          "oklch(26.43% 0.0093 99.98)",
+          "oklch(37.86% 0.0093 99.98)",
+          "oklch(49.29% 0.0093 99.98)",
+          "oklch(60.71% 0.0093 99.98)",
+          "oklch(72.14% 0.0093 99.98)",
+          "oklch(83.57% 0.0093 99.98)",
+          "oklch(95.00% 0.0093 99.98)"
+        ],
+        "note": "面板示意色阶，由源色合成；不是应用中的额外颜色。 / Synthesized panel ramp; not additional application tokens."
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "line",
+        "tonalRamp": [
+          "oklch(15.00% 0.0231 117.62)",
+          "oklch(26.43% 0.0231 117.62)",
+          "oklch(37.86% 0.0231 117.62)",
+          "oklch(49.29% 0.0231 117.62)",
+          "oklch(60.71% 0.0231 117.62)",
+          "oklch(72.14% 0.0231 117.62)",
+          "oklch(83.57% 0.0231 117.62)",
+          "oklch(95.00% 0.0231 117.62)"
+        ],
+        "note": "面板示意色阶，由源色合成；不是应用中的额外颜色。 / Synthesized panel ramp; not additional application tokens."
+      },
+      "primary-fill": {
+        "role": "primary",
+        "displayName": "primary-fill",
+        "tonalRamp": [
+          "oklch(15.00% 0.0830 133.38)",
+          "oklch(26.43% 0.0830 133.38)",
+          "oklch(37.86% 0.0830 133.38)",
+          "oklch(49.29% 0.0830 133.38)",
+          "oklch(60.71% 0.0830 133.38)",
+          "oklch(72.14% 0.0830 133.38)",
+          "oklch(83.57% 0.0830 133.38)",
+          "oklch(95.00% 0.0830 133.38)"
+        ],
+        "note": "面板示意色阶，由源色合成；不是应用中的额外颜色。 / Synthesized panel ramp; not additional application tokens."
+      },
+      "primary-hover": {
+        "role": "primary",
+        "displayName": "primary-hover",
+        "tonalRamp": [
+          "oklch(15.00% 0.0825 134.92)",
+          "oklch(26.43% 0.0825 134.92)",
+          "oklch(37.86% 0.0825 134.92)",
+          "oklch(49.29% 0.0825 134.92)",
+          "oklch(60.71% 0.0825 134.92)",
+          "oklch(72.14% 0.0825 134.92)",
+          "oklch(83.57% 0.0825 134.92)",
+          "oklch(95.00% 0.0825 134.92)"
+        ],
+        "note": "面板示意色阶，由源色合成；不是应用中的额外颜色。 / Synthesized panel ramp; not additional application tokens."
+      },
+      "primary-text": {
+        "role": "primary",
+        "displayName": "primary-text",
+        "tonalRamp": [
+          "oklch(15.00% 0.0159 98.99)",
+          "oklch(26.43% 0.0159 98.99)",
+          "oklch(37.86% 0.0159 98.99)",
+          "oklch(49.29% 0.0159 98.99)",
+          "oklch(60.71% 0.0159 98.99)",
+          "oklch(72.14% 0.0159 98.99)",
+          "oklch(83.57% 0.0159 98.99)",
+          "oklch(95.00% 0.0159 98.99)"
+        ],
+        "note": "面板示意色阶，由源色合成；不是应用中的额外颜色。 / Synthesized panel ramp; not additional application tokens."
+      },
+      "card-sage": {
+        "role": "neutral",
+        "displayName": "card-sage",
+        "tonalRamp": [
+          "oklch(15.00% 0.0186 113.34)",
+          "oklch(26.43% 0.0186 113.34)",
+          "oklch(37.86% 0.0186 113.34)",
+          "oklch(49.29% 0.0186 113.34)",
+          "oklch(60.71% 0.0186 113.34)",
+          "oklch(72.14% 0.0186 113.34)",
+          "oklch(83.57% 0.0186 113.34)",
+          "oklch(95.00% 0.0186 113.34)"
+        ],
+        "note": "面板示意色阶，由源色合成；不是应用中的额外颜色。 / Synthesized panel ramp; not additional application tokens."
+      },
+      "quick-sand": {
+        "role": "secondary",
+        "displayName": "quick-sand",
+        "tonalRamp": [
+          "oklch(15.00% 0.0368 86.17)",
+          "oklch(26.43% 0.0368 86.17)",
+          "oklch(37.86% 0.0368 86.17)",
+          "oklch(49.29% 0.0368 86.17)",
+          "oklch(60.71% 0.0368 86.17)",
+          "oklch(72.14% 0.0368 86.17)",
+          "oklch(83.57% 0.0368 86.17)",
+          "oklch(95.00% 0.0368 86.17)"
+        ],
+        "note": "面板示意色阶，由源色合成；不是应用中的额外颜色。 / Synthesized panel ramp; not additional application tokens."
+      },
+      "quick-hover": {
+        "role": "secondary",
+        "displayName": "quick-hover",
+        "tonalRamp": [
+          "oklch(15.00% 0.0454 85.86)",
+          "oklch(26.43% 0.0454 85.86)",
+          "oklch(37.86% 0.0454 85.86)",
+          "oklch(49.29% 0.0454 85.86)",
+          "oklch(60.71% 0.0454 85.86)",
+          "oklch(72.14% 0.0454 85.86)",
+          "oklch(83.57% 0.0454 85.86)",
+          "oklch(95.00% 0.0454 85.86)"
+        ],
+        "note": "面板示意色阶，由源色合成；不是应用中的额外颜色。 / Synthesized panel ramp; not additional application tokens."
+      },
+      "field-paper": {
+        "role": "neutral",
+        "displayName": "field-paper",
+        "tonalRamp": [
+          "oklch(15.00% 0.0066 106.52)",
+          "oklch(26.43% 0.0066 106.52)",
+          "oklch(37.86% 0.0066 106.52)",
+          "oklch(49.29% 0.0066 106.52)",
+          "oklch(60.71% 0.0066 106.52)",
+          "oklch(72.14% 0.0066 106.52)",
+          "oklch(83.57% 0.0066 106.52)",
+          "oklch(95.00% 0.0066 106.52)"
+        ],
+        "note": "面板示意色阶，由源色合成；不是应用中的额外颜色。 / Synthesized panel ramp; not additional application tokens."
+      },
+      "field-line": {
+        "role": "neutral",
+        "displayName": "field-line",
+        "tonalRamp": [
+          "oklch(15.00% 0.0328 118.48)",
+          "oklch(26.43% 0.0328 118.48)",
+          "oklch(37.86% 0.0328 118.48)",
+          "oklch(49.29% 0.0328 118.48)",
+          "oklch(60.71% 0.0328 118.48)",
+          "oklch(72.14% 0.0328 118.48)",
+          "oklch(83.57% 0.0328 118.48)",
+          "oklch(95.00% 0.0328 118.48)"
+        ],
+        "note": "面板示意色阶，由源色合成；不是应用中的额外颜色。 / Synthesized panel ramp; not additional application tokens."
+      },
+      "focus-clay": {
+        "role": "secondary",
+        "displayName": "focus-clay",
+        "tonalRamp": [
+          "oklch(15.00% 0.1122 52.39)",
+          "oklch(26.43% 0.1122 52.39)",
+          "oklch(37.86% 0.1122 52.39)",
+          "oklch(49.29% 0.1122 52.39)",
+          "oklch(60.71% 0.1122 52.39)",
+          "oklch(72.14% 0.1122 52.39)",
+          "oklch(83.57% 0.1122 52.39)",
+          "oklch(95.00% 0.1122 52.39)"
+        ],
+        "note": "面板示意色阶，由源色合成；不是应用中的额外颜色。 / Synthesized panel ramp; not additional application tokens."
+      }
+    },
+    "shadows": [
+      {
+        "name": "app-shell",
+        "value": "0 24px 70px #39462618",
+        "purpose": "奶油主容器 / Cream shell"
+      },
+      {
+        "name": "balance",
+        "value": "0 14px 30px #6876471c",
+        "purpose": "森林余额场景 / Illustrated balance"
+      },
+      {
+        "name": "primary-form",
+        "value": "0 8px 18px #5e75342b",
+        "purpose": "表单确认 / Form confirmation"
+      },
+      {
+        "name": "desktop-nav",
+        "value": "0 12px 35px #3d57272b",
+        "purpose": "桌面浮动导航 / Desktop floating navigation"
+      },
+      {
+        "name": "dialog",
+        "value": "0 28px 80px #2135204a",
+        "purpose": "模态表单 / Modal form"
+      }
+    ],
+    "motion": [
+      {
+        "name": "button-state",
+        "value": "background-color .18s ease-out, box-shadow .18s ease-out, transform .18s ease-out",
+        "purpose": "默认按钮状态；按下 translateY(1px)。 / Default button state; pressed translateY(1px)."
+      },
+      {
+        "name": "category-state",
+        "value": "border-color .16s ease-out, background-color .16s ease-out, color .16s ease-out",
+        "purpose": "分类选项继承的更具体规则。 / More specific inherited category rule."
+      },
+      {
+        "name": "voice-recording",
+        "value": ".8s ease-in-out infinite alternate; scaleY(.4); even bars delay .2s",
+        "purpose": "仅录音时启用。 / Only while recording."
+      },
+      {
+        "name": "toast",
+        "value": ".3s cubic-bezier(.16,1,.3,1)",
+        "purpose": "从透明、向下 10px 到最终位置。 / From opacity 0 and 10px below."
+      },
+      {
+        "name": "initial-loading",
+        "value": "1.1s ease-in-out infinite",
+        "purpose": "条内指示器 translateX(-100%) → 90% → 285%。 / Loading-strip indicator."
+      },
+      {
+        "name": "dialogs-and-progress",
+        "value": "animation: none; progress transition: none",
+        "purpose": "无弹窗入场或进度插值。 / Static dialog entrance and progress changes."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animation:none!important; transition:none!important; scroll-behavior:auto!important",
+        "purpose": "全局遵从减少动态效果偏好。 / Global reduced-motion preference."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact",
+        "value": "max-width:380px"
+      },
+      {
+        "name": "desktop",
+        "value": "min-width:850px"
+      }
+    ],
+    "focus": [
+      {
+        "name": "interactive",
+        "value": "outline:3px solid #a15a29; outline-offset:4px",
+        "purpose": "按钮、链接、摘要及未被更具体规则覆盖的输入。 / Buttons, links, summaries and inputs without a stronger override."
+      },
+      {
+        "name": "standard-sheet-input",
+        "value": "outline:none; border-color:#81985c; box-shadow:0 0 0 3px #8ea26322",
+        "purpose": "具体字段规则抑制通用轮廓。 / Specific field rule suppresses generic outline."
+      },
+      {
+        "name": "expense-source-row",
+        "value": "outline:3px solid #a15a29; outline-offset:2px",
+        "purpose": "消费来源单选行。 / Expense-source radio row."
+      },
+      {
+        "name": "backup-import",
+        "value": "outline:3px solid #78c29d; outline-offset:3px",
+        "purpose": "保留的导入标签 focus-within。 / Retained import-label focus-within."
+      },
+      {
+        "name": "goal-amount",
+        "value": "border-color:#64ad88; box-shadow:0 0 0 3px #57ae8420",
+        "purpose": "存款目标金额外框保留的 focus-within。 / Retained goal amount-wrapper focus-within."
+      }
+    ],
+    "imageRules": {
+      "asset": "public/art/xiaoman-forest.png",
+      "provenance": "public/art/xiaoman-forest.png.json",
+      "treatment": "CSS cover; no text baked into artwork; original seed companion on right, quiet clearing at left.",
+      "crops": {
+        "balanceMobile": "right center",
+        "balanceDesktop": "center 59%",
+        "cycleForm": "center 70%",
+        "setup": "center"
+      },
+      "desktopOuterOverlay": "linear-gradient(#e4ebdec9,#eef0e4ed)",
+      "restrictions": "保留原创角色，检查 390px/1280px 的金额可读性与裁切；场景不是动态养成或着色器效果。 / Preserve original character and check amount legibility/cropping at 390px/1280px; no progression or shader behavior."
+    },
+    "sourceOrder": [
+      "app/globals.css",
+      "app/interactions.css",
+      "app/storybook.css"
+    ],
+    "radiusNotes": "核心圆角在 DESIGN.md 页首；圆形麦克风为 50%，导航添加按钮 20px，分类选项 11px，空状态为 18px 18px 8px 18px。 / Core radii are in frontmatter; circular microphone 50%, nav add 20px, categories 11px, empty state 18px 18px 8px 18px."
+  },
+  "components": [
+    {
+      "name": "表单主按钮 / Form primary",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "确认表单；弹窗外沿用较早的 50px 主按钮。 / Confirm a form; outside dialogs the earlier 50px variant remains.",
+      "html": "<button class=\"ds-primary\">保存账目</button>",
+      "css": ".ds-primary{font-family:\"Microsoft YaHei UI\",\"PingFang SC\",sans-serif;transition:background-color .18s ease-out,box-shadow .18s ease-out,transform .18s ease-out;width:100%;height:52px;margin-top:15px;border:1px solid #4e6c3e;border-radius:16px;background:#597744;color:#fffdf1;font-size:14px;font-weight:700;box-shadow:0 8px 18px #5e75342b;cursor:pointer}.ds-primary:hover:not(:disabled){background:#496837}.ds-primary:active:not(:disabled){transform:translateY(1px)}.ds-primary:disabled{opacity:.55;cursor:not-allowed}.ds-primary:focus-visible,.ds-entry:focus-visible,.ds-chip:focus-visible,.ds-nav button:focus-visible,.ds-voice:focus-visible{outline:3px solid #a15a29;outline-offset:4px}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}"
+    },
+    {
+      "name": "记一笔入口 / Entry strip",
+      "kind": "button",
+      "refersTo": "quick-entry",
+      "description": "打开手动记账；书本与加号。 / Open entry using a book and plus.",
+      "html": "<button class=\"ds-entry\"><span class=\"ds-entry-copy\"><svg viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 4h7a4 4 0 0 1 4 3v14a4 4 0 0 0-4-2H4Zm11 3c1-2 3-3 6-3v15c-3 0-5 0-6 2\"/><path d=\"M7 8h4M7 12h4\"/></svg><span><b>记下刚刚的一笔</b><small>让每一份花费，都被好好看见</small></span></span><span class=\"ds-entry-plus\"><svg viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 4v16M4 12h16\"/></svg></span></button>",
+      "css": ".ds-entry{font-family:\"Microsoft YaHei UI\",\"PingFang SC\",sans-serif;transition:background-color .18s ease-out,box-shadow .18s ease-out,transform .18s ease-out;display:flex;width:100%;align-items:center;justify-content:space-between;padding:16px 18px;background:#f1e5cb;border:1px solid #e5d3af;border-radius:21px;box-shadow:0 6px 14px #8e734d0e;cursor:pointer}.ds-entry:hover{background:#ebdcbc}.ds-entry:active{transform:translateY(1px)}.ds-entry-copy{display:flex;align-items:center;gap:12px;color:#614e2e;text-align:left}.ds-entry-copy>svg{width:28px;height:28px}.ds-entry-copy b{display:block;font-size:15px;font-weight:700}.ds-entry-copy small{display:block;font-size:11px;margin-top:3px;color:#796541}.ds-entry-plus{display:grid;place-items:center;width:42px;height:42px;background:#706c43;border-radius:15px;color:#fff9e9;box-shadow:0 6px 12px #78674622}.ds-primary:focus-visible,.ds-entry:focus-visible,.ds-chip:focus-visible,.ds-nav button:focus-visible,.ds-voice:focus-visible{outline:3px solid #a15a29;outline-offset:4px}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}"
+    },
+    {
+      "name": "普通输入框 / Standard field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "可见标签、浅纸面、绿色焦点光圈。 / Visible label, pale paper and green focus ring.",
+      "html": "<label class=\"ds-field\">备注<input placeholder=\"例如：和朋友吃午饭\" /></label>",
+      "css": ".ds-field{font-family:\"Microsoft YaHei UI\",\"PingFang SC\",sans-serif;display:block;color:#526244;font-size:13px;line-height:1.6}.ds-field input{font-family:\"Microsoft YaHei UI\",\"PingFang SC\",sans-serif;display:block;width:100%;height:51px;margin-top:8px;padding:0 14px;font-size:16px;background:#fffffa;border:1px solid #d9dfc7;border-radius:13px;color:#34422d;outline:none;caret-color:#3c6440}.ds-field input::placeholder{font-size:12px;color:#727961;opacity:1}.ds-field input:focus{border-color:#81985c;box-shadow:0 0 0 3px #8ea26322}.ds-field input[readonly]{background:#edf0e2;color:#6b745c}"
+    },
+    {
+      "name": "分类选项 / Category choice",
+      "kind": "chip",
+      "description": "已选与未选分类；三列容器由页面提供。 / Selected and unselected categories; page supplies three columns.",
+      "html": "<button class=\"ds-chip\" aria-pressed=\"false\"><svg viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 3C8 2 2 8 5 15c3 7 14 6 15-12Z\"/><path d=\"m3 21 12-12M9 15V9m0 6h6\"/></svg>其他</button> <button class=\"ds-chip ds-selected\" aria-pressed=\"true\"><svg viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 4h7a4 4 0 0 1 4 3v14a4 4 0 0 0-4-2H4Zm11 3c1-2 3-3 6-3v15c-3 0-5 0-6 2\"/><path d=\"M7 8h4M7 12h4\"/></svg>学习</button>",
+      "css": ".ds-chip{font-family:\"Microsoft YaHei UI\",\"PingFang SC\",sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:0 6px;min-height:43px;border:1px solid #dce1cb;border-radius:11px;background:#f5f6eb;color:#63704f;font-size:12px;cursor:pointer;transition:border-color .16s ease-out,background-color .16s ease-out,color .16s ease-out}.ds-chip svg{width:18px;height:18px}.ds-chip.ds-selected{border-color:#7b9560;background:#e7edcf;color:#3f6034;font-weight:700}.ds-chip:active:not(:disabled){transform:translateY(1px)}.ds-chip:disabled{opacity:.55;cursor:not-allowed}.ds-primary:focus-visible,.ds-entry:focus-visible,.ds-chip:focus-visible,.ds-nav button:focus-visible,.ds-voice:focus-visible{outline:3px solid #a15a29;outline-offset:4px}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}"
+    },
+    {
+      "name": "信息卡 / Information card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "静态消费性质分组；无悬浮升起。 / Static expense-nature grouping with no hover lift.",
+      "html": "<section class=\"ds-card\"><h2>消费 / 浪费 / 投资</h2><div class=\"ds-row\"><b>消费</b><span>¥0.00</span><small>0.0%</small></div><p>记下第一笔后，这里会展现消费结构。</p></section>",
+      "css": ".ds-card{font-family:\"Microsoft YaHei UI\",\"PingFang SC\",sans-serif;padding:22px;background:#f0f2e4;border:1px solid #e1e5cc;border-radius:23px;color:var(--ink,#303e2c)}.ds-card h2{margin:0 0 16px;font-size:17px;font-weight:700}.ds-row{display:grid;grid-template-columns:1fr 1fr 50px;gap:10px;align-items:center;padding:13px 0;font-size:13px;border-bottom:1px solid #dfe4cb}.ds-row b:before{content:\"\";display:inline-block;width:7px;height:7px;margin-right:9px;background:#8b9b62;border-radius:50%}.ds-row span,.ds-row small{text-align:right}.ds-row small{font-size:11px;color:#61704e}.ds-card p{color:#687455;font-size:12px;line-height:1.7;margin:8px 0 12px}"
+    },
+    {
+      "name": "主要导航 / Main navigation",
+      "kind": "nav",
+      "description": "五格导航，中央添加；预览采用桌面浮动外观。 / Five slots and central add; preview uses the desktop floating appearance.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"主要导航\"><button class=\"ds-active\" aria-current=\"page\"><svg viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z\"/><path d=\"M8 6V3H5v5\"/></svg>首页</button><button><svg viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 4h7a4 4 0 0 1 4 3v14a4 4 0 0 0-4-2H4Zm11 3c1-2 3-3 6-3v15c-3 0-5 0-6 2\"/><path d=\"M7 8h4M7 12h4\"/></svg>账单</button><button class=\"ds-add\" aria-label=\"添加账目\"><svg viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 4v16M4 12h16\"/></svg></button><button><svg viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 3C8 2 2 8 5 15c3 7 14 6 15-12Z\"/><path d=\"m3 21 12-12M9 15V9m0 6h6\"/></svg>复盘</button><button><svg viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"8\" r=\"4\"/><path d=\"M4 21v-2a8 8 0 0 1 16 0v2\"/></svg>我的</button></nav>",
+      "css": ".ds-nav{font-family:\"Microsoft YaHei UI\",\"PingFang SC\",sans-serif;display:grid;width:min(480px,100%);grid-template-columns:repeat(5,1fr);align-items:center;padding:10px 15px;background:#fbfaf0fa;border:1px solid #d9dfc8;border-radius:25px;box-shadow:0 12px 35px #3d57272b}.ds-nav button{font-family:\"Microsoft YaHei UI\",\"PingFang SC\",sans-serif;transition:background-color .18s ease-out,box-shadow .18s ease-out,transform .18s ease-out;display:grid;min-height:46px;gap:4px;justify-items:center;border:0;background:transparent;color:#697657;font-size:11px;cursor:pointer}.ds-nav svg{width:22px;height:22px}.ds-nav .ds-active{color:#3c663a;font-weight:700}.ds-active svg{fill:#dce7c7;stroke:#42683c}.ds-nav .ds-add{display:grid;place-items:center;margin:0 auto;width:53px;height:53px;border-radius:20px;background:#718551;border:1px solid #607543;box-shadow:0 7px 14px #5268382b;color:#fff9e9}.ds-add svg{width:28px;height:28px}.ds-nav button:active{transform:translateY(1px)}.ds-primary:focus-visible,.ds-entry:focus-visible,.ds-chip:focus-visible,.ds-nav button:focus-visible,.ds-voice:focus-visible{outline:3px solid #a15a29;outline-offset:4px}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}"
+    },
+    {
+      "name": "语音入口 / Voice control",
+      "kind": "custom",
+      "description": "录音时使用 ds-listening，处理中使用 disabled 与 ds-processing；静态预览不访问麦克风。 / Recording uses ds-listening; processing uses disabled and ds-processing. Preview does not access a microphone.",
+      "html": "<button class=\"ds-voice\"><span class=\"ds-microphone\"><svg viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"8\" y=\"2\" width=\"8\" height=\"13\" rx=\"4\"/><path d=\"M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8\"/></svg><i class=\"ds-stop\"></i></span><span class=\"ds-voice-copy\"><b>说一句，帮你填备注</b><small>点击开始录音</small></span><span class=\"ds-wave\"><i></i><i></i><i></i><i></i><i></i></span></button>",
+      "css": ".ds-voice{font-family:\"Microsoft YaHei UI\",\"PingFang SC\",sans-serif;transition:background-color .18s ease-out,box-shadow .18s ease-out,transform .18s ease-out;display:flex;width:100%;align-items:center;gap:12px;padding:14px 15px;min-height:82px;background:#ede4cf;border:1px solid #dfcfac;border-radius:20px;color:#655237;text-align:left;cursor:pointer}.ds-voice:hover:not(:disabled){background:#e8dcc1}.ds-microphone{display:grid;place-items:center;flex:none;width:48px;height:48px;border-radius:50%;color:#fff8e9;background:#a67a45;box-shadow:0 5px 11px #85633424}.ds-microphone svg{width:23px;height:23px}.ds-stop{display:none;width:15px;height:15px;background:#fff8eb;border-radius:4px}.ds-voice-copy{flex:1}.ds-voice-copy b,.ds-voice-copy small{display:block}.ds-voice-copy b{font-size:14px;font-weight:700}.ds-voice-copy small{font-size:11px;color:#776746;margin-top:3px}.ds-wave{display:flex;gap:3px;align-items:center;height:32px}.ds-wave i{width:3px;height:10px;border-radius:3px;background:#aa8953}.ds-wave i:nth-child(2n){height:20px}.ds-wave i:nth-child(3n){height:29px}.ds-listening{background:#f7e4d1;border-color:#ce9b69}.ds-listening .ds-microphone{background:#af6e45}.ds-listening .ds-microphone svg{display:none}.ds-listening .ds-stop{display:block}.ds-listening .ds-wave i{animation:ds-ripple .8s ease-in-out infinite alternate}.ds-listening .ds-wave i:nth-child(2n){animation-delay:.2s}.ds-processing .ds-wave{opacity:.5}.ds-voice:disabled{opacity:.55;cursor:not-allowed}.ds-voice:active:not(:disabled){transform:translateY(1px)}@keyframes ds-ripple{to{transform:scaleY(.4)}}.ds-primary:focus-visible,.ds-entry:focus-visible,.ds-chip:focus-visible,.ds-nav button:focus-visible,.ds-voice:focus-visible{outline:3px solid #a15a29;outline-offset:4px}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "森林里的小满账本 / Xiaoman's Forest Ledger",
+    "overview": "小满把工资周期记账放进一座原创森林乐园：暖杏色种子伙伴、苔绿文字、奶油纸面与柔和日光共同营造治愈的童话氛围。金额、输入和确认动作保持清晰直接。\nXiaoman places salary-cycle bookkeeping inside an original forest park: an apricot seed companion, moss-colored text, cream paper and soft daylight create a comforting storybook atmosphere. Amounts, fields and confirmation actions remain clear.",
+    "keyCharacteristics": [
+      "原创种子伙伴与森林场景 / Original seed companion and forest setting",
+      "中文优先、系统字体、清楚的金额层级 / Chinese-first system type and clear financial hierarchy",
+      "柔软圆角、轻阴影、明确操作状态 / Soft corners, gentle shadows and explicit interaction states"
+    ],
+    "rules": [],
+    "dos": [
+      "**Do** 保持主要金额在场景左侧明亮留白处，并在手机与桌面检查裁切。 / Keep the main amount in the bright left clearing and check both crops.",
+      "**Do** 用文字说明预算和消费状态，图标与颜色辅助理解。 / Explain financial states in words; use icons and color as support.",
+      "**Do** 保留录音状态、处理状态和减少动态效果设置。 / Preserve recording, processing and reduced-motion states."
+    ],
+    "donts": [
+      "**Don't** 用已有影视角色替换原创种子伙伴。 / Replace the original seed companion with an existing franchise character.",
+      "**Don't** 把装饰字体、插画文字或持续环境动画加入日常记账控件。 / Add decorative type, text baked into artwork or continuous ambient animation to bookkeeping controls.",
+      "**Don't** 把未实现的着色器、养成奖励或游戏机制写成当前能力。 / Describe unimplemented shaders, progression rewards or game mechanics as current features."
+    ]
+  }
+}
