@@ -138,3 +138,18 @@ test('online navigation refreshes an older offline shell after an app update',as
   })).toBe(false);
   await page.context().setOffline(true);await page.reload();await expect(page.locator('[name="salaryDay"]')).toBeVisible();
 });
+test('ambiguous legacy timestamps require an explicit date instead of a timezone guess',async({page})=>{
+  await page.addInitScript(()=>localStorage.setItem('xiaoman-ledger-local-v1',JSON.stringify({
+    app:'xiaoman-ledger',version:2,revision:1,ledgerKind:'personal',profile:{salaryDay:20},activeCycleId:'cycle-2026-08-20-20',
+    cycles:[{id:'cycle-2026-08-20-20',salaryDay:20,startDate:'2026-08-20',endDate:'2026-09-19',nextSalaryDate:'2026-09-20'}],
+    budgets:[{cycleId:'cycle-2026-08-20-20',availableIncome:1000,plannedSavings:0,necessaryReserve:0}],
+    transactions:[{id:'old',type:'expense',amount:50,date:'2026-08-19T16:30:00Z',cycleId:'cycle-2026-08-20-20',nature:'消费',spendKind:'variable',category:'餐饮',note:'旧时间记录',icon:'餐',source:'text'}],
+    settings:{monthlyBudget:0,savingsCurrent:0,savingsGoal:0}
+  })));
+  await open(page);await expect(page.getByTestId('safe-to-spend')).toHaveText('待核对旧账');
+  await page.getByRole('button',{name:'核对账单',exact:true}).click();await page.getByRole('button',{name:'编辑',exact:true}).click();
+  await expect(page.locator('[name="date"]')).toHaveValue('');
+  await page.getByRole('button',{name:'保存修改',exact:true}).click();await expect(page.getByRole('dialog')).toBeVisible();
+  await page.locator('[name="date"]').fill('2026-08-20');await page.getByRole('button',{name:'保存修改',exact:true}).click();
+  await page.getByRole('button',{name:'首页',exact:true}).click();await expect(page.getByTestId('safe-to-spend')).toHaveText('¥950.00');
+});

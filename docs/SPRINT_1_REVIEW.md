@@ -18,7 +18,7 @@ Sprint 1 是第一轮开发迭代，交付的是可以运行的功能；`PRD.md`
 ### 验证范围
 
 - 32 项规则、数据存取、分类和 AI 接口测试，以及 2 项服务端加载/集成检查。
-- 6 项浏览器验收，覆盖完整记账、旧账确认、多页面冲突、零/负余额、新周期、保存失败和离线升级。
+- 7 项浏览器验收，覆盖完整记账、旧账确认、多页面冲突、零/负余额、新周期、保存失败和离线升级。
 - 类型检查、代码检查、vinext 构建、GitHub Pages 构建。
 
 ### 您需要判断什么
@@ -45,7 +45,7 @@ An independent code review found four gaps in the previous test coverage. All fo
 ### Validation scope
 
 - 32 rule/repository/classification/AI tests plus 2 rendered/integration checks.
-- 6 browser acceptance tests, covering CRUD, legacy confirmation, concurrent tabs, zero/negative balances, rollover, persistence failure and offline upgrades.
+- 7 browser acceptance tests, covering CRUD, legacy confirmation, concurrent tabs, zero/negative balances, rollover, persistence failure and offline upgrades.
 - Typecheck, lint, vinext build and GitHub Pages build.
 
 ### Decisions that remain yours

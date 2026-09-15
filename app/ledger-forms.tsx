@@ -41,7 +41,7 @@ export function EntryForm({ today, item, cycles, onSave }: { today: string; item
   const [nature, setNature] = useState<ExpenseNature | "">(item?.nature ?? "");
   const [spendKind, setSpendKind] = useState<SpendKind>(item?.spendKind ?? "variable");
   const [note, setNote] = useState(item?.note ?? "");
-  const [date, setDate] = useState(item ? transactionDay(item) : today);
+  const [date, setDate] = useState(item?.dateNeedsConfirmation ? "" : item ? transactionDay(item) : today);
   const [error, setError] = useState("");
   const [source, setSource] = useState<Transaction["source"]>(item?.source ?? "text");
   const [listening, setListening] = useState(false);
