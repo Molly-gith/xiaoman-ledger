@@ -1,9 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { salaryCycle, remainingDays, cents, parseDate, calculateFinance } from '../lib/domain/finance.ts';
+import { suggestBudget } from '../lib/domain/budget-suggestion.ts';
 const cycle = salaryCycle('2026-09-15', 20);
 const plan = {cycleId:cycle.id, availableIncome:10000, plannedSavings:2000, necessaryReserve:3000};
 const tx = (extra={}) => ({id:'a', type:'expense', amount:100, date:'2026-09-15', cycleId:cycle.id, nature:'消费', spendKind:'variable', ...extra});
+test('approved starter budget computes 15/35 with integer-fen remainder', () => {
+  assert.deepEqual(suggestBudget(3000),{availableIncome:3000,plannedSavings:450,necessaryReserve:1050,everydayBudget:1500});
+  assert.deepEqual(suggestBudget(0),{availableIncome:0,plannedSavings:0,necessaryReserve:0,everydayBudget:0});
+  for (const income of [0.01,0.02,0.1,99.99,3000.01,999999999999.99]) {
+    const b=suggestBudget(income);
+    assert.equal(cents(b.plannedSavings)+cents(b.necessaryReserve)+cents(b.everydayBudget),cents(income));
+  }
+  for (const income of [-1,NaN,Infinity,0.001]) assert.throws(()=>suggestBudget(income));
+});
 test('salary 20 cycle crosses months and includes salary day', () => {
   assert.deepEqual([cycle.startDate,cycle.endDate,cycle.nextSalaryDate], ['2026-08-20','2026-09-19','2026-09-20']);
   assert.equal(salaryCycle('2026-09-20',20).startDate,'2026-09-20');

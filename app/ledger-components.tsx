@@ -1,6 +1,7 @@
 "use client";
 import { useState, type ChangeEvent } from "react";
 import type { Transaction } from "../lib/domain/types";
+import { StoryIcon, categoryIcon } from './story-icons';
 export type Period = "day" | "week" | "month" | "year";
 export type LedgerKind = "personal" | "family" | "travel";
 const PERIODS: { key: Period; label: string }[] = [{key:"day",label:"日"},{key:"week",label:"周"},{key:"month",label:"月"},{key:"year",label:"年"}];
@@ -11,7 +12,7 @@ export function TransactionRow({ item, onEdit, onDelete, removingId }: { item: T
   const dateOnly = item.date.length === 10;
   const date = new Date(dateOnly ? item.date + "T12:00:00" : item.date);
   const label = date.toDateString() === new Date().toDateString() ? (dateOnly ? "今天" : "今天 " + date.toLocaleTimeString("zh-CN", {hour:"2-digit",minute:"2-digit"})) : (date.getMonth()+1) + "月" + date.getDate() + "日";
-  return <article className={`tx-row ${removingId === item.id ? "removing" : ""}`}><button className="tx-main" onClick={() => onEdit(item)} aria-label={`编辑${item.note}`}><span className={`tx-icon ${item.type}`}>{item.icon}</span><span className="tx-copy"><b>{item.note}</b><small>{item.category}{item.type === "expense" ? " · " + (item.nature ?? "待确认性质") : ""} · {label}</small></span><strong className={item.type}>{item.type === "income" ? "+" : "-"}{money(item.amount)}</strong></button><span className="tx-actions"><button onClick={() => onEdit(item)}>编辑</button><button onClick={() => onDelete(item)}>删除</button></span></article>;
+  return <article className={`tx-row ${removingId === item.id ? "removing" : ""}`}><button className="tx-main" onClick={() => onEdit(item)} aria-label={`编辑${item.note}`}><span className={`tx-icon ${item.type}`}><StoryIcon name={categoryIcon[item.category]??'leaf'}/></span><span className="tx-copy"><b>{item.note}</b><small>{item.category}{item.type === "expense" ? " · " + (item.nature ?? "待确认性质") : ""} · {label}</small></span><strong className={item.type}>{item.type === "income" ? "+" : "-"}{money(item.amount)}</strong></button><span className="tx-actions"><button onClick={() => onEdit(item)}>编辑</button><button onClick={() => onDelete(item)}>删除</button></span></article>;
 }
 export function PageHeader({ title, subtitle }: { title: string; subtitle: string }) { return <header className="page-header"><h1>{title}</h1><p>{subtitle}</p></header>; }
 export function PeriodTabs({ period, setPeriod }: { period: Period; setPeriod: (period: Period) => void }) { return <div className="period-tabs">{PERIODS.map((item) => <button key={item.key} className={period === item.key ? "active" : ""} onClick={() => setPeriod(item.key)}>{item.label}</button>)}</div>; }

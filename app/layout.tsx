@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { PwaRegister } from "./pwa-register";
 import "./globals.css";
 import "./interactions.css";
+import "./storybook.css";
 
 export const viewport: Viewport = { themeColor: "#176b4c", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
@@ -10,8 +11,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const incoming = await headers();
   const host = incoming.get("host") ?? "localhost:3000";
   const base = `${host.includes("localhost") ? "http" : "https"}://${host}`;
-  const title = "小满账本｜语音也能轻松记账";
-  const description = "随口说一句就能记账，轻松掌握收支、预算和存款目标。";
+  const title = "小满账本｜把日子，过成喜欢的样子";
+  const description = "围绕工资周期，安排储蓄与账单，记下每一笔，清楚还能安心花多少。";
   return {
     title,
     description,

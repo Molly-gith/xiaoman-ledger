@@ -90,3 +90,8 @@
 - Reserve allocation cannot exceed the confirmed reserve: the form retains the entry and asks the user to adjust the reserve or split the excess into variable spending. No silent reallocation. Automatic split behavior remains a future product decision.
 - A new cycle requires explicit income/budget confirmation; old records and cycles remain. Changing the next salary day cannot create overlapping periods.
 - AI remains disabled by default; adapter/eval plumbing does not imply a measured model baseline.
+# 2026-09-15 · 工资起步建议 / Salary starter preset
+
+用户批准：每个新周期输入到手工资后，建议计划储蓄 15%、房租账单预留 35%、其余用于日常；全部可改。按分取整，日常为余数。用户修改过的字段不随工资自动覆盖；已有周期保留原预算，只有显式点击重填建议才更新。此为小满产品建议，非书中原比例。消费性质的 70/5/25 参考不参与安心可花公式。
+
+User approved: every new cycle suggests 15% savings and 35% bills from take-home income; everyday money is the integer-fen remainder. Preserve edited fields and existing cycle budgets; explicit reapply can reset them. This is a product preset, not the book's ratio. The 70/5/25 expense-nature reference does not change safe-to-spend calculations.

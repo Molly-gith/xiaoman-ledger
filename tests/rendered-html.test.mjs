@@ -18,7 +18,7 @@ test("server-renders the branded local-ledger loading state", async () => {
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
   const html = await response.text();
-  assert.match(html, /<title>小满账本｜语音也能轻松记账<\/title>/);
+  assert.match(html, /<title>小满账本｜把日子，过成喜欢的样子<\/title>/);
   assert.match(html, /正在打开本地账本/);
   assert.match(html, /class="brand-seal">满</);
   assert.doesNotMatch(html, /Your site is taking shape|codex-preview/i);

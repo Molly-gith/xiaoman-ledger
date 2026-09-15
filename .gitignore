@@ -43,3 +43,4 @@ yarn-error.log*
 /test-results/
 /playwright-report/
 *.tsbuildinfo
+/.impeccable/review/

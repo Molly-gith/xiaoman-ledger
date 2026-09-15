@@ -41,17 +41,17 @@ test('manual cycle, CRUD, confirmed nature, reserved spending, budget, backups a
   await page.locator('[name="amount"]').fill('3000');
   await page.getByRole('button',{name:'居住',exact:false}).click();
   await page.getByRole('button',{name:'消费',exact:true}).click();
-  await page.locator('[name="spendKind"]').selectOption('reserved');
+  await page.locator('[name="spendKind"][value="reserved"]').check();
   await page.locator('[name="note"]').fill('房租');
   await page.getByRole('button',{name:'记好了',exact:true}).click();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥4,900.00');
-  await expect(page.getByText('必要预留剩余 ¥0.00')).toBeVisible();
+  await expect(page.getByText('账单预留还剩 ¥0.00')).toBeVisible();
   await page.clock.fastForward(5000);
   await page.screenshot({path:'docs/screenshots/home.png'});
   await page.getByRole('button',{name:'添加账目',exact:true}).click();
   await page.locator('[name="amount"]').fill('1');
   await page.getByRole('button',{name:'消费',exact:true}).click();
-  await page.locator('[name="spendKind"]').selectOption('reserved');
+  await page.locator('[name="spendKind"][value="reserved"]').check();
   await page.getByRole('button',{name:'记好了',exact:true}).click();
   await expect(page.getByRole('alert')).toContainText('必要预留额度不足');
   await expect(page.locator('[name="amount"]')).toHaveValue('1');
@@ -85,6 +85,7 @@ test('legacy data requires confirmation and manual editing preserves user choice
   await page.addInitScript(()=>localStorage.setItem('xiaoman-ledger-local-v1',JSON.stringify({app:'xiaoman-ledger',version:1,ledgerKind:'personal',settings:{monthlyBudget:15000,savingsCurrent:0,savingsGoal:100000},transactions:[{id:'old',type:'expense',amount:50,date:'2026-09-15',category:'购物',note:'旧账',icon:'购',source:'text'}]})));
   await open(page);
   await page.locator('[name="salaryDay"]').fill('20'); await page.locator('[name="availableIncome"]').fill('1000');
+  await page.locator('[name="plannedSavings"]').fill('0'); await page.locator('[name="necessaryReserve"]').fill('0');
   await page.getByRole('button',{name:'生成安心可花',exact:true}).click();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('待核对旧账');
   await page.getByRole('button',{name:'核对账单',exact:true}).click();
@@ -109,7 +110,7 @@ test('zero income, negative safe-to-spend and salary rollover preserve history',
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥-10.00');
   await page.clock.setFixedTime(new Date('2026-09-20T04:00:00Z'));await page.reload();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('请开启新周期');
-  await page.getByRole('button',{name:'确认收入，开启新周期',exact:true}).click();await page.locator('[name="availableIncome"]').fill('100');await page.getByRole('button',{name:'生成安心可花',exact:true}).click();
+  await page.getByRole('button',{name:'确认收入，开启新周期',exact:true}).click();await page.locator('[name="availableIncome"]').fill('100');await page.locator('[name="plannedSavings"]').fill('0');await page.locator('[name="necessaryReserve"]').fill('0');await page.getByRole('button',{name:'生成安心可花',exact:true}).click();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥100.00');
   await page.getByRole('button',{name:'账单',exact:true}).click();await expect(page.locator('.tx-row')).toHaveCount(1);
 });
@@ -128,12 +129,12 @@ test('online navigation refreshes an older offline shell after an app update',as
   await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
   await page.reload();await expect(page.locator('[name="salaryDay"]')).toBeVisible();
   await page.evaluate(async()=>{
-    const registration=await navigator.serviceWorker.ready, cache=await caches.open('xiaoman-shell-v2');
+    const registration=await navigator.serviceWorker.ready, cache=await caches.open('xiaoman-shell-v3');
     await cache.put(new URL('./',registration.scope),new Response('<html>old-release-marker</html>',{headers:{'content-type':'text/html'}}));
   });
   await page.reload();await expect(page.locator('[name="salaryDay"]')).toBeVisible();
   await expect.poll(()=>page.evaluate(async()=>{
-    const registration=await navigator.serviceWorker.ready, cache=await caches.open('xiaoman-shell-v2');
+    const registration=await navigator.serviceWorker.ready, cache=await caches.open('xiaoman-shell-v3');
     return (await (await cache.match(new URL('./',registration.scope)))!.text()).includes('old-release-marker');
   })).toBe(false);
   await page.context().setOffline(true);await page.reload();await expect(page.locator('[name="salaryDay"]')).toBeVisible();
