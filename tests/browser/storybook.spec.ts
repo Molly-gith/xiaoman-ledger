@@ -24,6 +24,8 @@ test('salary suggestions recalculate untouched fields and preserve edits, zero a
   await expect(page.locator('[name="plannedSavings"]')).toHaveValue('900');
   await expect(page.locator('[name="necessaryReserve"]')).toHaveValue('2100');
   await page.getByRole('button',{name:'保存周期预算',exact:true}).click();
+  // Wait for the completed write before navigating away, then verify persistence.
+  await expect(page.getByTestId('safe-to-spend')).toHaveText('¥3,000.00');
   await page.reload();await expect(page.getByTestId('safe-to-spend')).toHaveText('¥3,000.00');
   await page.clock.setSystemTime(new Date('2026-09-20T04:00:00Z'));await page.reload();
   await page.getByRole('button',{name:'确认收入，开启新周期'}).click();
