@@ -1,6 +1,8 @@
 # 小满账本
 
-一个适合手机使用的本地优先记账应用。无需注册即可用文字或语音记账，并按日、周、月、年查看收支、预算与存款目标。
+一个围绕工资周期的本地优先记账应用。设置发薪日、可用收入、计划储蓄和必要预留，即可查看“安心可花”；手动记账支持消费 / 浪费 / 投资，语音可辅助填写备注。
+
+Sprint 1 的架构、验收示例、测试和已知缺口见 [交付说明](docs/SPRINT_1_DELIVERY.md)。
 
 ## Prerequisites
 
@@ -9,7 +11,7 @@
 ## Quick Start
 
 ```bash
-npm install
+npm ci
 npm run dev
 npm run build
 ```
@@ -28,6 +30,10 @@ This starter does not use `wrangler.jsonc`.
 
 - `npm run dev`: start local development
 - `npm run build`: verify the vinext build output
+- `npm run build:github`: 构建 GitHub Pages 静态版本
+- `npm run typecheck` / `npm run lint`: 类型与代码检查
+- `npm run test:browser`: 浏览器验收（先运行 `npm run build:github` 和 `npx playwright install chromium`）
+- `npm run eval`: AI 评测骨架，默认未启用真实模型
 - `npm test`: 构建并验证本地存储与发布配置
 - `npm run db:generate`: generate Drizzle migrations after schema changes
 

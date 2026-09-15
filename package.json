@@ -10,9 +10,14 @@
     "build": "vinext build",
     "build:github": "vite build --config vite.github.config.ts",
     "start": "vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/classification.test.mjs",
+    "test": "npm run build && npm run test:unit && node --test tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern github-dist",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "test:unit": "node --experimental-strip-types --test tests/classification.test.mjs tests/finance.test.mjs tests/repository.test.mjs tests/ai-adapter.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "eval": "node evals/run-smoke.mjs",
+    "preview:github": "vite preview --config vite.github.config.ts --host 127.0.0.1 --port 4173",
+    "test:browser": "playwright test"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
@@ -22,9 +27,11 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",
+    "@cloudflare/workers-types": "4.20260702.1",
     "@eslint/js": "9.39.4",
     "@next/eslint-plugin-next": "16.2.6",
     "@openai/sites-vite-plugin": "0.1.0",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
@@ -36,6 +43,7 @@
     "eslint-plugin-jsx-a11y": "6.10.2",
     "eslint-plugin-react": "7.37.5",
     "eslint-plugin-react-hooks": "7.1.1",
+    "fake-indexeddb": "6.2.5",
     "globals": "16.4.0",
     "react-server-dom-webpack": "19.2.6",
     "tailwindcss": "4.2.1",
@@ -47,4 +55,3 @@
   },
   "type": "module"
 }
-
