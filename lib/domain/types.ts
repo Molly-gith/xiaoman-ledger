@@ -1,10 +1,13 @@
 export type ExpenseNature = "消费" | "浪费" | "投资";
 export type SpendKind = "variable" | "reserved";
+export type BudgetModel = "legacy" | "nature";
 export type DateOnly = string;
 export type UserProfile = { salaryDay: number };
 export type FinancialCycle = { id: string; salaryDay: number; startDate: DateOnly; endDate: DateOnly; nextSalaryDate: DateOnly };
 // All persisted amounts are yuan with at most two decimals. Arithmetic uses integer fen.
-export type BudgetPlan = { cycleId: string; availableIncome: number; plannedSavings: number; necessaryReserve: number };
+// `plannedSavings` is kept for backwards compatibility. In the `nature` model it is the
+// protected investment/savings target amount shown to users as “投资目标”.
+export type BudgetPlan = { cycleId: string; availableIncome: number; plannedSavings: number; necessaryReserve: number; model?: BudgetModel };
 export type Transaction = {
   id: string; type: "expense" | "income"; amount: number; date: string;
   category: string; note: string; icon: string; source: "text" | "voice" | "import";
