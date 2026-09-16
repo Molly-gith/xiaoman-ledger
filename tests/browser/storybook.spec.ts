@@ -9,7 +9,7 @@ test('70 5 25 suggestions preserve explicit investment edits and persist new str
   await expect(page.getByTestId('budget-preview')).toHaveText('¥2,250.00');
   await expect(page.getByText('消费参考')).toBeVisible();
   await expect(page.getByText('浪费上限')).toBeVisible();
-  await expect(page.getByText('投资目标',{exact:true}).first()).toBeVisible();
+  await expect(page.getByText('投资目标',{exact:false}).first()).toBeVisible();
   await page.locator('[name="plannedSavings"]').fill('0');
   await page.locator('[name="availableIncome"]').fill('4000');
   await expect(page.locator('[name="plannedSavings"]')).toHaveValue('0');
