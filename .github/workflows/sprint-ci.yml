@@ -16,24 +16,24 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Typecheck
-        id: typecheck
+      - run: npm run typecheck
+      - run: npm run lint
+      - name: Test and capture diagnostics
+        id: tests
         continue-on-error: true
-        run: npm run typecheck 2>&1 | tee typecheck.log
-      - name: Report typecheck failure
-        if: steps.typecheck.outcome == 'failure'
+        run: npm test 2>&1 | tee test.log
+      - name: Report test failure
+        if: steps.tests.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          printf '### Automated typecheck diagnostics\n\n```text\n' > typecheck-comment.md
-          cat typecheck.log >> typecheck-comment.md
-          printf '\n```\n' >> typecheck-comment.md
-          gh pr comment "${{ github.event.pull_request.number }}" --body-file typecheck-comment.md
-      - name: Stop after typecheck failure
-        if: steps.typecheck.outcome == 'failure'
+          printf '### Automated test diagnostics\n\n```text\n' > test-comment.md
+          tail -n 180 test.log >> test-comment.md
+          printf '\n```\n' >> test-comment.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file test-comment.md
+      - name: Stop after test failure
+        if: steps.tests.outcome == 'failure'
         run: exit 1
-      - run: npm run lint
-      - run: npm test
       - run: npm run build:github
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
