@@ -32,6 +32,104 @@
 
 Prototype 迁移阶段也兼容 `result` / `output`，后续应收敛为单一 `result_json`。
 
+## Dify 控制台最小配置
+
+当前用于聊天验证的 `user_question -> LLM -> 输出` Workflow 只能证明模型链路可运行；接入小满真实 Eval 前，需要把 Workflow 收敛到下面这个机器可校验 contract。
+
+### 1. Start / 用户输入
+
+建立 3 个必填字符串变量：
+
+- `operation`
+- `payload`
+- `context`
+
+不要再以 `user_question` 作为唯一输入。Provider 会自动传入上面三个变量。
+
+### 2. LLM
+
+建议先保持单 LLM 节点，避免在 Baseline 前增加不必要的路由复杂度。System Prompt 可直接使用下面的最小版本：
+
+```text
+你是“小满”的结构化 AI 能力层。你的输出只作为建议，不直接修改账本。
+
+你会收到：
+- operation：本次能力类型
+- payload：JSON 字符串
+- context：包含 today、timezone、preferences 的 JSON 字符串
+
+必须根据 operation 返回且只返回一个合法 JSON 对象，不要 Markdown，不要代码块，不要解释前后缀。
+
+operation=parseTransaction：
+{
+  "type": "income" | "expense",
+  "amount": 正数，最多两位小数,
+  "category": "非空字符串",
+  "occurred_at": "YYYY-MM-DD",
+  "note": "字符串",
+  "nature_suggestion": "消费" | "浪费" | "投资" | null,
+  "confidence": 0到1,
+  "ambiguous": true | false
+}
+收入的 nature_suggestion 必须为 null。相对日期必须基于 context.today 和 context.timezone 解释。缺少关键信息时不要编造；降低 confidence，并把 ambiguous 设为 true。
+
+operation=recommendNature：
+{
+  "recommended_nature": "消费" | "浪费" | "投资",
+  "acceptable_alternative": "消费" | "浪费" | "投资"（可省略）,
+  "reason": "非空字符串",
+  "confidence": 0到1
+}
+
+operation=generateDailyBrief：
+{
+  "summary": "不超过300字",
+  "suggestion": "不超过300字" | null
+}
+只能解释 payload 已给出的确定性财务事实，不自行重新计算金额。
+
+operation=generateCycleReview：
+{
+  "insights": [最多3条非空字符串],
+  "explanation": "非空字符串",
+  "next_cycle_suggestions": [最多3条非空字符串]
+}
+只能解释 payload 已给出的确定性财务事实，不自行重新计算金额。
+```
+
+User Prompt：
+
+```text
+operation={{operation}}
+payload={{payload}}
+context={{context}}
+```
+
+### 3. 输出 / End
+
+设置一个输出变量：
+
+- 变量名：`result_json`
+- 变量值：`LLM.text`
+
+最终返回给 API 的必须是纯 JSON 字符串。如果模型前后增加说明文字或 Markdown fence，AIAdapter 会判为 `invalid_output`，该 Eval case 计失败。
+
+### 4. 发布与运行配置
+
+Workflow 发布后，需要在运行环境中配置以下值；**API Key 不要写进 GitHub 文件、Notion 或聊天记录**：
+
+- `DIFY_API_BASE`：Dify Cloud 通常为 `https://api.dify.ai`
+- `DIFY_API_KEY`：Workflow 的 API Key，仅放服务器环境变量 / CI Secret / 本地私密 `.env`
+- `DIFY_WORKFLOW_VERSION`：人为固定的版本标识，例如 `xiaoman-dify-v0.1`
+- `DIFY_MODEL_VERSION`：本次实际使用的模型标识
+- `DIFY_USER_ID`：可选，默认使用 `xiaoman-eval`
+
+配置完成后运行：
+
+```bash
+npm run eval:baseline
+```
+
 ## 环境变量
 
 必须只配置在服务器或 CI Secret 中，不得提交到 GitHub：
