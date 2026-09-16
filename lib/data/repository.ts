@@ -32,7 +32,9 @@ export function validateLedger(state: LedgerState): LedgerState {
   }
   for (const cycle of normalized.cycles) {
     const metrics = calculateFinance(cycle, normalized.budgets.find(b => b.cycleId === cycle.id)!, normalized.transactions);
-    if (metrics.reserveRemaining < 0) throw new Error("必要预留额度不足，请先调整预算，或将超出部分另记为可变支出");
+    // Legacy periods keep their original reserve invariant. Nature-based periods no
+    // longer have a reserve bucket at all.
+    if (metrics.model === "legacy" && metrics.reserveRemaining < 0) throw new Error("必要预留额度不足，请先调整预算，或将超出部分另记为可变支出");
   }
   return normalized;
 }
@@ -53,7 +55,10 @@ export function createRepository(store: LedgerStore): LedgerRepository {
       delete tx.dateNeedsConfirmation;
       const exists = state.transactions.some(item => item.id === tx.id);
       if (editing !== exists) throw new Error(editing ? "账目已不存在" : "账目编号重复");
-      if (!tx.cycleId || (tx.type === "expense" && (!tx.nature || !tx.spendKind))) throw new Error("请确认财务周期、消费性质和支出来源");
+      if (!tx.cycleId || (tx.type === "expense" && !tx.nature)) throw new Error("请确认财务周期和消费性质");
+      // spendKind is retained only for legacy schema compatibility. Users no longer
+      // choose it; missing legacy values are safely normalized to variable spending.
+      if (tx.type === "expense" && !tx.spendKind) tx.spendKind = "variable";
       if (tx.type === "income" && (tx.nature !== null || tx.spendKind !== null)) throw new Error("收入不设置消费性质或支出来源");
       return { ...state, transactions: [tx, ...state.transactions.filter(item => item.id !== tx.id)].sort((a, b) => b.date.localeCompare(a.date)) };
     }),
