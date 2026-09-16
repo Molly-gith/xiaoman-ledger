@@ -3,8 +3,6 @@ on:
   pull_request:
 permissions:
   contents: read
-  pull-requests: write
-  issues: write
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -16,39 +14,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Typecheck and capture diagnostics
-        id: typecheck
-        continue-on-error: true
-        run: npm run typecheck 2>&1 | tee typecheck.log
-      - name: Report typecheck failure
-        if: steps.typecheck.outcome == 'failure'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          printf '### Automated typecheck diagnostics\n\n```text\n' > diagnostics-comment.md
-          tail -n 180 typecheck.log >> diagnostics-comment.md
-          printf '\n```\n' >> diagnostics-comment.md
-          gh pr comment "${{ github.event.pull_request.number }}" --body-file diagnostics-comment.md
-      - name: Stop after typecheck failure
-        if: steps.typecheck.outcome == 'failure'
-        run: exit 1
+      - run: npm run typecheck
       - run: npm run lint
-      - name: Test and capture diagnostics
-        id: tests
-        continue-on-error: true
-        run: npm test 2>&1 | tee test.log
-      - name: Report test failure
-        if: steps.tests.outcome == 'failure'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          printf '### Automated test diagnostics\n\n```text\n' > diagnostics-comment.md
-          tail -n 180 test.log >> diagnostics-comment.md
-          printf '\n```\n' >> diagnostics-comment.md
-          gh pr comment "${{ github.event.pull_request.number }}" --body-file diagnostics-comment.md
-      - name: Stop after test failure
-        if: steps.tests.outcome == 'failure'
-        run: exit 1
+      - run: npm test
       - run: npm run build:github
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser

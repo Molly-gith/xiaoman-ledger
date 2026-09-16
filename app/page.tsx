@@ -5,12 +5,13 @@ import { calculateFinance, cents, localDate, remainingDays, sumMoney, transactio
 import { createLocalRepository } from "../lib/data/local-adapter";
 import { defaultState, normalizeBackup } from "../lib/data/schema";
 import { CycleForm, EntryForm } from "./ledger-forms";
+import { InvestmentAccounts } from "./investment-accounts";
 import { StoryIcon } from './story-icons';
 import { ConfirmPanel, DataPanel, EmptyState, GoalForm, LoadingScreen, PageHeader, PeriodTabs, TransactionRow, money, type Period } from "./ledger-components";
 
-type Tab = "home" | "bills" | "review" | "me";
+type Tab = "home" | "bills" | "review" | "me" | "assets";
 type Modal = "add" | "edit" | "delete" | "cycle" | "data" | "import" | "clear" | "goal" | null;
-const NAV: { key: Tab; label: string }[] = [{ key: "home", label: "首页" }, { key: "bills", label: "账单" }, { key: "review", label: "复盘" }, { key: "me", label: "我的" }];
+const NAV: { key: Exclude<Tab, "assets">; label: string }[] = [{ key: "home", label: "首页" }, { key: "bills", label: "账单" }, { key: "review", label: "复盘" }, { key: "me", label: "我的" }];
 const FILTERS = [{ key: "all", label: "全部" }, { key: "income", label: "收入" }, { key: "expense", label: "支出" }] as const;
 function download(content: string, type: string, filename: string) {
   const url = URL.createObjectURL(new Blob([content], { type }));
@@ -63,16 +64,17 @@ export default function Home() {
     return () => { active = false; clearInterval(timer); };
   }, [repository]);
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(""), 4000); return () => clearTimeout(timer); }, [toast]);
-  async function commit(action: () => Promise<LedgerState>, message: string) {
-    if (saving.current) return;
+  async function commit(action: () => Promise<LedgerState>, message: string): Promise<boolean> {
+    if (saving.current) return false;
     saving.current = true; setBusy(true); setError("");
     try {
       const next = await action(); setState(next); setModal(null); setEditing(null); setPendingImport(null);
       const c = next.cycles.find(c => c.id === next.activeCycleId), p = next.budgets.find(b => b.cycleId === next.activeCycleId);
-      const m = c && p ? calculateFinance(c, p, next.transactions) : null;
+      const m = c && p ? calculateFinance(c, p, next.transactions, next.investmentFlows) : null;
       const label = m?.model === "nature" ? "本周期可支出" : "本周期剩余";
       setToast(m && !m.unresolvedCount ? `${message} · ${label} ${money(m.safeToSpend)}` : message);
-    } catch (e) { setError(e instanceof Error ? e.message : "保存失败，请重试；输入内容已保留"); }
+      return true;
+    } catch (e) { setError(e instanceof Error ? e.message : "保存失败，请重试；输入内容已保留"); return false; }
     finally { saving.current = false; setBusy(false); }
   }
   async function reload() {
@@ -82,7 +84,7 @@ export default function Home() {
   if (!state) return error ? <main className="app-shell"><PageHeader title="账本暂时无法读取" subtitle="原有数据已保留" /><p role="alert">{error}</p><button className="primary" onClick={() => void reload()}>重新载入</button></main> : <LoadingScreen text="正在打开本地账本" />;
   const cycle = state.cycles.find(c => c.id === state.activeCycleId);
   const plan = state.budgets.find(b => b.cycleId === cycle?.id);
-  const metrics = cycle && plan ? calculateFinance(cycle, plan, state.transactions) : null;
+  const metrics = cycle && plan ? calculateFinance(cycle, plan, state.transactions, state.investmentFlows) : null;
   const expired = cycle ? today >= cycle.nextSalaryDate : false;
   const setup = !cycle;
   const visible = state.transactions.filter(tx => inPeriod(tx, period, today) && (filter === "all" || tx.type === filter));
@@ -124,7 +126,8 @@ export default function Home() {
     </>}
     {tab === "bills" && <><PageHeader title="账单" subtitle="每一笔，都清清楚楚 · 以下按自然日历筛选" /><PeriodTabs period={period} setPeriod={setPeriod} />{filters}<section className="bill-summary"><div><span>收入记录</span><b>{money(total(visible, "income"))}</b></div><div><span>支出记录</span><b>{money(total(visible, "expense"))}</b></div><div><span>账目</span><b>{visible.length} 笔</b></div></section><section className="transactions bill-list">{visible.length ? visible.map(tx => <TransactionRow key={tx.id} item={tx} {...rowActions} />) : <EmptyState text="这个时段还没有账目" action={() => openEntry()} />}</section></>}
     {tab === "review" && <><PageHeader title="周期复盘" subtitle={cycle ? `${cycle.startDate} 至 ${cycle.endDate}` : "先建立财务周期"} />{metrics && <><section className="stats-hero"><p>本周期实际支出</p><strong>{money(metrics.totalExpense)}</strong><p>{metrics.model === "nature" ? `投资目标 ${money(metrics.investmentTarget)} · 已发生投资 ${money(metrics.investmentSpend)}` : `旧周期计划储蓄 ${money(plan!.plannedSavings)}`}</p><p>收入记录 {money(total(cycleTransactions, "income"))}；可用收入以周期设置为准。</p></section>{budgetCard}{natureCard}<p className="helper">当前提供确定性数据复盘。财务健康评分和 AI 洞察将在后续版本完善。</p></>}</>}
-    {tab === "me" && <><PageHeader title="我的" subtitle="安排周期，也照顾未来" /><section className="category-card"><h2>财务周期</h2><p>每月 {state.profile?.salaryDay ?? "—"} 日发薪 · 短月按月末</p><button className="primary" onClick={() => setModal("cycle")}>{!expired && cycle ? "调整本周期结构" : "建立新周期"}</button><p className="helper">收入记录不会重复增加本周期可支出。收入变化时，请在周期设置中确认可用收入。</p></section><section className="goal-card saving"><p>存款目标</p><strong>{money(state.settings.savingsCurrent)} <small>/ {money(state.settings.savingsGoal)}</small></strong><button onClick={() => setModal("goal")}>更新存款目标</button></section><button className="local-data-card" onClick={() => setModal("data")}><span className="local-data-icon">本</span><span><b>本机数据与备份</b><small>换设备前，导出一份完整备份</small></span></button></>}
+    {tab === "me" && <><PageHeader title="我的" subtitle="安排周期，也照顾未来" /><section className="category-card"><h2>财务周期</h2><p>每月 {state.profile?.salaryDay ?? "—"} 日发薪 · 短月按月末</p><button className="primary" onClick={() => setModal("cycle")}>{!expired && cycle ? "调整本周期结构" : "建立新周期"}</button><p className="helper">收入记录不会重复增加本周期可支出。收入变化时，请在周期设置中确认可用收入。</p></section><button className="local-data-card" onClick={() => setTab("assets")}><span className="local-data-icon">投</span><span><b>投资账户</b><small>记录已有 ETF / 基金资产与当前市值</small></span></button><section className="goal-card saving"><p>存款目标</p><strong>{money(state.settings.savingsCurrent)} <small>/ {money(state.settings.savingsGoal)}</small></strong><button onClick={() => setModal("goal")}>更新存款目标</button></section><button className="local-data-card" onClick={() => setModal("data")}><span className="local-data-icon">本</span><span><b>本机数据与备份</b><small>换设备前，导出一份完整备份</small></span></button></>}
+    {tab === "assets" && <InvestmentAccounts state={state} today={today} onBack={() => setTab("me")} onCreateAccount={account => commit(() => repository.saveInvestmentAccount(account, state.revision), "投资账户已创建")} onFlow={flow => commit(() => repository.saveInvestmentFlow(flow, state.revision), flow.type === "contribution" ? "投资投入已记录" : "投资取出已记录")} onMarketValue={(accountId, value, date) => commit(() => repository.saveMarketValue(accountId, value, date, state.revision), "当前市值已更新")} />}
     <nav className="bottom-nav" aria-label="主要导航">{NAV.slice(0, 2).map(item => <button key={item.key} className={tab === item.key ? "active" : ""} aria-current={tab === item.key ? 'page' : undefined} onClick={() => setTab(item.key)}><StoryIcon name={item.key === 'home' ? 'home' : 'book'}/>{item.label}</button>)}<button className="add" aria-label="添加账目" onClick={() => openEntry()}><StoryIcon name="plus"/></button>{NAV.slice(2).map(item => <button key={item.key} className={tab === item.key ? "active" : ""} aria-current={tab === item.key ? 'page' : undefined} onClick={() => setTab(item.key)}><StoryIcon name={item.key === 'review' ? 'leaf' : 'user'}/>{item.label}</button>)}</nav>
   </fieldset>
   {(setup || modal) && <div className={`modal-wrap ${setup && !modal ? 'setup-wrap' : ''}`}><section className={`sheet ${setup && !modal ? 'setup-sheet' : ''}`} role="dialog" aria-modal="true" aria-label={setup ? "建立第一个财务周期" : modal === "add" || modal === "edit" ? "记账" : "账本设置"}>
