@@ -1,4 +1,4 @@
-import type { BudgetPlan, FinancialCycle, Transaction } from "./types.ts";
+import type { BudgetPlan, FinancialCycle, InvestmentFlow, Transaction } from "./types.ts";
 
 const DAY = 86400000;
 export function parseDate(value: string): Date {
@@ -48,8 +48,11 @@ export function inCycle(tx: Transaction, cycle: FinancialCycle): boolean {
 function natureAmount(expenses: Transaction[], nature: "消费" | "浪费" | "投资") {
   return sumMoney(expenses.filter(tx => tx.nature === nature).map(tx => tx.amount));
 }
+function flowInvestmentAmount(cycle: FinancialCycle, flows: InvestmentFlow[]) {
+  return sumMoney(flows.filter(flow => flow.type === "contribution" && flow.cycleId === cycle.id && flow.date >= cycle.startDate && flow.date <= cycle.endDate).map(flow => flow.amount));
+}
 
-export function calculateFinance(cycle: FinancialCycle, plan: BudgetPlan, transactions: Transaction[]) {
+export function calculateFinance(cycle: FinancialCycle, plan: BudgetPlan, transactions: Transaction[], investmentFlows: InvestmentFlow[] = []) {
   if (plan.cycleId !== cycle.id) throw new Error("预算与周期不匹配");
   const expenses = transactions.filter(tx => tx.type === "expense" && inCycle(tx, cycle));
   const totalExpense = sumMoney(expenses.map(tx => tx.amount));
@@ -86,7 +89,7 @@ export function calculateFinance(cycle: FinancialCycle, plan: BudgetPlan, transa
 
   const consumptionSpend = natureAmount(expenses, "消费");
   const wasteSpend = natureAmount(expenses, "浪费");
-  const investmentSpend = natureAmount(expenses, "投资");
+  const investmentSpend = sumMoney([natureAmount(expenses, "投资"), flowInvestmentAmount(cycle, investmentFlows)]);
   const income = cents(plan.availableIncome);
   const investmentTarget = cents(plan.plannedSavings);
   const protectedInvestment = Math.max(investmentTarget, cents(investmentSpend));

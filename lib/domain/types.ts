@@ -16,10 +16,37 @@ export type Transaction = {
   dateNeedsConfirmation?: boolean;
   aiSuggestion?: { nature: ExpenseNature; confidence: number; reason: string; modelVersion: string; promptVersion: string };
 };
+export type InvestmentAccount = {
+  id: string;
+  name: string;
+  /** Historical net contributions before Xiaoman started tracking this account. Null means unknown. */
+  openingNetContribution: number | null;
+  currentMarketValue: number;
+  marketValueUpdatedAt: DateOnly;
+  createdAt: DateOnly;
+};
+export type InvestmentFlow = {
+  id: string;
+  accountId: string;
+  type: "contribution" | "withdrawal";
+  amount: number;
+  date: DateOnly;
+  /** Contributions tied to a salary cycle count toward that cycle's investment progress. */
+  cycleId: string | null;
+};
+export type MarketValueSnapshot = {
+  id: string;
+  accountId: string;
+  marketValue: number;
+  date: DateOnly;
+};
 export type LedgerState = {
-  app: "xiaoman-ledger"; version: 2; revision: number;
+  app: "xiaoman-ledger"; version: 3; revision: number;
   ledgerKind: "personal" | "family" | "travel";
   profile: UserProfile | null; activeCycleId: string | null;
   cycles: FinancialCycle[]; budgets: BudgetPlan[]; transactions: Transaction[];
+  investmentAccounts: InvestmentAccount[];
+  investmentFlows: InvestmentFlow[];
+  marketValueSnapshots: MarketValueSnapshot[];
   settings: { monthlyBudget: number; savingsCurrent: number; savingsGoal: number };
 };
