@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { baselineCases } from "../evals/baseline-cases.mjs";
+import { runEvaluation } from "../evals/runner.mjs";
 
 const ids = baselineCases.map((item) => item.case_id);
 const parseCases = baselineCases.filter((item) => item.capability === "parseTransaction");
@@ -36,4 +37,18 @@ test("nature baseline permits ambiguity instead of forcing one gold label", () =
     for (const label of item.unacceptable_labels) assert.ok(["消费", "浪费", "投资"].includes(label), item.case_id);
     assert.equal(item.acceptable_labels.some((label) => item.unacceptable_labels.includes(label)), false, item.case_id);
   }
+});
+
+test("live-provider fallback counts as a failed eval case rather than being skipped", async () => {
+  const adapter = {
+    parseTransaction: async () => ({ status: "manual", reason: "unavailable" }),
+  };
+  const report = await runEvaluation(adapter, [parseCases[0]]);
+  assert.equal(report.total, 1);
+  assert.equal(report.evaluated, 1);
+  assert.equal(report.skipped, 0);
+  assert.equal(report.failed, 1);
+  assert.equal(report.accuracy, 0);
+  assert.equal(report.rows[0].status, "failed");
+  assert.deepEqual(report.rows[0].failures, ["manual_fallback"]);
 });
