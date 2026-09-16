@@ -63,7 +63,11 @@ export function normalizeBackup(value: unknown): LedgerState {
   });
   const sorted = [...state.cycles].sort((a, b) => a.startDate.localeCompare(b.startDate));
   if (sorted.some((cycle, i) => i > 0 && cycle.startDate <= sorted[i - 1].endDate)) throw new Error("财务周期不能重叠");
-  state.budgets = v.budgets.map(value => { const b = record(value); return { cycleId: string(b.cycleId), availableIncome: amount(b.availableIncome), plannedSavings: amount(b.plannedSavings), necessaryReserve: amount(b.necessaryReserve) }; });
+  state.budgets = v.budgets.map(value => {
+    const b = record(value);
+    const model = b.model === "nature" ? "nature" as const : "legacy" as const;
+    return { cycleId: string(b.cycleId), availableIncome: amount(b.availableIncome), plannedSavings: amount(b.plannedSavings), necessaryReserve: amount(b.necessaryReserve), model };
+  });
   if (state.budgets.length !== state.cycles.length || new Set(state.budgets.map(b => b.cycleId)).size !== state.budgets.length || state.budgets.some(b => !state.cycles.some(c => c.id === b.cycleId))) throw new Error("周期预算缺失或重复");
   state.activeCycleId = v.activeCycleId === null ? null : string(v.activeCycleId);
   if ((state.cycles.length > 0 && !state.activeCycleId) || (state.activeCycleId && !state.cycles.some(c => c.id === state.activeCycleId))) throw new Error("当前周期不存在");
