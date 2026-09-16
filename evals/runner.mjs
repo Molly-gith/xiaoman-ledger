@@ -4,15 +4,19 @@ export async function runEvaluation(adapter, cases) {
   for (const item of cases) {
     const result = await adapter[item.capability](item.user_input, item.user_context);
     if (result.status !== "suggestion") {
-      rows.push({
-        case_id: item.case_id,
-        status: "failed",
-        failures: ["manual_fallback"],
-        severity: item.risk_level === "high" ? "P0" : "P1",
-        reason: result.reason,
-        model_version: null,
-        prompt_version: null,
-      });
+      if (result.reason === "disabled") {
+        rows.push({ case_id: item.case_id, status: "skipped", reason: "provider_disabled" });
+      } else {
+        rows.push({
+          case_id: item.case_id,
+          status: "failed",
+          failures: ["manual_fallback"],
+          severity: item.risk_level === "high" ? "P0" : "P1",
+          reason: result.reason,
+          model_version: null,
+          prompt_version: null,
+        });
+      }
       continue;
     }
     const failures = [];
