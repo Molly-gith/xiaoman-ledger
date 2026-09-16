@@ -44,23 +44,72 @@ export function inCycle(tx: Transaction, cycle: FinancialCycle): boolean {
   const day = transactionDay(tx);
   return tx.cycleId === cycle.id && day >= cycle.startDate && day <= cycle.endDate;
 }
+
+function natureAmount(expenses: Transaction[], nature: "消费" | "浪费" | "投资") {
+  return sumMoney(expenses.filter(tx => tx.nature === nature).map(tx => tx.amount));
+}
+
 export function calculateFinance(cycle: FinancialCycle, plan: BudgetPlan, transactions: Transaction[]) {
   if (plan.cycleId !== cycle.id) throw new Error("预算与周期不匹配");
-  const budget = cents(plan.availableIncome) - cents(plan.plannedSavings) - cents(plan.necessaryReserve);
   const expenses = transactions.filter(tx => tx.type === "expense" && inCycle(tx, cycle));
-  const variable = sumMoney(expenses.filter(tx => tx.spendKind === "variable").map(tx => tx.amount));
-  const reserved = sumMoney(expenses.filter(tx => tx.spendKind === "reserved").map(tx => tx.amount));
   const totalExpense = sumMoney(expenses.map(tx => tx.amount));
   const natureMix = (["消费", "浪费", "投资"] as const).map(nature => {
-    const amount = sumMoney(expenses.filter(tx => tx.nature === nature).map(tx => tx.amount));
+    const amount = natureAmount(expenses, nature);
     return { nature, amount, percent: totalExpense ? amount / totalExpense * 100 : 0 };
   });
+
+  if ((plan.model ?? "legacy") === "legacy") {
+    const budget = cents(plan.availableIncome) - cents(plan.plannedSavings) - cents(plan.necessaryReserve);
+    const variable = sumMoney(expenses.filter(tx => tx.spendKind === "variable").map(tx => tx.amount));
+    const reserved = sumMoney(expenses.filter(tx => tx.spendKind === "reserved").map(tx => tx.amount));
+    const unresolved = transactions.filter(tx => tx.type === "expense" && (
+      (tx.dateNeedsConfirmation && tx.cycleId === cycle.id) ||
+      (transactionDay(tx) >= cycle.startDate && transactionDay(tx) <= cycle.endDate && (!tx.cycleId || !tx.spendKind))
+    ));
+    return {
+      model: "legacy" as const,
+      safeToSpend: (budget - cents(variable)) / 100,
+      variableBudget: budget / 100,
+      variableSpend: variable,
+      reservedSpend: reserved,
+      reserveRemaining: (cents(plan.necessaryReserve) - cents(reserved)) / 100,
+      totalExpense,
+      natureMix,
+      unresolvedCount: unresolved.length,
+      budgetPercent: budget > 0 ? cents(variable) / budget * 100 : null,
+      consumptionReference: plan.availableIncome * 0.7,
+      wasteLimit: plan.availableIncome * 0.05,
+      investmentTarget: plan.plannedSavings,
+      investmentSpend: natureAmount(expenses, "投资"),
+    };
+  }
+
+  const consumptionSpend = natureAmount(expenses, "消费");
+  const wasteSpend = natureAmount(expenses, "浪费");
+  const investmentSpend = natureAmount(expenses, "投资");
+  const income = cents(plan.availableIncome);
+  const investmentTarget = cents(plan.plannedSavings);
+  const protectedInvestment = Math.max(investmentTarget, cents(investmentSpend));
+  const everydayBudget = income - investmentTarget;
+  const everydaySpend = cents(consumptionSpend) + cents(wasteSpend);
   const unresolved = transactions.filter(tx => tx.type === "expense" && (
     (tx.dateNeedsConfirmation && tx.cycleId === cycle.id) ||
-    (transactionDay(tx) >= cycle.startDate && transactionDay(tx) <= cycle.endDate && (!tx.cycleId || !tx.spendKind))
+    (transactionDay(tx) >= cycle.startDate && transactionDay(tx) <= cycle.endDate && (!tx.cycleId || !tx.nature))
   ));
-  return { safeToSpend: (budget - cents(variable)) / 100, variableBudget: budget / 100, variableSpend: variable,
-    reservedSpend: reserved, reserveRemaining: (cents(plan.necessaryReserve) - cents(reserved)) / 100,
-    totalExpense, natureMix, unresolvedCount: unresolved.length,
-    budgetPercent: budget > 0 ? cents(variable) / budget * 100 : null };
+  return {
+    model: "nature" as const,
+    safeToSpend: (income - everydaySpend - protectedInvestment) / 100,
+    variableBudget: everydayBudget / 100,
+    variableSpend: everydaySpend / 100,
+    reservedSpend: 0,
+    reserveRemaining: 0,
+    totalExpense,
+    natureMix,
+    unresolvedCount: unresolved.length,
+    budgetPercent: everydayBudget > 0 ? everydaySpend / everydayBudget * 100 : null,
+    consumptionReference: plan.availableIncome * 0.7,
+    wasteLimit: plan.availableIncome * 0.05,
+    investmentTarget: plan.plannedSavings,
+    investmentSpend,
+  };
 }
