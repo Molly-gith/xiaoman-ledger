@@ -5,9 +5,10 @@ import type { LedgerState } from "../domain/types.ts";
 const DB_NAME = "xiaoman-ledger-db", STORE_NAME = "ledger", STATE_KEY = "current";
 const FALLBACK_KEY = "xiaoman-ledger-local-v1";
 function isAdoptedFallback(raw: string | null): boolean {
+  if (raw === null) return false;
   try {
-    const version = raw === null ? null : JSON.parse(raw)?.version;
-    return version === 2 || version === 3;
+    const parsed = JSON.parse(raw) as { version?: unknown };
+    return parsed.version === 2 || parsed.version === 3;
   } catch { return false; }
 }
 function openDatabase(): Promise<IDBDatabase> {
