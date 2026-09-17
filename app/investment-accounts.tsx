@@ -78,7 +78,7 @@ export function InvestmentAccounts({ state, today, onBack, onCreateAccount, onFl
   }
 
   return <>
-    <header className="page-header"><button onClick={onBack}>← 我的</button><div><h1>投资账户</h1><p>看清已有资产，不把市场涨跌混进收入</p></div></header>
+    <header className="page-header"><button onClick={onBack}>← 返回</button><div><h1>投资账户</h1><p>看清已有资产，不把市场涨跌混进收入</p></div></header>
     <section className="gentle-tip" aria-label="投资账户说明">
       <p><b>投资账户是你已经拥有的资产。</b> 本周期准备投入多少钱，仍由首页的“投资目标”管理。</p>
       <p>ETF / 基金涨跌只更新资产市值，不会算成收入。</p>
