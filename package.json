@@ -13,9 +13,10 @@
     "test": "npm run build && npm run test:unit && node --test tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern github-dist",
     "db:generate": "drizzle-kit generate",
-    "test:unit": "node --experimental-strip-types --test tests/classification.test.mjs tests/finance.test.mjs tests/repository.test.mjs tests/ai-adapter.test.mjs tests/ai-financial-assistant-contract.test.mjs tests/openai-compatible-provider.test.mjs tests/dify-provider.test.mjs tests/investment.test.mjs",
+    "test:unit": "node --experimental-strip-types --test tests/classification.test.mjs tests/finance.test.mjs tests/repository.test.mjs tests/assistant-snapshot.test.mjs tests/assistant-context.test.mjs tests/ai-adapter.test.mjs tests/ai-financial-assistant-contract.test.mjs tests/ai-financial-question-contract.test.mjs tests/openai-compatible-provider.test.mjs tests/openai-financial-question-provider.test.mjs tests/dify-provider.test.mjs tests/investment.test.mjs tests/eval-v03-cases.test.mjs tests/live-question-runner.test.mjs",
     "typecheck": "tsc --noEmit",
     "eval": "node evals/run-smoke.mjs",
+    "eval:live": "node --experimental-strip-types evals/run-live-question.mjs",
     "preview:github": "vite preview --config vite.github.config.ts --host 127.0.0.1 --port 4173",
     "test:browser": "playwright test"
   },

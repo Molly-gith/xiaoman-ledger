@@ -1,7 +1,7 @@
-import { calculateFinance } from './finance';
-import { floatingPnL, netContribution } from './investment';
-import type { InvestmentAccount, InvestmentFlow } from './types';
-import { buildAssistantFinancialSnapshot, type AssistantFinancialSnapshot } from './assistant-snapshot';
+import { calculateFinance } from './finance.ts';
+import { floatingPnL, netContribution } from './investment.ts';
+import type { InvestmentAccount, InvestmentFlow } from './types.ts';
+import { buildAssistantFinancialSnapshot, type AssistantFinancialSnapshot, type AssistantPeriodComparison } from './assistant-snapshot.ts';
 
 type FinanceMetrics = ReturnType<typeof calculateFinance>;
 
@@ -10,6 +10,8 @@ export type AssistantContextInput = {
   metrics: FinanceMetrics;
   investmentAccounts: InvestmentAccount[];
   investmentFlows: InvestmentFlow[];
+  /** Optional deterministic prior/current period comparison for review experiences. */
+  comparison?: AssistantPeriodComparison;
 };
 
 /**
@@ -38,5 +40,6 @@ export function buildAssistantContext(input: AssistantContextInput): AssistantFi
       netContribution: netContribution(account, input.investmentFlows),
       floatingPnL: floatingPnL(account, input.investmentFlows),
     })),
+    ...(input.comparison ? { comparison: input.comparison } : {}),
   });
 }

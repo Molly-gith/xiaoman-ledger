@@ -26,6 +26,7 @@ test('builds an AI-ready snapshot only from deterministic facts', () => {
   assert.equal(snapshot.investmentAssets.totalNetContribution, 105000);
   assert.equal(snapshot.investmentAssets.totalFloatingPnL, 12107.09);
   assert.ok(snapshot.referencedFacts.includes('safe_to_spend:7000'));
+  assert.ok(snapshot.referencedFacts.includes('investment_account_count:2'));
 });
 
 test('does not invent aggregate investment profit when any cost basis is unknown', () => {
@@ -56,7 +57,28 @@ test('marks unresolved ledger facts as needing review without hiding a negative 
   assert.equal(snapshot.unresolvedCount, 2);
 });
 
+test('accepts optional deterministic period comparisons and exposes auditable comparison facts', () => {
+  const snapshot = buildAssistantFinancialSnapshot({
+    ...base,
+    comparison: {
+      previousPeriod: { consumptionSpend: 9400, wasteSpend: 900, investmentSpend: 3500, safeToSpend: 4200 },
+      currentPeriod: { consumptionSpend: 8000, wasteSpend: 500, investmentSpend: 5000, safeToSpend: 7000 },
+    },
+  });
+  assert.equal(snapshot.comparison.previousPeriod.wasteSpend, 900);
+  assert.equal(snapshot.comparison.currentPeriod.safeToSpend, 7000);
+  assert.ok(snapshot.referencedFacts.includes('comparison_previous_investment_spend:3500'));
+  assert.ok(snapshot.referencedFacts.includes('comparison_current_safe_to_spend:7000'));
+});
+
 test('rejects non-finite or negative fact inputs before they can reach the assistant', () => {
   assert.throws(() => buildAssistantFinancialSnapshot({ ...base, wasteSpend: -1 }), /wasteSpend must be non-negative/);
   assert.throws(() => buildAssistantFinancialSnapshot({ ...base, safeToSpend: Number.NaN }), /safeToSpend must be finite/);
+  assert.throws(() => buildAssistantFinancialSnapshot({
+    ...base,
+    comparison: {
+      previousPeriod: { consumptionSpend: -1, wasteSpend: 0, investmentSpend: 0, safeToSpend: 0 },
+      currentPeriod: { consumptionSpend: 0, wasteSpend: 0, investmentSpend: 0, safeToSpend: 0 },
+    },
+  }), /comparison\.previousPeriod\.consumptionSpend must be non-negative/);
 });
