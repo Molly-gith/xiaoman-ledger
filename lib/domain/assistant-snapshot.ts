@@ -8,6 +8,18 @@ export type AssistantInvestmentAccountFact = {
   floatingPnL: number | null;
 };
 
+export type AssistantPeriodComparisonSide = {
+  consumptionSpend: number;
+  wasteSpend: number;
+  investmentSpend: number;
+  safeToSpend: number | null;
+};
+
+export type AssistantPeriodComparison = {
+  previousPeriod: AssistantPeriodComparisonSide;
+  currentPeriod: AssistantPeriodComparisonSide;
+};
+
 export type AssistantFinancialSnapshotInput = {
   asOfDate: string;
   safeToSpend: number | null;
@@ -17,6 +29,8 @@ export type AssistantFinancialSnapshotInput = {
   investmentSpend: number;
   investmentTarget: number;
   investmentAccounts: AssistantInvestmentAccountFact[];
+  /** Optional deterministic period comparison. Omit when the product has no prior-period facts. */
+  comparison?: AssistantPeriodComparison;
 };
 
 export type AssistantFinancialSnapshot = {
@@ -38,6 +52,8 @@ export type AssistantFinancialSnapshot = {
     totalFloatingPnL: number | null;
     hasUnknownCost: boolean;
   };
+  /** Present only when both sides are supplied by deterministic product code. */
+  comparison?: AssistantPeriodComparison;
   referencedFacts: string[];
 };
 
@@ -52,11 +68,20 @@ function nonNegative(value: number, label: string): number {
   return checked;
 }
 
+function normalizeComparisonSide(side: AssistantPeriodComparisonSide, label: string): AssistantPeriodComparisonSide {
+  return {
+    consumptionSpend: nonNegative(side.consumptionSpend, `${label}.consumptionSpend`),
+    wasteSpend: nonNegative(side.wasteSpend, `${label}.wasteSpend`),
+    investmentSpend: nonNegative(side.investmentSpend, `${label}.investmentSpend`),
+    safeToSpend: side.safeToSpend === null ? null : finite(side.safeToSpend, `${label}.safeToSpend`),
+  };
+}
+
 /**
  * Builds the deterministic fact payload that the AI assistant is allowed to use.
  *
  * Product boundary:
- * - rules/code calculate money, progress and asset totals;
+ * - rules/code calculate money, progress, asset totals and optional period comparisons;
  * - the LLM may explain these facts, but must not recalculate them;
  * - if any investment account has unknown cost basis, aggregate cost/P&L stay null.
  */
@@ -87,6 +112,10 @@ export function buildAssistantFinancialSnapshot(input: AssistantFinancialSnapsho
 
   const investmentGap = Math.max(0, investmentTarget - investmentSpend);
   const readiness: AssistantReadiness = input.unresolvedCount > 0 || safeToSpend === null ? "needs_review" : "ready";
+  const comparison = input.comparison ? {
+    previousPeriod: normalizeComparisonSide(input.comparison.previousPeriod, "comparison.previousPeriod"),
+    currentPeriod: normalizeComparisonSide(input.comparison.currentPeriod, "comparison.currentPeriod"),
+  } : undefined;
 
   const referencedFacts = [
     `as_of:${input.asOfDate}`,
@@ -98,10 +127,22 @@ export function buildAssistantFinancialSnapshot(input: AssistantFinancialSnapsho
     `investment_spend:${investmentSpend}`,
     `investment_target:${investmentTarget}`,
     `investment_gap:${investmentGap}`,
+    `investment_account_count:${input.investmentAccounts.length}`,
     `investment_market_value:${totalMarketValue}`,
     hasUnknownCost ? "investment_cost_basis:partial_or_unknown" : `investment_net_contribution:${totalNetContribution}`,
     hasUnknownCost ? "investment_floating_pnl:unknown" : `investment_floating_pnl:${totalFloatingPnL}`,
   ];
+
+  if (comparison) {
+    for (const [prefix, side] of [["comparison_previous", comparison.previousPeriod], ["comparison_current", comparison.currentPeriod]] as const) {
+      referencedFacts.push(
+        `${prefix}_consumption_spend:${side.consumptionSpend}`,
+        `${prefix}_waste_spend:${side.wasteSpend}`,
+        `${prefix}_investment_spend:${side.investmentSpend}`,
+        side.safeToSpend === null ? `${prefix}_safe_to_spend:unknown` : `${prefix}_safe_to_spend:${side.safeToSpend}`,
+      );
+    }
+  }
 
   return {
     asOfDate: input.asOfDate,
@@ -122,6 +163,7 @@ export function buildAssistantFinancialSnapshot(input: AssistantFinancialSnapsho
       totalFloatingPnL: hasUnknownCost ? null : totalFloatingPnL,
       hasUnknownCost,
     },
+    ...(comparison ? { comparison } : {}),
     referencedFacts,
   };
 }
