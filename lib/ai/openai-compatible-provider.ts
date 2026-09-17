@@ -69,6 +69,17 @@ function systemPrompt(operation: AIOperation): string {
       "JSON schema: {status_summary:'非空字符串',financial_stage:'数据建立期'|'安全垫建立期'|'稳定积累期'|'资产增长期'|null,stage_evidence:[最多3条非空字符串],top_insights:[最多3条非空字符串],next_actions:[最多3条非空字符串],referenced_facts:[至少1条输入中的fact],confidence:0到1}。",
     ].join("\n");
   }
+  if (operation === "answerFinancialQuestion") {
+    return [...shared,
+      "任务：回答用户对自己财务状态的具体问题。payload.question 是用户问题，payload.snapshot 是唯一允许使用的财务事实来源。",
+      "回答中涉及金额、比例、收益、账户数量、数据完整度等事实时，只能使用 payload.snapshot 中已经给出的值。",
+      "referenced_facts 中的每一项都必须逐字选择自 payload.snapshot.referencedFacts；纯安全边界回答可以返回空数组。",
+      "如果用户询问财务阶段，但 payload.snapshot.referencedFacts 中不存在 financial_stage:*，必须明确说明当前不能确定阶段，不得自行发明阈值或阶段。",
+      "如果用户要求具体证券/基金买卖推荐、收益保证、自动交易或虚构排名，应明确拒绝该部分并给出安全替代方向。",
+      "next_actions 最多3条，保持克制、可执行、不制造焦虑。",
+      "JSON schema: {answer:'非空字符串',next_actions:[最多3条非空字符串],referenced_facts:[0条或多条输入中的fact],confidence:0到1}。",
+    ].join("\n");
+  }
   return [...shared,
     "任务：基于唯一输入 payload=AssistantFinancialSnapshot 生成财务周期复盘。",
     "只能引用 payload.referencedFacts 中存在的事实；没有历史变化事实时不得编造趋势。",
