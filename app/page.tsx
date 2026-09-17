@@ -213,22 +213,6 @@ export default function Home() {
     <div className="savings-line"><StoryIcon name="leaf"/><span>目标是结构更健康，不是把每个额度花完。<small>房租、水电等发生时直接正常记账。</small></span></div>
   </> : <><div className="budget-row"><span>当前周期剩余</span><b>{money(metrics.safeToSpend)}</b></div><div className="gentle-tip"><p>这是升级前建立的旧周期，继续沿用原计算，避免历史金额突然变化。调整周期后即可切换到新的 70 / 5 / 25 结构。</p></div></>}</section>;
 
-  const assistantInsights = assistantSnapshot ? [
-    assistantSnapshot.readiness === "needs_review"
-      ? `${assistantSnapshot.unresolvedCount} 笔历史数据还需要核对，先不把当前结果当成最终结论。`
-      : assistantSnapshot.period.safeToSpend === null
-        ? "当前还不能形成可信的本周期可支出结论。"
-        : `本周期还可支出 ${money(assistantSnapshot.period.safeToSpend)}。`,
-    assistantSnapshot.period.investmentGap > 0
-      ? `投资目标还差 ${money(assistantSnapshot.period.investmentGap)}，已投入 ${money(assistantSnapshot.period.investmentSpend)}。`
-      : `本周期投资目标已达到 ${money(assistantSnapshot.period.investmentTarget)}。`,
-    assistantSnapshot.investmentAssets.accountCount > 0
-      ? assistantSnapshot.investmentAssets.hasUnknownCost
-        ? `投资账户总市值 ${money(assistantSnapshot.investmentAssets.totalMarketValue)}；部分历史成本未知，暂不计算总浮盈亏。`
-        : `投资账户总市值 ${money(assistantSnapshot.investmentAssets.totalMarketValue)}，浮动盈亏 ${money(assistantSnapshot.investmentAssets.totalFloatingPnL ?? 0)}。`
-      : "还没有投资账户数据，可以从「账户与资产」补充当前市值。",
-  ].slice(0, 3) : [];
-
   const safeToSpendText = assistantSnapshot?.readiness === "needs_review"
     ? "待核对旧账"
     : expired
@@ -237,17 +221,37 @@ export default function Home() {
         ? "数据不足"
         : money(assistantSnapshot.period.safeToSpend);
 
+  const assistantHeadline = !assistantSnapshot
+    ? "先补一点财务信息，我再帮你判断。"
+    : assistantSnapshot.readiness === "needs_review"
+      ? "先把几笔旧账核对清楚，我再给你更确定的判断。"
+      : expired
+        ? "这个周期已经结束。先确认收入，再看下一步怎么安排。"
+        : assistantSnapshot.period.safeToSpend === null
+          ? "数据还不够完整。先补一点信息，我再帮你判断。"
+          : metrics && metrics.safeToSpend < 0
+            ? "这个周期已经超出当前结构目标，先看最需要调整的地方。"
+            : "这个周期整体还稳。";
+
+  const assistantNextStep = !assistantSnapshot
+    ? "先建立财务周期。"
+    : assistantSnapshot.period.investmentGap > 0
+      ? `接下来最值得关注：投资目标还差 ${money(assistantSnapshot.period.investmentGap)}。`
+      : assistantSnapshot.investmentAssets.accountCount > 0
+        ? "投资目标已经达到，可以继续按现在的节奏。"
+        : "下一步可以先补充资产，或者直接问我你最关心的问题。";
+
   return <main className={`app-shell ${tab === "home" ? "conversation-home" : "detail-page"}`}><fieldset className="app-content" disabled={busy} inert={showDialog}>
     {tab !== "home" && tab !== "assets" && <nav className="page-navigation" aria-label="返回导航"><button className="back-home" onClick={() => setTab("home")}><StoryIcon name="arrow"/>返回小满</button>{tab === "bills" && <button className="detail-add" onClick={() => openEntry()}><StoryIcon name="plus"/>记一笔</button>}</nav>}
     {tab === "home" && <>
       <header className="topbar"><div className="storybook-brand"><StoryIcon name="leaf"/><div><h1>小满</h1><p>你的个人财务助手</p></div></div><div className="header-actions"><button className="avatar" onClick={() => setModal("data")} aria-label="本地数据与备份"><StoryIcon name="lock"/></button><button className="avatar" onClick={() => setTab("me")} aria-label="我的设置"><StoryIcon name="user"/></button></div></header>
       {cycle && metrics && assistantSnapshot && <>
         <section className="assistant-conversation" data-testid="assistant-conversation">
-          <div className="assistant-thread-head"><span className="assistant-avatar" aria-hidden="true"><StoryIcon name="leaf"/></span><div><b>和小满聊聊</b><small data-testid="assistant-readiness">{assistantSnapshot.readiness === "ready" ? "财务数据已就绪" : "有数据待核对"}</small></div></div>
+          <div className="assistant-thread-head"><span className="assistant-avatar" aria-hidden="true"><StoryIcon name="leaf"/></span><div><b>小满</b><small data-testid="assistant-readiness">{assistantSnapshot.readiness === "ready" ? "数据已就绪" : "有数据待核对"}</small></div></div>
           <div className="assistant-message">
-            <p>我看了一下你这个周期的财务情况。</p>
-            <p>当前可支出 <strong data-testid="safe-to-spend">{safeToSpendText}</strong>{assistantSnapshot.period.investmentGap > 0 ? `，投资目标还差 ${money(assistantSnapshot.period.investmentGap)}。` : "，本周期投资目标已经达到。"}</p>
-            {assistantInsights[2] && <p>{assistantInsights[2]}</p>}
+            <p className="assistant-summary">{assistantHeadline}</p>
+            <p className="assistant-key-fact"><span>这个周期还能安排</span><strong data-testid="safe-to-spend">{safeToSpendText}</strong></p>
+            <p className="assistant-next-step">{assistantNextStep}</p>
           </div>
           <p className="assistant-fact-note"><StoryIcon name="lock"/>根据本机账本计算 · 数据由你掌控</p>
         </section>
@@ -256,15 +260,15 @@ export default function Home() {
         {!metrics.unresolvedCount && metrics.safeToSpend < 0 && <div className="gentle-tip" role="status"><p>本周期已超出当前结构目标 {money(-metrics.safeToSpend)}。可以查看财务明细或调整目标。</p></div>}
       </>}
       <section className="section-block home-actions-section">
-        <div className="section-title"><h2>常用功能</h2><span>从这里继续处理财务</span></div>
+        <div className="section-title"><h2>接下来你可以</h2></div>
         <div className="home-action-grid">
-          <button className="home-action-card" data-testid="home-action-add" onClick={() => openEntry()}><StoryIcon name="plus"/><span><b>记一笔</b><small>记录收入与支出</small></span></button>
-          <button className="home-action-card" data-testid="home-action-bills" onClick={() => setTab("bills")}><StoryIcon name="book"/><span><b>财务看板</b><small>支出结构与账单</small></span></button>
-          <button className="home-action-card" data-testid="home-action-assets" onClick={() => openAssets("home")}><StoryIcon name="jar"/><span><b>账户与资产</b><small>投资账户与市值</small></span></button>
-          <button className="home-action-card" data-testid="home-action-review" onClick={() => setTab("review")}><StoryIcon name="leaf"/><span><b>周期复盘</b><small>回顾本周期</small></span></button>
+          <button className="home-action-card" data-testid="home-action-add" onClick={() => openEntry()}><StoryIcon name="plus"/><span><b>记一笔</b><small>把刚刚的花费告诉小满</small></span></button>
+          <button className="home-action-card" data-testid="home-action-bills" onClick={() => setTab("bills")}><StoryIcon name="book"/><span><b>看看这个月</b><small>消费、浪费和投资</small></span></button>
+          <button className="home-action-card" data-testid="home-action-assets" onClick={() => openAssets("home")}><StoryIcon name="jar"/><span><b>我的资产</b><small>现金、投资和负债</small></span></button>
+          <button className="home-action-card" data-testid="home-action-review" onClick={() => setTab("review")}><StoryIcon name="leaf"/><span><b>帮我复盘</b><small>看看这个周期发生了什么</small></span></button>
         </div>
       </section>
-      <section className="section-block transactions"><div className="section-title"><h2>最近账目</h2><button onClick={() => setTab("bills")}>进入财务</button></div>{filters}{recent.length ? recent.map(tx => <TransactionRow key={tx.id} item={tx} {...rowActions} />) : <EmptyState compact text="从第一笔开始，让小满慢慢理解你的钱" action={() => openEntry()} />}</section>
+      <section className="section-block transactions"><div className="section-title"><h2>最近账目</h2><button onClick={() => setTab("bills")}>查看全部</button></div>{filters}{recent.length ? recent.map(tx => <TransactionRow key={tx.id} item={tx} {...rowActions} />) : <EmptyState compact text="从第一笔开始，让小满慢慢理解你的钱" action={() => openEntry()} />}</section>
       {cycle && <div ref={dockRef} className="assistant-dock" aria-label="与小满对话">
         <div className="assistant-prompts" aria-label="快捷问题">{QUICK_QUESTIONS.map(question => <button key={question} type="button" onClick={() => { setAssistantQuestion(question); questionRef.current?.focus(); }}>{question}</button>)}</div>
         <p id="assistant-availability" className="assistant-provider-note">AI 分析暂未启用 · 记账与财务看板可正常使用</p>
