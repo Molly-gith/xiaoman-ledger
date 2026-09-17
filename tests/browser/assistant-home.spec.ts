@@ -13,7 +13,15 @@ async function setup(page: Page) {
   await page.getByRole('button', { name: '开始这个周期', exact: true }).click();
 }
 
-test('conversation-first home leads with trusted financial facts and direct chat entry', async ({ page }) => {
+async function expectComposerAtBottom(page: Page) {
+  await expect(page.locator('.assistant-composer')).toBeVisible();
+  expect(await page.locator('.assistant-composer').evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return rect.bottom <= window.innerHeight + 2 && rect.bottom >= window.innerHeight - 36;
+  })).toBeTruthy();
+}
+
+test('conversation-first v3 keeps trusted facts, bottom composer and capability cards', async ({ page }) => {
   await open(page);
   await setup(page);
 
@@ -25,17 +33,13 @@ test('conversation-first home leads with trusted financial facts and direct chat
   await expect(page.getByPlaceholder('问小满：我这个月还能花多少？')).toBeVisible();
   await expect(page.getByText('AI 分析暂未启用 · 金额和比例仍由规则层计算', { exact: true })).toBeVisible();
   await expect(page.getByText('这周花多了吗？', { exact: true })).toBeVisible();
+  await expectComposerAtBottom(page);
 
   await expect(page.getByTestId('home-action-add')).toBeVisible();
   await expect(page.getByTestId('home-action-bills')).toBeVisible();
   await expect(page.getByTestId('home-action-assets')).toBeVisible();
   await expect(page.getByTestId('home-action-review')).toBeVisible();
-
-  await expect(page.getByRole('button', { name: '小满', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '财务', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '复盘', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '我的', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '添加账目', exact: true })).toBeVisible();
+  await expect(page.locator('.bottom-nav')).toBeHidden();
 
   await page.screenshot({ path: 'docs/screenshots/v03-conversation-home.png', fullPage: true });
 
@@ -45,20 +49,26 @@ test('conversation-first home leads with trusted financial facts and direct chat
   await expect(page.getByRole('heading', { name: '投资资产', exact: true })).toBeVisible();
   await page.screenshot({ path: 'docs/screenshots/v03-finance.png', fullPage: true });
 
-  await page.getByRole('button', { name: '小满', exact: true }).click();
+  await page.reload();
   await page.getByTestId('home-action-assets').click();
   await expect(page.getByText('投资账户', { exact: true }).first()).toBeVisible();
   await page.screenshot({ path: 'docs/screenshots/v03-assets.png', fullPage: true });
 
-  await page.getByRole('button', { name: '小满', exact: true }).click();
+  await page.reload();
   await page.getByTestId('home-action-review').click();
   await expect(page.getByRole('heading', { name: '周期复盘', exact: true })).toBeVisible();
   await page.screenshot({ path: 'docs/screenshots/v03-review.png', fullPage: true });
 
-  await page.getByRole('button', { name: '小满', exact: true }).click();
+  await page.reload();
   await page.setViewportSize({ width: 320, height: 760 });
   await expect(page.getByTestId('assistant-conversation')).toBeVisible();
+  await expectComposerAtBottom(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  expect(await page.evaluate(() => {
+    const dock = document.querySelector('.assistant-composer')?.getBoundingClientRect();
+    const shell = document.querySelector('.app-shell')?.getBoundingClientRect();
+    return !!dock && !!shell && dock.left >= shell.left - 1 && dock.right <= shell.right + 1;
+  })).toBeTruthy();
   await page.screenshot({ path: 'docs/screenshots/v03-home-320.png', fullPage: true });
 });
 
@@ -82,4 +92,5 @@ test('conversation-first home downgrades certainty when legacy data still needs 
   await expect(page.getByText('1 笔历史数据还需要核对，先不把当前结果当成最终结论。', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '核对账单', exact: true })).toBeVisible();
   await expect(page.getByPlaceholder('问小满：我这个月还能花多少？')).toBeVisible();
+  await expectComposerAtBottom(page);
 });
