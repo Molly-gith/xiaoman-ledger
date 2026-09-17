@@ -11,33 +11,74 @@ async function importTypeScript(relativePath) {
   return import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
 }
 
-const required = ["DIFY_API_BASE", "DIFY_API_KEY", "DIFY_WORKFLOW_VERSION", "DIFY_MODEL_VERSION"];
-const missing = required.filter((name) => !process.env[name]?.trim());
-if (missing.length) {
+function missingConfig(required) {
+  return required.filter((name) => !process.env[name]?.trim());
+}
+
+async function createLiveProvider() {
+  const providerKind = (process.env.AI_PROVIDER || "dify").trim().toLowerCase();
+  if (providerKind === "dify") {
+    const required = ["DIFY_API_BASE", "DIFY_API_KEY", "DIFY_WORKFLOW_VERSION", "DIFY_MODEL_VERSION"];
+    const missing = missingConfig(required);
+    if (missing.length) return { providerKind, missing };
+    const { createDifyProvider } = await importTypeScript("../lib/ai/dify-provider.ts");
+    return {
+      providerKind,
+      provider: createDifyProvider({
+        baseUrl: process.env.DIFY_API_BASE,
+        apiKey: process.env.DIFY_API_KEY,
+        workflowVersion: process.env.DIFY_WORKFLOW_VERSION,
+        modelVersion: process.env.DIFY_MODEL_VERSION,
+        userId: process.env.DIFY_USER_ID || "xiaoman-eval",
+      }),
+    };
+  }
+
+  if (providerKind === "openai-compatible") {
+    const required = ["AI_API_BASE", "AI_API_KEY", "AI_MODEL", "AI_WORKFLOW_VERSION"];
+    const missing = missingConfig(required);
+    if (missing.length) return { providerKind, missing };
+    const { createOpenAICompatibleProvider } = await importTypeScript("../lib/ai/openai-compatible-provider.ts");
+    return {
+      providerKind,
+      provider: createOpenAICompatibleProvider({
+        baseUrl: process.env.AI_API_BASE,
+        apiKey: process.env.AI_API_KEY,
+        model: process.env.AI_MODEL,
+        workflowVersion: process.env.AI_WORKFLOW_VERSION,
+        modelVersion: process.env.AI_MODEL_VERSION || process.env.AI_MODEL,
+      }),
+    };
+  }
+
+  return { providerKind, invalidProvider: true };
+}
+
+const live = await createLiveProvider();
+if (live.invalidProvider) {
+  console.error(JSON.stringify({
+    status: "blocked",
+    reason: "unsupported_live_provider",
+    provider: live.providerKind,
+    supported: ["dify", "openai-compatible"],
+  }, null, 2));
+  process.exitCode = 2;
+} else if (live.missing?.length) {
   console.error(JSON.stringify({
     status: "blocked",
     reason: "missing_live_provider_config",
-    missing,
+    provider: live.providerKind,
+    missing: live.missing,
     note: "No real-model baseline was run. Configure secrets in the server/CI environment; never commit them to the repository.",
   }, null, 2));
   process.exitCode = 2;
 } else {
-  const [{ createAIAdapter }, { createDifyProvider }] = await Promise.all([
-    importTypeScript("../lib/ai/adapter.ts"),
-    importTypeScript("../lib/ai/dify-provider.ts"),
-  ]);
-
-  const provider = createDifyProvider({
-    baseUrl: process.env.DIFY_API_BASE,
-    apiKey: process.env.DIFY_API_KEY,
-    workflowVersion: process.env.DIFY_WORKFLOW_VERSION,
-    modelVersion: process.env.DIFY_MODEL_VERSION,
-    userId: process.env.DIFY_USER_ID || "xiaoman-eval",
-  });
-  const adapter = createAIAdapter(provider, { timeoutMs: 15_000, lowConfidenceThreshold: 0.8 });
+  const { createAIAdapter } = await importTypeScript("../lib/ai/adapter.ts");
+  const adapter = createAIAdapter(live.provider, { timeoutMs: 15_000, lowConfidenceThreshold: 0.8 });
   const report = await runEvaluation(adapter, baselineCases);
   const summary = {
     status: "completed",
+    provider: live.providerKind,
     dataset: "baseline-cases-v0.1",
     ...report,
   };
