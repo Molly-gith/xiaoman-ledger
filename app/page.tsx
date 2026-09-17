@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import type { LedgerState, Transaction } from "../lib/domain/types";
-import { calculateFinance, cents, localDate, remainingDays, sumMoney, transactionDay } from "../lib/domain/finance";
+import { calculateFinance, cents, localDate, sumMoney, transactionDay } from "../lib/domain/finance";
 import { buildAssistantContext } from "../lib/domain/assistant-context";
 import { createLocalRepository } from "../lib/data/local-adapter";
 import { defaultState, normalizeBackup } from "../lib/data/schema";
