@@ -21,43 +21,44 @@ async function expectComposerAtBottom(page: Page) {
   })).toBeTruthy();
 }
 
-test('conversation-first v3 keeps trusted facts, bottom composer and capability cards', async ({ page }) => {
+test('conversation-first v4 keeps trusted facts, bottom composer and task-oriented capability entries', async ({ page }) => {
   await open(page);
   await setup(page);
 
   await expect(page.getByRole('heading', { name: '小满', exact: true })).toBeVisible();
   await expect(page.getByText('你的个人财务助手', { exact: true })).toBeVisible();
   await expect(page.getByTestId('assistant-conversation')).toBeVisible();
-  await expect(page.getByTestId('assistant-readiness')).toContainText('财务数据已就绪');
+  await expect(page.getByTestId('assistant-readiness')).toContainText('数据已就绪');
+  await expect(page.getByText('这个周期整体还稳。', { exact: true })).toBeVisible();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥7,500.00');
   await expect(page.getByPlaceholder('问小满：我这个月还能花多少？')).toBeVisible();
   await expect(page.getByText('AI 分析暂未启用 · 记账与财务看板可正常使用', { exact: true })).toBeVisible();
   await expect(page.getByText('这周花多了吗？', { exact: true })).toBeVisible();
   await expectComposerAtBottom(page);
 
-  await expect(page.getByTestId('home-action-add')).toBeVisible();
-  await expect(page.getByTestId('home-action-bills')).toBeVisible();
-  await expect(page.getByTestId('home-action-assets')).toBeVisible();
-  await expect(page.getByTestId('home-action-review')).toBeVisible();
+  await expect(page.getByTestId('home-action-add')).toContainText('记一笔');
+  await expect(page.getByTestId('home-action-bills')).toContainText('看看这个月');
+  await expect(page.getByTestId('home-action-assets')).toContainText('我的资产');
+  await expect(page.getByTestId('home-action-review')).toContainText('帮我复盘');
   await expect(page.locator('.bottom-nav')).toBeHidden();
 
-  await page.screenshot({ path: 'docs/screenshots/v03-conversation-home.png', fullPage: true });
+  await page.screenshot({ path: 'docs/screenshots/v04-conversation-home.png', fullPage: true });
 
   await page.getByTestId('home-action-bills').click();
   await expect(page.getByRole('heading', { name: '财务', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: '消费 / 浪费 / 投资', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: '投资资产', exact: true })).toBeVisible();
-  await page.screenshot({ path: 'docs/screenshots/v03-finance.png', fullPage: true });
+  await page.screenshot({ path: 'docs/screenshots/v04-finance.png', fullPage: true });
 
   await page.reload();
   await page.getByTestId('home-action-assets').click();
   await expect(page.getByText('投资账户', { exact: true }).first()).toBeVisible();
-  await page.screenshot({ path: 'docs/screenshots/v03-assets.png', fullPage: true });
+  await page.screenshot({ path: 'docs/screenshots/v04-assets.png', fullPage: true });
 
   await page.reload();
   await page.getByTestId('home-action-review').click();
   await expect(page.getByRole('heading', { name: '周期复盘', exact: true })).toBeVisible();
-  await page.screenshot({ path: 'docs/screenshots/v03-review.png', fullPage: true });
+  await page.screenshot({ path: 'docs/screenshots/v04-review.png', fullPage: true });
 
   await page.reload();
   await page.setViewportSize({ width: 320, height: 760 });
@@ -69,7 +70,7 @@ test('conversation-first v3 keeps trusted facts, bottom composer and capability 
     const shell = document.querySelector('.app-shell')?.getBoundingClientRect();
     return !!dock && !!shell && dock.left >= shell.left - 1 && dock.right <= shell.right + 1;
   })).toBeTruthy();
-  await page.screenshot({ path: 'docs/screenshots/v03-home-320.png', fullPage: true });
+  await page.screenshot({ path: 'docs/screenshots/v04-home-320.png', fullPage: true });
 });
 
 test('conversation-first home downgrades certainty when legacy data still needs review', async ({ page }) => {
@@ -89,7 +90,7 @@ test('conversation-first home downgrades certainty when legacy data still needs 
 
   await expect(page.getByTestId('assistant-readiness')).toContainText('有数据待核对');
   await expect(page.getByTestId('safe-to-spend')).toHaveText('待核对旧账');
-  await expect(page.getByText('1 笔历史数据还需要核对，先不把当前结果当成最终结论。', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('先把几笔旧账核对清楚，我再给你更确定的判断。', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '核对账单', exact: true })).toBeVisible();
   await expect(page.getByPlaceholder('问小满：我这个月还能花多少？')).toBeVisible();
   await expectComposerAtBottom(page);
