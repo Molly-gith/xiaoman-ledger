@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import type { LedgerState, Transaction } from "../lib/domain/types";
 import { calculateFinance, cents, localDate, remainingDays, sumMoney, transactionDay } from "../lib/domain/finance";
+import { buildAssistantContext } from "../lib/domain/assistant-context";
 import { createLocalRepository } from "../lib/data/local-adapter";
 import { defaultState, normalizeBackup } from "../lib/data/schema";
 import { CycleForm, EntryForm } from "./ledger-forms";
@@ -11,13 +12,23 @@ import { ConfirmPanel, DataPanel, EmptyState, GoalForm, LoadingScreen, PageHeade
 
 type Tab = "home" | "bills" | "review" | "me" | "assets";
 type Modal = "add" | "edit" | "delete" | "cycle" | "data" | "import" | "clear" | "goal" | null;
-const NAV: { key: Exclude<Tab, "assets">; label: string }[] = [{ key: "home", label: "首页" }, { key: "bills", label: "账单" }, { key: "review", label: "复盘" }, { key: "me", label: "我的" }];
+const NAV: { key: Exclude<Tab, "assets">; label: string }[] = [
+  { key: "home", label: "小满" },
+  { key: "bills", label: "财务" },
+  { key: "review", label: "复盘" },
+  { key: "me", label: "我的" },
+];
 const FILTERS = [{ key: "all", label: "全部" }, { key: "income", label: "收入" }, { key: "expense", label: "支出" }] as const;
+
 function download(content: string, type: string, filename: string) {
   const url = URL.createObjectURL(new Blob([content], { type }));
-  const link = document.createElement("a"); link.href = url; link.download = filename; link.click();
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
   setTimeout(() => URL.revokeObjectURL(url), 500);
 }
+
 function inPeriod(tx: Transaction, period: Period, today: string) {
   const date = transactionDay(tx);
   if (period === "day") return date === today;
@@ -25,6 +36,7 @@ function inPeriod(tx: Transaction, period: Period, today: string) {
   if (period === "year") return date.slice(0, 4) === today.slice(0, 4);
   return date <= today && +new Date(`${today}T00:00:00Z`) - +new Date(`${date}T00:00:00Z`) < 7 * 86400000;
 }
+
 export default function Home() {
   const [repository] = useState(createLocalRepository);
   const [state, setState] = useState<LedgerState | null>(null);
@@ -41,6 +53,7 @@ export default function Home() {
   const [today, setToday] = useState(() => localDate());
   const showDialog = !!state && (!state.activeCycleId || modal !== null);
   const canDismiss = !!state?.activeCycleId;
+
   useEffect(() => {
     if (!showDialog) return;
     const sheet = document.querySelector<HTMLElement>(".sheet");
@@ -57,34 +70,72 @@ export default function Home() {
     document.addEventListener("keydown", handleKey);
     return () => { document.removeEventListener("keydown", handleKey); if (previous?.isConnected) previous.focus(); };
   }, [showDialog, canDismiss, modal]);
+
   useEffect(() => {
     let active = true;
     void repository.read().then(value => { if (active) setState(value); }).catch(e => { if (active) setError(e instanceof Error ? e.message : "本机数据读取失败"); });
     const timer = setInterval(() => setToday(localDate()), 30000);
     return () => { active = false; clearInterval(timer); };
   }, [repository]);
-  useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(""), 4000); return () => clearTimeout(timer); }, [toast]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(""), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
   async function commit(action: () => Promise<LedgerState>, message: string): Promise<boolean> {
     if (saving.current) return false;
-    saving.current = true; setBusy(true); setError("");
+    saving.current = true;
+    setBusy(true);
+    setError("");
     try {
-      const next = await action(); setState(next); setModal(null); setEditing(null); setPendingImport(null);
-      const c = next.cycles.find(c => c.id === next.activeCycleId), p = next.budgets.find(b => b.cycleId === next.activeCycleId);
+      const next = await action();
+      setState(next);
+      setModal(null);
+      setEditing(null);
+      setPendingImport(null);
+      const c = next.cycles.find(c => c.id === next.activeCycleId);
+      const p = next.budgets.find(b => b.cycleId === next.activeCycleId);
       const m = c && p ? calculateFinance(c, p, next.transactions, next.investmentFlows) : null;
       const label = m?.model === "nature" ? "本周期可支出" : "本周期剩余";
       setToast(m && !m.unresolvedCount ? `${message} · ${label} ${money(m.safeToSpend)}` : message);
       return true;
-    } catch (e) { setError(e instanceof Error ? e.message : "保存失败，请重试；输入内容已保留"); return false; }
-    finally { saving.current = false; setBusy(false); }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "保存失败，请重试；输入内容已保留");
+      return false;
+    } finally {
+      saving.current = false;
+      setBusy(false);
+    }
   }
+
   async function reload() {
-    try { const next = await repository.read(); setState(next); setError(""); setModal(null); }
-    catch (e) { setError(e instanceof Error ? e.message : "读取失败"); }
+    try {
+      const next = await repository.read();
+      setState(next);
+      setError("");
+      setModal(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "读取失败");
+    }
   }
-  if (!state) return error ? <main className="app-shell"><PageHeader title="账本暂时无法读取" subtitle="原有数据已保留" /><p role="alert">{error}</p><button className="primary" onClick={() => void reload()}>重新载入</button></main> : <LoadingScreen text="正在打开本地账本" />;
+
+  if (!state) {
+    return error
+      ? <main className="app-shell"><PageHeader title="账本暂时无法读取" subtitle="原有数据已保留" /><p role="alert">{error}</p><button className="primary" onClick={() => void reload()}>重新载入</button></main>
+      : <LoadingScreen text="正在打开本地账本" />;
+  }
+
   const cycle = state.cycles.find(c => c.id === state.activeCycleId);
   const plan = state.budgets.find(b => b.cycleId === cycle?.id);
   const metrics = cycle && plan ? calculateFinance(cycle, plan, state.transactions, state.investmentFlows) : null;
+  const assistantSnapshot = metrics ? buildAssistantContext({
+    asOfDate: today,
+    metrics,
+    investmentAccounts: state.investmentAccounts,
+    investmentFlows: state.investmentFlows,
+  }) : null;
   const expired = cycle ? today >= cycle.nextSalaryDate : false;
   const setup = !cycle;
   const visible = state.transactions.filter(tx => inPeriod(tx, period, today) && (filter === "all" || tx.type === filter));
@@ -101,10 +152,18 @@ export default function Home() {
     download(`\uFEFF${rows.map(row => row.map(escape).join(",")).join("\n")}`, "text/csv;charset=utf-8", `xiaoman-ledger-${today}.csv`);
   };
   const chooseBackup = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]; event.target.value = ""; if (!file) return;
-    try { if (file.size > 10_000_000) throw new Error("请选择小于 10 MB 的备份"); setPendingImport(normalizeBackup(JSON.parse(await file.text()))); setModal("import"); }
-    catch (e) { setError(e instanceof Error ? e.message : "备份无效"); }
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      if (file.size > 10_000_000) throw new Error("请选择小于 10 MB 的备份");
+      setPendingImport(normalizeBackup(JSON.parse(await file.text())));
+      setModal("import");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "备份无效");
+    }
   };
+
   const filters = <div className="recent-filters" aria-label="筛选账目">{FILTERS.map(item => <button key={item.key} aria-pressed={filter === item.key} className={filter === item.key ? "active" : ""} onClick={() => setFilter(item.key)}>{item.label}</button>)}</div>;
   const natureCard = metrics && <section className="section-block category-card"><div className="section-title"><h2>消费 / 浪费 / 投资</h2><span>按支出金额</span></div>{metrics.natureMix.map(item => <div className="nature-row" key={item.nature}><b>{item.nature}</b><span>{money(item.amount)}</span><small>{item.percent.toFixed(1)}%</small></div>)}{!metrics.totalExpense && <p className="helper">记下第一笔后，这里会展现消费结构。</p>}</section>;
   const consumptionSpend = metrics?.natureMix.find(item => item.nature === "消费")?.amount ?? 0;
@@ -115,21 +174,78 @@ export default function Home() {
     <div className="budget-row"><span>投资目标 · ≥ 25%</span><b>{money(metrics.investmentSpend)} / {money(metrics.investmentTarget)}</b></div>
     <div className="savings-line"><StoryIcon name="leaf"/><span>目标是结构更健康，不是把每个额度花完。<small>房租、水电等发生时直接正常记账。</small></span></div>
   </> : <><div className="budget-row"><span>当前周期剩余</span><b>{money(metrics.safeToSpend)}</b></div><div className="gentle-tip"><p>这是升级前建立的旧周期，继续沿用原计算，避免历史金额突然变化。调整周期后即可切换到新的 70 / 5 / 25 结构。</p></div></>}</section>;
+
+  const assistantInsights = assistantSnapshot ? [
+    assistantSnapshot.readiness === "needs_review"
+      ? `${assistantSnapshot.unresolvedCount} 笔历史数据还需要核对，先不把当前结果当成最终结论。`
+      : assistantSnapshot.period.safeToSpend === null
+        ? "当前还不能形成可信的本周期可支出结论。"
+        : `本周期还可支出 ${money(assistantSnapshot.period.safeToSpend)}。`,
+    assistantSnapshot.period.investmentGap > 0
+      ? `投资目标还差 ${money(assistantSnapshot.period.investmentGap)}，已投入 ${money(assistantSnapshot.period.investmentSpend)}。`
+      : `本周期投资目标已达到 ${money(assistantSnapshot.period.investmentTarget)}。`,
+    assistantSnapshot.investmentAssets.accountCount > 0
+      ? assistantSnapshot.investmentAssets.hasUnknownCost
+        ? `投资账户总市值 ${money(assistantSnapshot.investmentAssets.totalMarketValue)}；部分历史成本未知，暂不计算总浮盈亏。`
+        : `投资账户总市值 ${money(assistantSnapshot.investmentAssets.totalMarketValue)}，浮动盈亏 ${money(assistantSnapshot.investmentAssets.totalFloatingPnL ?? 0)}。`
+      : "还没有投资账户数据，后续可在财务页补充当前市值。",
+  ].slice(0, 3) : [];
+
   return <main className="app-shell"><fieldset className="app-content" disabled={busy} inert={showDialog}>
-    {tab === "home" && <><header className="topbar"><div className="storybook-brand"><StoryIcon name="leaf"/><div><h1>小满</h1><p>把日子，过成喜欢的样子</p></div></div><button className="avatar" onClick={() => setModal("data")} aria-label="本地数据与备份"><StoryIcon name="user"/></button></header>
-      {cycle && metrics && <><section className="balance-card"><div className="balance-top"><span>{metrics.model === "nature" ? "这个周期，还可支出" : "这个周期，当前剩余"}</span><span className="card-mark"><StoryIcon name="lock"/>仅存此设备</span></div><strong data-testid="safe-to-spend">{metrics.unresolvedCount ? "待核对旧账" : expired ? "请开启新周期" : money(metrics.safeToSpend)}</strong><p className="balance-explanation">{metrics.model === "nature" ? "已为投资目标留出空间；房租等发生时正常记账。" : "旧周期继续沿用原计算，调整周期可切换新结构。"}</p><div className="balance-stats"><div><span>{expired ? "上个周期已结束" : "距下次发薪"}</span><b>{remainingDays(cycle, today)} 天</b></div><div><span>财务周期</span><b>{cycle.startDate.slice(5)} — {cycle.endDate.slice(5)}</b></div></div></section>
-      {expired && <button className="primary" onClick={() => setModal("cycle")}>确认收入，开启新周期</button>}
-      {!!metrics.unresolvedCount && <div className="gentle-tip"><p>{metrics.unresolvedCount} 笔旧支出尚需核对日期、周期或消费性质。请在账单中编辑确认，完成后再显示本周期可支出。</p><button onClick={() => { setTab("bills"); setPeriod("year"); setFilter("expense"); }}>核对账单</button></div>}
-      {!metrics.unresolvedCount && metrics.safeToSpend < 0 && <div className="gentle-tip" role="status"><p>本周期已超出当前结构目标 {money(-metrics.safeToSpend)}。可以查看账目或调整目标。</p></div>}
-      <button className="quick-entry" onClick={() => openEntry()}><div><StoryIcon name="book"/><span><b>记下刚刚的一笔</b><small>让每一份花费，都被好好看见</small></span></div><span className="mic"><StoryIcon name="plus"/></span></button><div className="home-overview">{budgetCard}{natureCard}</div>
-      <section className="section-block transactions"><div className="section-title"><h2>最近账目</h2><button onClick={() => setTab("bills")}>查看账单</button></div>{filters}{recent.length ? recent.map(tx => <TransactionRow key={tx.id} item={tx} {...rowActions} />) : <EmptyState compact text="从第一笔开始，慢慢看见自己的生活" action={() => openEntry()} />}</section></>}
+    {tab === "home" && <>
+      <header className="topbar"><div className="storybook-brand"><StoryIcon name="leaf"/><div><h1>小满</h1><p>你的个人财务助手</p></div></div><button className="avatar" onClick={() => setModal("data")} aria-label="本地数据与备份"><StoryIcon name="user"/></button></header>
+      {cycle && metrics && assistantSnapshot && <>
+        <section className="balance-card">
+          <div className="balance-top"><span>小满看到的财务状态</span><span className="card-mark" data-testid="assistant-readiness"><StoryIcon name="lock"/>{assistantSnapshot.readiness === "ready" ? "数据已就绪" : "待核对"}</span></div>
+          <strong data-testid="safe-to-spend">{assistantSnapshot.readiness === "needs_review" ? "待核对旧账" : expired ? "请开启新周期" : assistantSnapshot.period.safeToSpend === null ? "数据不足" : money(assistantSnapshot.period.safeToSpend)}</strong>
+          <p className="balance-explanation">{assistantSnapshot.readiness === "ready" ? "这是规则层已经算好的本周期事实，AI 只负责解释，不重新计算金额。" : "先把旧账补齐，小满再给你更确定的分析。"}</p>
+          <div className="balance-stats"><div><span>{expired ? "上个周期已结束" : "距下次发薪"}</span><b>{remainingDays(cycle, today)} 天</b></div><div><span>财务周期</span><b>{cycle.startDate.slice(5)} — {cycle.endDate.slice(5)}</b></div></div>
+        </section>
+        {expired && <button className="primary" onClick={() => setModal("cycle")}>确认收入，开启新周期</button>}
+        {!!metrics.unresolvedCount && <div className="gentle-tip"><p>{metrics.unresolvedCount} 笔旧支出尚需核对日期、周期或消费性质。完成后再生成强结论。</p><button onClick={() => { setTab("bills"); setPeriod("year"); setFilter("expense"); }}>核对账单</button></div>}
+        {!metrics.unresolvedCount && metrics.safeToSpend < 0 && <div className="gentle-tip" role="status"><p>本周期已超出当前结构目标 {money(-metrics.safeToSpend)}。可以查看财务明细或调整目标。</p></div>}
+        <section className="section-block">
+          <div className="section-title"><h2>当前分析状态</h2><span>{assistantSnapshot.readiness === "ready" ? "基础事实完整" : "数据待补充"}</span></div>
+          <p>{assistantSnapshot.readiness === "ready" ? "财务阶段的具体阈值还没有冻结，所以这一版只做事实分析，不擅自给你贴“财富等级”。" : "有未核对数据时，小满不会输出确定的财务阶段或安心可花结论。"}</p>
+        </section>
+        <section className="section-block">
+          <div className="section-title"><h2>小满今天想提醒你</h2><span>确定性洞察</span></div>
+          {assistantInsights.map((insight, index) => <p key={insight}>{index + 1}. {insight}</p>)}
+        </section>
+        <section className="section-block">
+          <div className="section-title"><h2>问小满</h2><span>AI 分析待启用</span></div>
+          <p>现在先展示规则层可信事实。接入真实 AI Provider 后，你可以直接问“我最近花钱怎么样”“这期该关注什么”。</p>
+        </section>
+      </>}
+      <button className="quick-entry" onClick={() => openEntry()}><div><StoryIcon name="book"/><span><b>记下刚刚的一笔</b><small>手动记账继续保留，作为小满理解你财务状况的数据来源</small></span></div><span className="mic"><StoryIcon name="plus"/></span></button>
+      <section className="section-block transactions"><div className="section-title"><h2>最近账目</h2><button onClick={() => setTab("bills")}>进入财务</button></div>{filters}{recent.length ? recent.map(tx => <TransactionRow key={tx.id} item={tx} {...rowActions} />) : <EmptyState compact text="从第一笔开始，让小满慢慢理解你的钱" action={() => openEntry()} />}</section>
     </>}
-    {tab === "bills" && <><PageHeader title="账单" subtitle="每一笔，都清清楚楚 · 以下按自然日历筛选" /><PeriodTabs period={period} setPeriod={setPeriod} />{filters}<section className="bill-summary"><div><span>收入记录</span><b>{money(total(visible, "income"))}</b></div><div><span>支出记录</span><b>{money(total(visible, "expense"))}</b></div><div><span>账目</span><b>{visible.length} 笔</b></div></section><section className="transactions bill-list">{visible.length ? visible.map(tx => <TransactionRow key={tx.id} item={tx} {...rowActions} />) : <EmptyState text="这个时段还没有账目" action={() => openEntry()} />}</section></>}
-    {tab === "review" && <><PageHeader title="周期复盘" subtitle={cycle ? `${cycle.startDate} 至 ${cycle.endDate}` : "先建立财务周期"} />{metrics && <><section className="stats-hero"><p>本周期实际支出</p><strong>{money(metrics.totalExpense)}</strong><p>{metrics.model === "nature" ? `投资目标 ${money(metrics.investmentTarget)} · 已发生投资 ${money(metrics.investmentSpend)}` : `旧周期计划储蓄 ${money(plan!.plannedSavings)}`}</p><p>收入记录 {money(total(cycleTransactions, "income"))}；可用收入以周期设置为准。</p></section>{budgetCard}{natureCard}<p className="helper">当前提供确定性数据复盘。财务健康评分和 AI 洞察将在后续版本完善。</p></>}</>}
+
+    {tab === "bills" && <>
+      <PageHeader title="财务" subtitle="消 / 浪 / 投、投资资产与账单都在这里" />
+      <div className="home-overview">{budgetCard}{natureCard}</div>
+      <section className="section-block category-card">
+        <div className="section-title"><h2>投资资产</h2><button onClick={() => setTab("assets")}>管理投资账户</button></div>
+        {assistantSnapshot && assistantSnapshot.investmentAssets.accountCount > 0 ? <>
+          <div className="budget-row"><span>当前总市值</span><b>{money(assistantSnapshot.investmentAssets.totalMarketValue)}</b></div>
+          <div className="budget-row"><span>累计净投入</span><b>{assistantSnapshot.investmentAssets.totalNetContribution === null ? "成本待补充" : money(assistantSnapshot.investmentAssets.totalNetContribution)}</b></div>
+          <div className="budget-row"><span>浮动盈亏</span><b>{assistantSnapshot.investmentAssets.totalFloatingPnL === null ? "暂不计算" : money(assistantSnapshot.investmentAssets.totalFloatingPnL)}</b></div>
+        </> : <p className="helper">还没有投资账户。你可以先记录 ETF / 基金的当前市值，历史成本未知时小满不会编造收益。</p>}
+      </section>
+      <PeriodTabs period={period} setPeriod={setPeriod} />{filters}
+      <section className="bill-summary"><div><span>收入记录</span><b>{money(total(visible, "income"))}</b></div><div><span>支出记录</span><b>{money(total(visible, "expense"))}</b></div><div><span>账目</span><b>{visible.length} 笔</b></div></section>
+      <section className="transactions bill-list">{visible.length ? visible.map(tx => <TransactionRow key={tx.id} item={tx} {...rowActions} />) : <EmptyState text="这个时段还没有账目" action={() => openEntry()} />}</section>
+    </>}
+
+    {tab === "review" && <><PageHeader title="周期复盘" subtitle={cycle ? `${cycle.startDate} 至 ${cycle.endDate}` : "先建立财务周期"} />{metrics && <><section className="stats-hero"><p>本周期实际支出</p><strong>{money(metrics.totalExpense)}</strong><p>{metrics.model === "nature" ? `投资目标 ${money(metrics.investmentTarget)} · 已发生投资 ${money(metrics.investmentSpend)}` : `旧周期计划储蓄 ${money(plan!.plannedSavings)}`}</p><p>收入记录 {money(total(cycleTransactions, "income"))}；可用收入以周期设置为准。</p></section>{budgetCard}{natureCard}<p className="helper">当前提供确定性数据复盘。AI 周期洞察会在真实 Provider 接入后启用。</p></>}</>}
+
     {tab === "me" && <><PageHeader title="我的" subtitle="安排周期，也照顾未来" /><section className="category-card"><h2>财务周期</h2><p>每月 {state.profile?.salaryDay ?? "—"} 日发薪 · 短月按月末</p><button className="primary" onClick={() => setModal("cycle")}>{!expired && cycle ? "调整本周期结构" : "建立新周期"}</button><p className="helper">收入记录不会重复增加本周期可支出。收入变化时，请在周期设置中确认可用收入。</p></section><button className="local-data-card" onClick={() => setTab("assets")}><span className="local-data-icon">投</span><span><b>投资账户</b><small>记录已有 ETF / 基金资产与当前市值</small></span></button><section className="goal-card saving"><p>存款目标</p><strong>{money(state.settings.savingsCurrent)} <small>/ {money(state.settings.savingsGoal)}</small></strong><button onClick={() => setModal("goal")}>更新存款目标</button></section><button className="local-data-card" onClick={() => setModal("data")}><span className="local-data-icon">本</span><span><b>本机数据与备份</b><small>换设备前，导出一份完整备份</small></span></button></>}
+
     {tab === "assets" && <InvestmentAccounts state={state} today={today} onBack={() => setTab("me")} onCreateAccount={account => commit(() => repository.saveInvestmentAccount(account, state.revision), "投资账户已创建")} onFlow={flow => commit(() => repository.saveInvestmentFlow(flow, state.revision), flow.type === "contribution" ? "投资投入已记录" : "投资取出已记录")} onMarketValue={(accountId, value, date) => commit(() => repository.saveMarketValue(accountId, value, date, state.revision), "当前市值已更新")} />}
+
     <nav className="bottom-nav" aria-label="主要导航">{NAV.slice(0, 2).map(item => <button key={item.key} className={tab === item.key ? "active" : ""} aria-current={tab === item.key ? 'page' : undefined} onClick={() => setTab(item.key)}><StoryIcon name={item.key === 'home' ? 'home' : 'book'}/>{item.label}</button>)}<button className="add" aria-label="添加账目" onClick={() => openEntry()}><StoryIcon name="plus"/></button>{NAV.slice(2).map(item => <button key={item.key} className={tab === item.key ? "active" : ""} aria-current={tab === item.key ? 'page' : undefined} onClick={() => setTab(item.key)}><StoryIcon name={item.key === 'review' ? 'leaf' : 'user'}/>{item.label}</button>)}</nav>
   </fieldset>
+
   {(setup || modal) && <div className={`modal-wrap ${setup && !modal ? 'setup-wrap' : ''}`}><section className={`sheet ${setup && !modal ? 'setup-sheet' : ''}`} role="dialog" aria-modal="true" aria-label={setup ? "建立第一个财务周期" : modal === "add" || modal === "edit" ? "记账" : "账本设置"}>
     {(!setup || modal) && <button className="close" disabled={busy} onClick={() => { setModal(null); setEditing(null); setError(""); }} aria-label="关闭">×</button>}
     <fieldset disabled={busy} className="app-content">
