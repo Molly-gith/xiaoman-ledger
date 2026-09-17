@@ -5,6 +5,7 @@ import "./globals.css";
 import "./interactions.css";
 import "./storybook.css";
 import "./conversation.css";
+import "./v3-navigation.css";
 
 export const viewport: Viewport = { themeColor: "#176b4c", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
