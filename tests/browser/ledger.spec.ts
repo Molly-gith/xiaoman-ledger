@@ -10,6 +10,12 @@ async function setup(page: Page) {
   await page.getByRole('button', { name: '开始这个周期', exact: true }).click();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥7,500.00');
 }
+async function returnHome(page: Page) {
+  const back = page.locator('.bottom-nav > button').first();
+  await expect(back).toBeVisible();
+  await back.click();
+  await expect(page.getByTestId('assistant-conversation')).toBeVisible();
+}
 
 test('manual cycle, CRUD, rent as normal spending, nature targets, backups and offline reload', async ({ page, context }) => {
   const errors: string[]=[]; page.on('pageerror', error=>errors.push(error.message));
@@ -17,7 +23,7 @@ test('manual cycle, CRUD, rent as normal spending, nature targets, backups and o
   await mkdir('docs/screenshots', {recursive:true});
   await page.screenshot({path:'docs/screenshots/onboarding.png',fullPage:true});
   await setup(page);
-  await page.getByRole('button',{name:'添加账目',exact:true}).click();
+  await page.getByTestId('home-action-add').click();
   await expect(page.getByText('这笔钱，从哪里出？')).toHaveCount(0);
   await page.locator('[name="amount"]').fill('37.8');
   await page.getByRole('button',{name:'消费',exact:true}).click();
@@ -33,13 +39,13 @@ test('manual cycle, CRUD, rent as normal spending, nature targets, backups and o
   await page.reload();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥7,500.00');
   await expect(page.locator('.tx-copy small')).toContainText('学习 · 投资');
-  await page.getByRole('button',{name:'添加账目',exact:true}).click();
+  await page.getByTestId('home-action-add').click();
   await page.getByRole('button',{name:'收入',exact:true}).last().click();
   await page.locator('[name="amount"]').fill('10000');
   await page.locator('[name="note"]').fill('工资');
   await page.getByRole('button',{name:'记好了',exact:true}).click();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥7,500.00');
-  await page.getByRole('button',{name:'添加账目',exact:true}).click();
+  await page.getByTestId('home-action-add').click();
   await page.locator('[name="amount"]').fill('3000');
   await page.getByRole('button',{name:'居住',exact:false}).click();
   await page.getByRole('button',{name:'消费',exact:true}).click();
@@ -50,17 +56,19 @@ test('manual cycle, CRUD, rent as normal spending, nature targets, backups and o
   await expect(page.getByText(/账单预留/)).toHaveCount(0);
   await page.clock.fastForward(5000);
   await page.screenshot({path:'docs/screenshots/home.png'});
-  await page.getByRole('button',{name:'财务',exact:true}).click();
+  await page.getByTestId('home-action-bills').click();
   await page.getByRole('button',{name:'调整结构',exact:true}).click();
   await page.locator('[name="availableIncome"]').fill('11000');
   await page.getByRole('button',{name:'保存新的周期结构',exact:true}).click();
-  await page.getByRole('button',{name:'小满',exact:true}).click();
+  await expect(page.getByText(/周期结构已保存/)).toBeVisible();
+  await returnHome(page);
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥5,500.00');
-  await page.getByRole('button',{name:'财务',exact:true}).click();
+  await page.getByTestId('home-action-bills').click();
   const course=page.locator('.tx-row').filter({hasText:'课程'});
   await course.getByRole('button',{name:'删除',exact:true}).click();
   await page.getByRole('button',{name:'确认删除',exact:true}).click();
-  await page.getByRole('button',{name:'小满',exact:true}).click();
+  await expect(page.getByText(/账目已删除/)).toBeVisible();
+  await returnHome(page);
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥5,500.00');
   await page.getByRole('button',{name:'本地数据与备份',exact:true}).click();
   const pending=page.waitForEvent('download');
@@ -90,33 +98,33 @@ test('legacy data requires confirmation and manual editing preserves user choice
   await page.getByRole('button',{name:'编辑',exact:true}).click();
   await page.getByRole('button',{name:'浪费',exact:true}).click();
   await page.getByRole('button',{name:'保存修改',exact:true}).click();
-  await page.getByRole('button',{name:'小满',exact:true}).click();
+  await returnHome(page);
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥950.00');
 });
 
 test('stale tabs cannot overwrite newer data',async({page,context})=>{
   await open(page);await setup(page);
   const second=await context.newPage();await open(second);await expect(second.getByTestId('safe-to-spend')).toHaveText('¥7,500.00');
-  await page.getByRole('button',{name:'财务',exact:true}).click();
+  await page.getByTestId('home-action-bills').click();
   await page.getByRole('button',{name:'调整结构',exact:true}).click();await page.locator('[name="availableIncome"]').fill('12000');await page.getByRole('button',{name:'保存新的周期结构',exact:true}).click();
-  await second.getByRole('button',{name:'财务',exact:true}).click();
+  await expect(page.getByText(/周期结构已保存/)).toBeVisible();
+  await second.getByTestId('home-action-bills').click();
   await second.getByRole('button',{name:'调整结构',exact:true}).click();await second.locator('[name="availableIncome"]').fill('9000');await second.getByRole('button',{name:'保存新的周期结构',exact:true}).click();
   await expect(second.getByRole('alert')).toContainText('其他页面更新');
   await second.getByRole('button',{name:'重新载入账本',exact:true}).click();
-  await second.getByRole('button',{name:'小满',exact:true}).click();
   await expect(second.getByTestId('safe-to-spend')).toHaveText('¥9,500.00');
 });
 
 test('zero income, negative period spendable and salary rollover preserve history',async({page})=>{
   await open(page);await page.locator('[name="salaryDay"]').fill('20');await page.locator('[name="availableIncome"]').fill('0');
   await page.getByRole('button',{name:'开始这个周期',exact:true}).click();await expect(page.getByTestId('safe-to-spend')).toHaveText('¥0.00');
-  await page.getByRole('button',{name:'添加账目',exact:true}).click();await page.locator('[name="amount"]').fill('10');await page.getByRole('button',{name:'消费',exact:true}).click();await page.getByRole('button',{name:'记好了',exact:true}).click();
+  await page.getByTestId('home-action-add').click();await page.locator('[name="amount"]').fill('10');await page.getByRole('button',{name:'消费',exact:true}).click();await page.getByRole('button',{name:'记好了',exact:true}).click();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥-10.00');
   await page.clock.setFixedTime(new Date('2026-09-20T04:00:00Z'));await page.reload();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('请开启新周期');
   await page.getByRole('button',{name:'确认收入，开启新周期',exact:true}).click();await page.locator('[name="availableIncome"]').fill('100');await page.locator('[name="plannedSavings"]').fill('0');await page.getByRole('button',{name:'开始这个周期',exact:true}).click();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥100.00');
-  await page.getByRole('button',{name:'财务',exact:true}).click();await expect(page.locator('.tx-row')).toHaveCount(1);
+  await page.getByTestId('home-action-bills').click();await expect(page.locator('.tx-row')).toHaveCount(1);
 });
 
 test('failed durable write retains the form and does not report success',async({page})=>{
@@ -160,5 +168,5 @@ test('ambiguous legacy timestamps require an explicit date instead of a timezone
   await expect(page.locator('[name="spendKind"]')).toHaveCount(0);
   await page.getByRole('button',{name:'保存修改',exact:true}).click();await expect(page.getByRole('dialog')).toBeVisible();
   await page.locator('[name="date"]').fill('2026-08-20');await page.getByRole('button',{name:'保存修改',exact:true}).click();
-  await page.getByRole('button',{name:'小满',exact:true}).click();await expect(page.getByTestId('safe-to-spend')).toHaveText('¥950.00');
+  await returnHome(page);await expect(page.getByTestId('safe-to-spend')).toHaveText('¥950.00');
 });
