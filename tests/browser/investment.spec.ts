@@ -31,8 +31,9 @@ test("investment account keeps asset value separate from cycle cash flow", async
   await page.getByRole("button", { name: "保存资金变化", exact: true }).click();
   await expect(page.getByText("¥75,000.00", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "首页", exact: true }).click();
+  await page.getByRole("button", { name: "小满", exact: true }).click();
   await expect(page.getByTestId("safe-to-spend")).toHaveText("¥5,000.00");
+  await page.getByRole("button", { name: "财务", exact: true }).click();
   await expect(page.getByText("¥5,000.00 / ¥2,500.00", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "我的", exact: true }).click();
@@ -42,9 +43,9 @@ test("investment account keeps asset value separate from cycle cash flow", async
   await page.getByRole("button", { name: "保存当前市值", exact: true }).click();
   await expect(page.getByTestId("market-value")).toHaveText("¥80,136.50");
 
-  await page.getByRole("button", { name: "账单", exact: true }).click();
+  await page.getByRole("button", { name: "财务", exact: true }).click();
   await expect(page.locator(".tx-row")).toHaveCount(0);
-  await page.getByRole("button", { name: "首页", exact: true }).click();
+  await page.getByRole("button", { name: "小满", exact: true }).click();
   await expect(page.getByTestId("safe-to-spend")).toHaveText("¥5,000.00");
 
   await page.reload();
