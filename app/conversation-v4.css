@@ -15,9 +15,6 @@
 
 body{background:var(--xm-v4-bg)}
 .app-shell{max-width:1080px;background:var(--xm-v4-bg);box-shadow:none}
-
-/* Brand stays present but quiet. The product should feel like a conversation,
-   not a themed dashboard. */
 .topbar{margin-bottom:30px}
 .storybook-brand>.story-icon{background:transparent;padding:4px;color:var(--xm-v4-brand)}
 .topbar h1{font-size:24px;color:var(--xm-v4-ink)}
@@ -25,17 +22,7 @@ body{background:var(--xm-v4-bg)}
 .avatar{background:transparent;border-color:transparent;box-shadow:none}
 .avatar:hover{background:#efefeb;border-color:#e5e6e1}
 
-/* Hero becomes an open conversation surface instead of card-inside-card. */
-.assistant-conversation{
-  max-width:820px;
-  margin:0 auto 34px;
-  padding:8px 0 0;
-  border:0;
-  border-radius:0;
-  background:transparent;
-  box-shadow:none;
-  overflow:visible;
-}
+.assistant-conversation{max-width:820px;margin:0 auto 34px;padding:8px 0 0;border:0;border-radius:0;background:transparent;box-shadow:none;overflow:visible}
 .assistant-conversation:before{display:none}
 .assistant-thread-head{margin-bottom:14px;gap:9px}
 .assistant-avatar{width:30px;height:30px;border-radius:10px;background:var(--xm-v4-brand);box-shadow:none}
@@ -53,45 +40,23 @@ body{background:var(--xm-v4-bg)}
 .assistant-fact-note{margin-top:16px;color:#878d88;font-size:11px}
 .assistant-fact-note .story-icon{color:#8a918c}
 
-/* Home actions read as next steps, not primary navigation. */
 .home-actions-section{max-width:820px;margin:0 auto 28px}
 .home-actions-section .section-title{margin-bottom:10px}
 .home-actions-section .section-title h2{font-size:13px;font-weight:650;color:#59605b}
 .home-actions-section .section-title>span{display:none}
 .home-action-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
-.home-action-card{
-  min-height:70px;
-  padding:12px;
-  grid-template-columns:28px minmax(0,1fr);
-  gap:9px;
-  border:1px solid var(--xm-v4-line);
-  border-radius:14px;
-  background:rgba(255,255,255,.72);
-  box-shadow:none;
-}
+.home-action-card{min-height:70px;padding:12px;grid-template-columns:28px minmax(0,1fr);gap:9px;border:1px solid var(--xm-v4-line);border-radius:14px;background:rgba(255,255,255,.72);box-shadow:none}
 .home-action-card:hover{background:#fff;border-color:#d8dbd6;box-shadow:none;transform:none}
-.home-action-card>.story-icon,
-.home-action-card:nth-child(2)>.story-icon,
-.home-action-card:nth-child(3)>.story-icon,
-.home-action-card:nth-child(4)>.story-icon{
-  width:28px;height:28px;padding:6px;border-radius:9px;background:var(--xm-v4-brand-soft);color:var(--xm-v4-brand)
-}
+.home-action-card>.story-icon,.home-action-card:nth-child(2)>.story-icon,.home-action-card:nth-child(3)>.story-icon,.home-action-card:nth-child(4)>.story-icon{width:28px;height:28px;padding:6px;border-radius:9px;background:var(--xm-v4-brand-soft);color:var(--xm-v4-brand)}
 .home-action-card b{font-size:12px;font-weight:680;color:var(--xm-v4-ink)}
 .home-action-card small{margin-top:2px;font-size:10px;line-height:1.35;color:#858b86}
 
-/* Secondary history is visually subordinate to the conversation and actions. */
 .transactions.section-block{max-width:820px;margin:0 auto;padding:0;border:0;border-radius:0;background:transparent}
 .transactions.section-block>.section-title{padding-top:5px;border-top:1px solid var(--xm-v4-line)}
 .transactions .tx-row{background:transparent}
 .recent-filters{width:max-content;max-width:100%;background:#efefeb;border-color:transparent}
 
-/* One unobtrusive bottom conversation dock. */
-.assistant-dock{
-  width:min(820px,100%);
-  padding:8px 18px max(14px,env(safe-area-inset-bottom));
-  border-top:0;
-  background:linear-gradient(180deg,rgba(247,247,244,0),rgba(247,247,244,.96) 20%,var(--xm-v4-bg) 52%);
-}
+.assistant-dock{width:min(820px,100%);padding:8px 18px max(14px,env(safe-area-inset-bottom));border-top:0;background:linear-gradient(180deg,rgba(247,247,244,0),rgba(247,247,244,.96) 20%,var(--xm-v4-bg) 52%)}
 .assistant-prompts{padding-top:14px;gap:6px}
 .assistant-prompts button{min-height:36px;padding:0 11px;border-color:var(--xm-v4-line);border-radius:999px;background:rgba(255,255,255,.82);color:#5e655f;font-size:11px}
 .assistant-prompts button:hover{background:#fff;border-color:#d5d9d4}
@@ -103,7 +68,6 @@ body{background:var(--xm-v4-bg)}
 .assistant-composer button{min-width:54px;min-height:44px;border-radius:12px;background:var(--xm-v4-brand)}
 .assistant-composer button:disabled{background:#eceeeb;color:#9ba09c}
 
-/* Detail screens use the same restrained language as home. */
 .detail-page{background:var(--xm-v4-bg)}
 .page-navigation{max-width:900px;margin:0 auto 24px}
 .page-navigation button,.page-header>button{background:transparent;border-color:transparent;color:#59625d}
@@ -131,7 +95,9 @@ body{background:var(--xm-v4-bg)}
 
 @media(max-width:360px){
   .app-shell{padding-left:12px;padding-right:12px}
-  .home-action-card{grid-template-columns:24px minmax(0,1fr);gap:7px;padding:10px}
+  .home-action-card{min-height:54px;grid-template-columns:24px minmax(0,1fr);gap:8px;padding:10px}
   .home-action-card>.story-icon,.home-action-card:nth-child(2)>.story-icon,.home-action-card:nth-child(3)>.story-icon,.home-action-card:nth-child(4)>.story-icon{width:24px;height:24px;padding:5px}
+  .home-action-card b{font-size:12px;line-height:1.3;white-space:normal}
+  .home-action-card small{display:none}
   .assistant-dock{padding-left:8px;padding-right:8px}
 }
