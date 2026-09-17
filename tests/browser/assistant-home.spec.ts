@@ -37,10 +37,29 @@ test('conversation-first home leads with trusted financial facts and direct chat
   await expect(page.getByRole('button', { name: '我的', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '添加账目', exact: true })).toBeVisible();
 
+  await page.screenshot({ path: 'docs/screenshots/v03-conversation-home.png', fullPage: true });
+
   await page.getByTestId('home-action-bills').click();
   await expect(page.getByRole('heading', { name: '财务', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: '消费 / 浪费 / 投资', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: '投资资产', exact: true })).toBeVisible();
+  await page.screenshot({ path: 'docs/screenshots/v03-finance.png', fullPage: true });
+
+  await page.getByRole('button', { name: '小满', exact: true }).click();
+  await page.getByTestId('home-action-assets').click();
+  await expect(page.getByText('投资账户', { exact: true }).first()).toBeVisible();
+  await page.screenshot({ path: 'docs/screenshots/v03-assets.png', fullPage: true });
+
+  await page.getByRole('button', { name: '小满', exact: true }).click();
+  await page.getByTestId('home-action-review').click();
+  await expect(page.getByRole('heading', { name: '周期复盘', exact: true })).toBeVisible();
+  await page.screenshot({ path: 'docs/screenshots/v03-review.png', fullPage: true });
+
+  await page.getByRole('button', { name: '小满', exact: true }).click();
+  await page.setViewportSize({ width: 320, height: 760 });
+  await expect(page.getByTestId('assistant-conversation')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  await page.screenshot({ path: 'docs/screenshots/v03-home-320.png', fullPage: true });
 });
 
 test('conversation-first home downgrades certainty when legacy data still needs review', async ({ page }) => {
