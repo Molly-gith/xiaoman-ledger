@@ -16,12 +16,14 @@ test('70 5 25 suggestions preserve explicit investment edits and persist new str
   await expect(page.getByTestId('budget-preview')).toHaveText('¥4,000.00');
   await page.getByRole('button',{name:'开始这个周期',exact:true}).click();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥4,000.00');
+  await page.getByRole('button',{name:'财务',exact:true}).click();
   await page.getByRole('button',{name:'调整结构',exact:true}).click();
   await page.locator('[name="availableIncome"]').fill('6000');
   await expect(page.locator('[name="plannedSavings"]')).toHaveValue('0');
   await page.getByRole('button',{name:'恢复 25% 投资目标'}).click();
   await expect(page.locator('[name="plannedSavings"]')).toHaveValue('1500');
   await page.getByRole('button',{name:'保存新的周期结构',exact:true}).click();
+  await page.getByRole('button',{name:'小满',exact:true}).click();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥4,500.00');
   await page.reload();await expect(page.getByTestId('safe-to-spend')).toHaveText('¥4,500.00');
   await page.clock.setSystemTime(new Date('2026-09-20T04:00:00Z'));await page.reload();
@@ -45,7 +47,6 @@ test('voice start, stop, transcript, permission error and manual fallback', asyn
   await page.getByRole('button',{name:'停止录音',exact:true}).click();
   await expect(page.locator('[name="note"]')).toHaveValue('午餐一碗面');
   await expect(page.getByText('已填入备注，检查一下就好。')).toBeVisible();
-  // A failed stop must not leave a timer that cancels a later retry.
   await page.getByRole('button',{name:'用语音填写备注',exact:true}).click();
   await page.evaluate(()=>{(window as unknown as {testRecognition:{stop:()=>void}}).testRecognition.stop=()=>{throw new Error('device stopped');};});
   await page.getByRole('button',{name:'停止录音',exact:true}).click();
