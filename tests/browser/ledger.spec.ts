@@ -112,6 +112,7 @@ test('stale tabs cannot overwrite newer data',async({page,context})=>{
   await second.getByRole('button',{name:'调整结构',exact:true}).click();await second.locator('[name="availableIncome"]').fill('9000');await second.getByRole('button',{name:'保存新的周期结构',exact:true}).click();
   await expect(second.getByRole('alert')).toContainText('其他页面更新');
   await second.getByRole('button',{name:'重新载入账本',exact:true}).click();
+  await returnHome(second);
   await expect(second.getByTestId('safe-to-spend')).toHaveText('¥9,500.00');
 });
 
