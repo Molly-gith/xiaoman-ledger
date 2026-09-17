@@ -43,12 +43,14 @@ body{background:var(--xm-v4-bg)}
 .assistant-thread-head b{font-size:14px;color:var(--xm-v4-ink)}
 .assistant-thread-head small{padding:0;background:transparent;color:#858b86;font-size:10px;font-weight:500}
 .assistant-message{padding:0;background:transparent;border:0;border-radius:0;box-shadow:none}
-.assistant-message p{max-width:720px;color:#4f5651;font-size:14px;line-height:1.7}
-.assistant-message p:first-child{display:none}
-.assistant-message p:nth-child(2){color:var(--xm-v4-ink);font-size:20px;line-height:1.5;letter-spacing:-.02em}
-.assistant-message p:nth-child(n+3){display:none}
-.assistant-message strong{display:inline;font-size:32px;font-weight:760;color:var(--xm-v4-ink);letter-spacing:-.045em}
-.assistant-fact-note{margin-top:14px;color:#878d88;font-size:11px}
+.assistant-message p{max-width:720px;margin:0;color:#4f5651;font-size:14px;line-height:1.7}
+.assistant-message p+p{margin-top:12px}
+.assistant-summary{color:var(--xm-v4-ink)!important;font-size:19px!important;line-height:1.5!important;letter-spacing:-.02em}
+.assistant-key-fact{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:18px!important}
+.assistant-key-fact span{color:#7c837e;font-size:11px;font-weight:560}
+.assistant-message .assistant-key-fact strong{display:block;color:var(--xm-v4-ink);font-size:34px;font-weight:760;line-height:1.15;letter-spacing:-.045em;font-variant-numeric:tabular-nums}
+.assistant-next-step{max-width:650px!important;color:#59615c!important;font-size:13px!important}
+.assistant-fact-note{margin-top:16px;color:#878d88;font-size:11px}
 .assistant-fact-note .story-icon{color:#8a918c}
 
 /* Home actions read as next steps, not primary navigation. */
@@ -117,8 +119,8 @@ body{background:var(--xm-v4-bg)}
   .topbar h1{font-size:22px}
   .assistant-conversation{margin-bottom:26px;padding-top:2px}
   .assistant-thread-head{margin-bottom:12px}
-  .assistant-message p:nth-child(2){font-size:18px;line-height:1.55}
-  .assistant-message strong{font-size:29px}
+  .assistant-summary{font-size:18px!important}
+  .assistant-message .assistant-key-fact strong{font-size:30px}
   .home-actions-section{margin-bottom:24px}
   .home-action-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
   .home-action-card{min-height:66px;padding:11px}
