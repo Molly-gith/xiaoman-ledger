@@ -12,12 +12,6 @@ import { ConfirmPanel, DataPanel, EmptyState, GoalForm, LoadingScreen, PageHeade
 
 type Tab = "home" | "bills" | "review" | "me" | "assets";
 type Modal = "add" | "edit" | "delete" | "cycle" | "data" | "import" | "clear" | "goal" | null;
-const NAV: { key: Exclude<Tab, "assets">; label: string }[] = [
-  { key: "home", label: "小满" },
-  { key: "bills", label: "财务" },
-  { key: "review", label: "复盘" },
-  { key: "me", label: "我的" },
-];
 const FILTERS = [{ key: "all", label: "全部" }, { key: "income", label: "收入" }, { key: "expense", label: "支出" }] as const;
 const QUICK_QUESTIONS = ["这周花多了吗？", "帮我复盘这个周期", "我现在最该关注什么？"];
 
@@ -45,8 +39,10 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const saving = useRef(false);
   const [tab, setTab] = useState<Tab>("home");
-  const [assetReturnTab, setAssetReturnTab] = useState<"home" | "me">("me");
+  const [assetReturnTab, setAssetReturnTab] = useState<"home" | "bills" | "me">("home");
   const [assistantQuestion, setAssistantQuestion] = useState("");
+  const dockRef = useRef<HTMLDivElement>(null);
+  const questionRef = useRef<HTMLInputElement>(null);
   const [period, setPeriod] = useState<Period>("month");
   const [filter, setFilter] = useState<"all" | "income" | "expense">("all");
   const [modal, setModal] = useState<Modal>(null);
@@ -56,6 +52,39 @@ export default function Home() {
   const [today, setToday] = useState(() => localDate());
   const showDialog = !!state && (!state.activeCycleId || modal !== null);
   const canDismiss = !!state?.activeCycleId;
+
+  // Keep the dock above the on-screen keyboard; reserve its actual height so
+  // the last content row can always be scrolled completely above it.
+  useEffect(() => {
+    const dock = dockRef.current;
+    if (!dock) return;
+    const shell = dock.closest<HTMLElement>(".app-shell");
+    const viewport = window.visualViewport;
+    const measure = () => {
+      const inset = viewport && viewport.scale === 1
+        ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0;
+      dock.style.setProperty("--keyboard-inset", `${inset}px`);
+      shell?.style.setProperty("--keyboard-inset", `${inset}px`);
+      dock.dataset.keyboard = String(inset > 100);
+      shell?.style.setProperty("--dock-height", `${dock.getBoundingClientRect().height}px`);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(dock);
+    viewport?.addEventListener("resize", measure);
+    viewport?.addEventListener("scroll", measure);
+    window.addEventListener("resize", measure);
+    measure();
+    return () => {
+      observer.disconnect();
+      viewport?.removeEventListener("resize", measure);
+      viewport?.removeEventListener("scroll", measure);
+      window.removeEventListener("resize", measure);
+      shell?.style.removeProperty("--dock-height");
+      shell?.style.removeProperty("--keyboard-inset");
+    };
+  }, [tab, state?.activeCycleId]);
+
+  useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [tab]);
 
   useEffect(() => {
     if (!showDialog) return;
@@ -146,7 +175,7 @@ export default function Home() {
   const recent = cycleTransactions.filter(tx => filter === "all" || tx.type === filter).slice(0, 4);
   const total = (items: Transaction[], type: "income" | "expense") => sumMoney(items.filter(tx => tx.type === type).map(tx => tx.amount));
   const openEntry = (tx?: Transaction) => { if (!cycle) { setModal("cycle"); return; } setError(""); setEditing(tx ?? null); setModal(tx ? "edit" : "add"); };
-  const openAssets = (from: "home" | "me") => { setAssetReturnTab(from); setTab("assets"); };
+  const openAssets = (from: "home" | "bills" | "me") => { setAssetReturnTab(from); setTab("assets"); };
   const rowActions = { onEdit: openEntry, onDelete: (tx: Transaction) => { setEditing(tx); setModal("delete"); }, removingId: null };
   const changeState = (next: LedgerState, message: string) => void commit(() => repository.replace(next, state.revision), message);
   const exportBackup = () => download(JSON.stringify({ ...state, exportedAt: new Date().toISOString() }, null, 2), "application/json", `xiaoman-ledger-backup-${today}.json`);
@@ -197,7 +226,7 @@ export default function Home() {
       ? assistantSnapshot.investmentAssets.hasUnknownCost
         ? `投资账户总市值 ${money(assistantSnapshot.investmentAssets.totalMarketValue)}；部分历史成本未知，暂不计算总浮盈亏。`
         : `投资账户总市值 ${money(assistantSnapshot.investmentAssets.totalMarketValue)}，浮动盈亏 ${money(assistantSnapshot.investmentAssets.totalFloatingPnL ?? 0)}。`
-      : "还没有投资账户数据，后续可在财务页补充当前市值。",
+      : "还没有投资账户数据，可以从「账户与资产」补充当前市值。",
   ].slice(0, 3) : [];
 
   const safeToSpendText = assistantSnapshot?.readiness === "needs_review"
@@ -208,9 +237,10 @@ export default function Home() {
         ? "数据不足"
         : money(assistantSnapshot.period.safeToSpend);
 
-  return <main className="app-shell"><fieldset className="app-content" disabled={busy} inert={showDialog}>
+  return <main className={`app-shell ${tab === "home" ? "conversation-home" : "detail-page"}`}><fieldset className="app-content" disabled={busy} inert={showDialog}>
+    {tab !== "home" && tab !== "assets" && <nav className="page-navigation" aria-label="返回导航"><button className="back-home" onClick={() => setTab("home")}><StoryIcon name="arrow"/>返回小满</button>{tab === "bills" && <button className="detail-add" onClick={() => openEntry()}><StoryIcon name="plus"/>记一笔</button>}</nav>}
     {tab === "home" && <>
-      <header className="topbar"><div className="storybook-brand"><StoryIcon name="leaf"/><div><h1>小满</h1><p>你的个人财务助手</p></div></div><button className="avatar" onClick={() => setModal("data")} aria-label="本地数据与备份"><StoryIcon name="user"/></button></header>
+      <header className="topbar"><div className="storybook-brand"><StoryIcon name="leaf"/><div><h1>小满</h1><p>你的个人财务助手</p></div></div><div className="header-actions"><button className="avatar" onClick={() => setModal("data")} aria-label="本地数据与备份"><StoryIcon name="lock"/></button><button className="avatar" onClick={() => setTab("me")} aria-label="我的设置"><StoryIcon name="user"/></button></div></header>
       {cycle && metrics && assistantSnapshot && <>
         <section className="assistant-conversation" data-testid="assistant-conversation">
           <div className="assistant-thread-head"><span className="assistant-avatar" aria-hidden="true"><StoryIcon name="leaf"/></span><div><b>和小满聊聊</b><small data-testid="assistant-readiness">{assistantSnapshot.readiness === "ready" ? "财务数据已就绪" : "有数据待核对"}</small></div></div>
@@ -218,15 +248,8 @@ export default function Home() {
             <p>我看了一下你这个周期的财务情况。</p>
             <p>当前可支出 <strong data-testid="safe-to-spend">{safeToSpendText}</strong>{assistantSnapshot.period.investmentGap > 0 ? `，投资目标还差 ${money(assistantSnapshot.period.investmentGap)}。` : "，本周期投资目标已经达到。"}</p>
             {assistantInsights[2] && <p>{assistantInsights[2]}</p>}
-            <p className="assistant-followup">你可以直接问我为什么，或者让我帮你复盘。</p>
           </div>
-          <form className="assistant-composer" onSubmit={submitAssistantQuestion}>
-            <label className="sr-only" htmlFor="assistant-question">问小满</label>
-            <input id="assistant-question" value={assistantQuestion} onChange={event => setAssistantQuestion(event.target.value)} placeholder="问小满：我这个月还能花多少？" autoComplete="off" />
-            <button type="submit" aria-label="发送给小满" disabled={!assistantQuestion.trim()}>发送</button>
-          </form>
-          <p className="assistant-provider-note">AI 分析暂未启用 · 金额和比例仍由规则层计算</p>
-          <div className="assistant-prompts" aria-label="快捷问题">{QUICK_QUESTIONS.map(question => <button key={question} type="button" onClick={() => setAssistantQuestion(question)}>{question}</button>)}</div>
+          <p className="assistant-fact-note"><StoryIcon name="lock"/>根据本机账本计算 · 数据由你掌控</p>
         </section>
         {expired && <button className="primary" onClick={() => setModal("cycle")}>确认收入，开启新周期</button>}
         {!!metrics.unresolvedCount && <div className="gentle-tip"><p>{metrics.unresolvedCount} 笔旧支出尚需核对日期、周期或消费性质。完成后再生成强结论。</p><button onClick={() => { setTab("bills"); setPeriod("year"); setFilter("expense"); }}>核对账单</button></div>}
@@ -235,20 +258,29 @@ export default function Home() {
       <section className="section-block home-actions-section">
         <div className="section-title"><h2>常用功能</h2><span>从这里继续处理财务</span></div>
         <div className="home-action-grid">
-          <button className="home-action-card" data-testid="home-action-add" onClick={() => openEntry()}><StoryIcon name="plus"/><span><b>记一笔</b><small>收入、消费、浪费或投资</small></span></button>
-          <button className="home-action-card" data-testid="home-action-bills" onClick={() => setTab("bills")}><StoryIcon name="book"/><span><b>财务看板</b><small>查看消 / 浪 / 投和账单</small></span></button>
-          <button className="home-action-card" data-testid="home-action-assets" onClick={() => openAssets("home")}><StoryIcon name="jar"/><span><b>账户与资产</b><small>ETF、基金与当前市值</small></span></button>
-          <button className="home-action-card" data-testid="home-action-review" onClick={() => setTab("review")}><StoryIcon name="leaf"/><span><b>周期复盘</b><small>回看这一周期发生了什么</small></span></button>
+          <button className="home-action-card" data-testid="home-action-add" onClick={() => openEntry()}><StoryIcon name="plus"/><span><b>记一笔</b><small>记录收入与支出</small></span></button>
+          <button className="home-action-card" data-testid="home-action-bills" onClick={() => setTab("bills")}><StoryIcon name="book"/><span><b>财务看板</b><small>支出结构与账单</small></span></button>
+          <button className="home-action-card" data-testid="home-action-assets" onClick={() => openAssets("home")}><StoryIcon name="jar"/><span><b>账户与资产</b><small>投资账户与市值</small></span></button>
+          <button className="home-action-card" data-testid="home-action-review" onClick={() => setTab("review")}><StoryIcon name="leaf"/><span><b>周期复盘</b><small>回顾本周期</small></span></button>
         </div>
       </section>
       <section className="section-block transactions"><div className="section-title"><h2>最近账目</h2><button onClick={() => setTab("bills")}>进入财务</button></div>{filters}{recent.length ? recent.map(tx => <TransactionRow key={tx.id} item={tx} {...rowActions} />) : <EmptyState compact text="从第一笔开始，让小满慢慢理解你的钱" action={() => openEntry()} />}</section>
+      {cycle && <div ref={dockRef} className="assistant-dock" aria-label="与小满对话">
+        <div className="assistant-prompts" aria-label="快捷问题">{QUICK_QUESTIONS.map(question => <button key={question} type="button" onClick={() => { setAssistantQuestion(question); questionRef.current?.focus(); }}>{question}</button>)}</div>
+        <p id="assistant-availability" className="assistant-provider-note">AI 分析暂未启用 · 记账与财务看板可正常使用</p>
+        <form className="assistant-composer" onSubmit={submitAssistantQuestion}>
+          <label className="sr-only" htmlFor="assistant-question">问小满</label>
+          <input ref={questionRef} id="assistant-question" aria-describedby="assistant-availability" value={assistantQuestion} onChange={event => setAssistantQuestion(event.target.value)} placeholder="问小满：我这个月还能花多少？" autoComplete="off" enterKeyHint="send" />
+          <button type="submit" aria-label="发送给小满" disabled={!assistantQuestion.trim()}>发送</button>
+        </form>
+      </div>}
     </>}
 
     {tab === "bills" && <>
       <PageHeader title="财务" subtitle="消 / 浪 / 投、投资资产与账单都在这里" />
       <div className="home-overview">{budgetCard}{natureCard}</div>
       <section className="section-block category-card">
-        <div className="section-title"><h2>投资资产</h2><button onClick={() => openAssets("home")}>管理投资账户</button></div>
+        <div className="section-title"><h2>投资资产</h2><button onClick={() => openAssets("bills")}>管理投资账户</button></div>
         {assistantSnapshot && assistantSnapshot.investmentAssets.accountCount > 0 ? <>
           <div className="budget-row"><span>当前总市值</span><b>{money(assistantSnapshot.investmentAssets.totalMarketValue)}</b></div>
           <div className="budget-row"><span>累计净投入</span><b>{assistantSnapshot.investmentAssets.totalNetContribution === null ? "成本待补充" : money(assistantSnapshot.investmentAssets.totalNetContribution)}</b></div>
@@ -266,7 +298,6 @@ export default function Home() {
 
     {tab === "assets" && <InvestmentAccounts state={state} today={today} onBack={() => setTab(assetReturnTab)} onCreateAccount={account => commit(() => repository.saveInvestmentAccount(account, state.revision), "投资账户已创建")} onFlow={flow => commit(() => repository.saveInvestmentFlow(flow, state.revision), flow.type === "contribution" ? "投资投入已记录" : "投资取出已记录")} onMarketValue={(accountId, value, date) => commit(() => repository.saveMarketValue(accountId, value, date, state.revision), "当前市值已更新")} />}
 
-    <nav className="bottom-nav" aria-label="主要导航">{NAV.slice(0, 2).map(item => <button key={item.key} className={tab === item.key ? "active" : ""} aria-current={tab === item.key ? 'page' : undefined} onClick={() => setTab(item.key)}><StoryIcon name={item.key === 'home' ? 'home' : 'book'}/>{item.label}</button>)}<button className="add" aria-label="添加账目" onClick={() => openEntry()}><StoryIcon name="plus"/></button>{NAV.slice(2).map(item => <button key={item.key} className={tab === item.key ? "active" : ""} aria-current={tab === item.key ? 'page' : undefined} onClick={() => setTab(item.key)}><StoryIcon name={item.key === 'review' ? 'leaf' : 'user'}/>{item.label}</button>)}</nav>
   </fieldset>
 
   {(setup || modal) && <div className={`modal-wrap ${setup && !modal ? 'setup-wrap' : ''}`}><section className={`sheet ${setup && !modal ? 'setup-sheet' : ''}`} role="dialog" aria-modal="true" aria-label={setup ? "建立第一个财务周期" : modal === "add" || modal === "edit" ? "记账" : "账本设置"}>

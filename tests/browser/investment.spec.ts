@@ -13,7 +13,7 @@ async function setup(page: import("@playwright/test").Page) {
 }
 
 async function returnHome(page: import("@playwright/test").Page) {
-  const back = page.locator('.bottom-nav > button').first();
+  const back = page.getByRole('button', { name: '返回小满', exact: true });
   await expect(back).toBeVisible();
   await back.click();
   await expect(page.getByTestId('assistant-conversation')).toBeVisible();

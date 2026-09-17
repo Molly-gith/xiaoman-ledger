@@ -31,7 +31,7 @@ test('conversation-first v3 keeps trusted facts, bottom composer and capability 
   await expect(page.getByTestId('assistant-readiness')).toContainText('财务数据已就绪');
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥7,500.00');
   await expect(page.getByPlaceholder('问小满：我这个月还能花多少？')).toBeVisible();
-  await expect(page.getByText('AI 分析暂未启用 · 金额和比例仍由规则层计算', { exact: true })).toBeVisible();
+  await expect(page.getByText('AI 分析暂未启用 · 记账与财务看板可正常使用', { exact: true })).toBeVisible();
   await expect(page.getByText('这周花多了吗？', { exact: true })).toBeVisible();
   await expectComposerAtBottom(page);
 

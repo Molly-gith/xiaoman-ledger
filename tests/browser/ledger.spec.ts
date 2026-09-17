@@ -11,7 +11,7 @@ async function setup(page: Page) {
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥7,500.00');
 }
 async function returnHome(page: Page) {
-  const back = page.locator('.bottom-nav > button').first();
+  const back = page.getByRole('button', { name: '返回小满', exact: true });
   await expect(back).toBeVisible();
   await back.click();
   await expect(page.getByTestId('assistant-conversation')).toBeVisible();
