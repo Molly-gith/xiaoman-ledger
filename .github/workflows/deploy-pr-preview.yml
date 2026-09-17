@@ -1,0 +1,73 @@
+name: Deploy validated PR preview
+
+on:
+  workflow_run:
+    workflows: ["Sprint validation"]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-preview
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.pull_requests[0].number != null
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}previews/pr-${{ github.event.workflow_run.pull_requests[0].number }}/
+    steps:
+      - name: Checkout main for stable public root
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main-src
+
+      - name: Checkout validated PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          path: preview-src
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build current main root
+        working-directory: main-src
+        run: |
+          npm ci
+          npm run build:github
+
+      - name: Build validated PR preview
+        working-directory: preview-src
+        env:
+          GITHUB_PAGES_BASE: /xiaoman-ledger/previews/pr-${{ github.event.workflow_run.pull_requests[0].number }}/
+        run: |
+          npm ci
+          npm run build:github
+
+      - name: Compose main + current PR preview
+        run: |
+          mkdir -p pages-dist/previews/pr-${{ github.event.workflow_run.pull_requests[0].number }}
+          cp -R main-src/github-dist/. pages-dist/
+          cp -R preview-src/github-dist/. pages-dist/previews/pr-${{ github.event.workflow_run.pull_requests[0].number }}/
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages-dist
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
