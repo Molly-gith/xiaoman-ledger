@@ -77,6 +77,7 @@ test('unsupported voice leaves manual entry usable and offline artwork is cached
   await expect(page.getByText('这个浏览器暂不支持语音，请在上方输入备注。')).toBeVisible();
   await page.locator('[name="note"]').fill('手动记录');await page.locator('[name="amount"]').fill('10');
   await page.getByRole('button',{name:'消费',exact:true}).click();await page.getByRole('button',{name:'记好了',exact:true}).click();
+  await expect(page.getByTestId('safe-to-spend')).toHaveText('¥2,240.00');
   await expect.poll(()=>page.evaluate(()=>!!navigator.serviceWorker.controller)).toBeTruthy();
   await context.setOffline(true);await page.reload();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥2,240.00');
