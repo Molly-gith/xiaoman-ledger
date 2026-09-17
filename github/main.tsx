@@ -5,6 +5,7 @@ import "../app/globals.css";
 import "../app/interactions.css";
 import "../app/storybook.css";
 import "../app/conversation.css";
+import "../app/v3-navigation.css";
 
 if (!location.hash) history.replaceState(null, "", `${location.pathname}${location.search}#/`);
 
