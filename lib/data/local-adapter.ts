@@ -5,8 +5,11 @@ import type { LedgerState } from "../domain/types.ts";
 const DB_NAME = "xiaoman-ledger-db", STORE_NAME = "ledger", STATE_KEY = "current";
 const FALLBACK_KEY = "xiaoman-ledger-local-v1";
 function isAdoptedFallback(raw: string | null): boolean {
-  try { return raw !== null && JSON.parse(raw)?.version === 2; }
-  catch { return false; }
+  if (raw === null) return false;
+  try {
+    const parsed = JSON.parse(raw) as { version?: unknown };
+    return parsed.version === 2 || parsed.version === 3;
+  } catch { return false; }
 }
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -26,7 +29,7 @@ function legacyState(): LedgerState {
     settings: { monthlyBudget: old.budget ?? 15000, savingsCurrent: old.saved ?? 0, savingsGoal: old.goal ?? 100000 } });
 }
 export function createLocalStore(): LedgerStore {
-  // v2 fallback denotes an adopted fallback ledger. v1 used IDB-first reads and
+  // v2/v3 fallback denotes an adopted fallback ledger. v1 used IDB-first reads and
   // could leave a stale fallback behind after IDB recovered; preserve that priority.
   let mode: "idb" | "fallback" | null = null;
   return {
