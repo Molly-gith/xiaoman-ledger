@@ -1,7 +1,7 @@
-import { calculateFinance } from './finance';
-import { floatingPnL, netContribution } from './investment';
-import type { InvestmentAccount, InvestmentFlow } from './types';
-import { buildAssistantFinancialSnapshot, type AssistantFinancialSnapshot, type AssistantPeriodComparison } from './assistant-snapshot';
+import { calculateFinance } from './finance.ts';
+import { floatingPnL, netContribution } from './investment.ts';
+import type { InvestmentAccount, InvestmentFlow } from './types.ts';
+import { buildAssistantFinancialSnapshot, type AssistantFinancialSnapshot, type AssistantPeriodComparison } from './assistant-snapshot.ts';
 
 type FinanceMetrics = ReturnType<typeof calculateFinance>;
 
