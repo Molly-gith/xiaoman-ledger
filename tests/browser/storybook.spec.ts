@@ -33,6 +33,35 @@ test('70 5 25 suggestions preserve explicit investment edits and persist new str
   await expect(page.locator('[name="necessaryReserve"]')).toHaveCount(0);
 });
 
+test('conversation-first home keeps chat primary and four actions one tap away', async ({page})=>{
+  await page.clock.install({time:today});await page.goto('./');
+  await page.locator('[name="salaryDay"]').fill('20');
+  await page.locator('[name="availableIncome"]').fill('3000');
+  await page.getByRole('button',{name:'开始这个周期',exact:true}).click();
+  await expect(page.getByTestId('assistant-conversation')).toBeVisible();
+  await expect(page.getByPlaceholder('问小满：我这个月还能花多少？')).toBeVisible();
+  await expect(page.getByText('AI 分析暂未启用',{exact:false})).toBeVisible();
+  await expect(page.getByTestId('home-action-add')).toBeVisible();
+  await expect(page.getByTestId('home-action-bills')).toBeVisible();
+  await expect(page.getByTestId('home-action-assets')).toBeVisible();
+  await expect(page.getByTestId('home-action-review')).toBeVisible();
+
+  await page.getByTestId('home-action-add').click();
+  await expect(page.getByRole('dialog',{name:'记账'})).toBeVisible();
+  await page.getByRole('button',{name:'关闭'}).click();
+
+  await page.getByTestId('home-action-bills').click();
+  await expect(page.getByRole('heading',{name:'财务',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'小满',exact:true}).click();
+
+  await page.getByTestId('home-action-assets').click();
+  await expect(page.getByText('投资账户',{exact:true}).first()).toBeVisible();
+  await page.getByRole('button',{name:'小满',exact:true}).click();
+
+  await page.getByTestId('home-action-review').click();
+  await expect(page.getByRole('heading',{name:'周期复盘',exact:true})).toBeVisible();
+});
+
 test('voice start, stop, transcript, permission error and manual fallback', async ({page})=>{
   await page.addInitScript({content:`window.SpeechRecognition=class {
     constructor(){window.testRecognition=this;}
