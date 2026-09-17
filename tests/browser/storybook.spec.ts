@@ -25,6 +25,7 @@ test('70 5 25 suggestions preserve explicit investment edits and persist new str
   await page.getByRole('button',{name:'恢复 25% 投资目标'}).click();
   await expect(page.locator('[name="plannedSavings"]')).toHaveValue('1500');
   await page.getByRole('button',{name:'保存新的周期结构',exact:true}).click();
+  await expect(page.getByText(/周期结构已保存/)).toBeVisible();
   await page.reload();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥4,500.00');
   await page.clock.setSystemTime(new Date('2026-09-20T04:00:00Z'));
