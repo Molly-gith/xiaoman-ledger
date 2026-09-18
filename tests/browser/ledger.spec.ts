@@ -63,7 +63,7 @@ test('manual cycle, CRUD, rent as normal spending, nature targets, backups and o
   await page.getByTestId('home-action-bills').click();
   await page.getByRole('button',{name:'调整结构',exact:true}).click();
   await page.locator('[name="availableIncome"]').fill('11000');
-  await page.getByRole('button',{name:'保存新的周期结构',exact:true}).click();
+  await page.getByRole('button',{name:'保存这个周期',exact:true}).click();
   await expect(page.getByText(/周期结构已保存/)).toBeVisible();
   await returnHome(page);
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥5,500.00');
@@ -110,10 +110,10 @@ test('stale tabs cannot overwrite newer data',async({page,context})=>{
   await open(page);await setup(page);
   const second=await context.newPage();await open(second);await expect(second.getByTestId('safe-to-spend')).toHaveText('¥7,500.00');
   await page.getByTestId('home-action-bills').click();
-  await page.getByRole('button',{name:'调整结构',exact:true}).click();await page.locator('[name="availableIncome"]').fill('12000');await page.getByRole('button',{name:'保存新的周期结构',exact:true}).click();
+  await page.getByRole('button',{name:'调整结构',exact:true}).click();await page.locator('[name="availableIncome"]').fill('12000');await page.getByRole('button',{name:'保存这个周期',exact:true}).click();
   await expect(page.getByText(/周期结构已保存/)).toBeVisible();
   await second.getByTestId('home-action-bills').click();
-  await second.getByRole('button',{name:'调整结构',exact:true}).click();await second.locator('[name="availableIncome"]').fill('9000');await second.getByRole('button',{name:'保存新的周期结构',exact:true}).click();
+  await second.getByRole('button',{name:'调整结构',exact:true}).click();await second.locator('[name="availableIncome"]').fill('9000');await second.getByRole('button',{name:'保存这个周期',exact:true}).click();
   await expect(second.getByRole('alert')).toContainText('其他页面更新');
   await second.getByRole('button',{name:'重新载入账本',exact:true}).click();
   await returnHome(second);
