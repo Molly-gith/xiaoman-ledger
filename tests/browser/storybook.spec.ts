@@ -9,9 +9,12 @@ test('70 5 25 suggestions preserve explicit investment edits and persist new str
   await expect(page.locator('[name="plannedSavings"]')).toHaveValue('750');
   await expect(page.locator('[name="necessaryReserve"]')).toHaveCount(0);
   await expect(page.getByTestId('budget-preview')).toHaveText('¥2,250.00');
-  await expect(page.getByText('消费参考')).toBeVisible();
-  await expect(page.getByText('浪费上限')).toBeVisible();
-  await expect(page.getByText('投资目标',{exact:false}).first()).toBeVisible();
+  await expect(page.getByTestId('ratio-consume')).toContainText('70%');
+  await expect(page.getByTestId('ratio-consume')).toContainText('消费');
+  await expect(page.getByTestId('ratio-invest')).toContainText('25%');
+  await expect(page.getByTestId('ratio-invest')).toContainText('投资');
+  await expect(page.getByTestId('ratio-waste')).toContainText('≤5%');
+  await expect(page.getByTestId('ratio-waste')).toContainText('浪费');
   await page.locator('[name="plannedSavings"]').fill('0');
   await page.locator('[name="availableIncome"]').fill('4000');
   await expect(page.locator('[name="plannedSavings"]')).toHaveValue('0');
@@ -24,7 +27,7 @@ test('70 5 25 suggestions preserve explicit investment edits and persist new str
   await expect(page.locator('[name="plannedSavings"]')).toHaveValue('0');
   await page.getByRole('button',{name:'恢复 25% 投资目标'}).click();
   await expect(page.locator('[name="plannedSavings"]')).toHaveValue('1500');
-  await page.getByRole('button',{name:'保存新的周期结构',exact:true}).click();
+  await page.getByRole('button',{name:'保存这个周期',exact:true}).click();
   await expect(page.getByText(/周期结构已保存/)).toBeVisible();
   await page.reload();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥4,500.00');
