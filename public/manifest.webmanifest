@@ -1,7 +1,7 @@
 {
-  "name": "小满账本",
-  "short_name": "小满账本",
-  "description": "语音或文字快速记账，查看收支、预算和存款目标。",
+  "name": "小满｜你的个人财务助手",
+  "short_name": "小满",
+  "description": "用对话理解收入、消费、投资与资产变化，并保留简单可靠的记账和财务看板。",
   "start_url": "./#/",
   "scope": "./",
   "display": "standalone",
@@ -12,4 +12,3 @@
     { "src": "./app-icon-512.png", "sizes": "512x512", "type": "image/png" }
   ]
 }
-

@@ -12,10 +12,16 @@ async function setup(page: import("@playwright/test").Page) {
   await expect(page.getByTestId("safe-to-spend")).toHaveText("¥7,500.00");
 }
 
+async function returnHome(page: import("@playwright/test").Page) {
+  const back = page.getByRole('button', { name: '返回小满', exact: true });
+  await expect(back).toBeVisible();
+  await back.click();
+  await expect(page.getByTestId('assistant-conversation')).toBeVisible();
+}
+
 test("investment account keeps asset value separate from cycle cash flow", async ({ page }) => {
   await setup(page);
-  await page.getByRole("button", { name: "我的", exact: true }).click();
-  await page.getByRole("button", { name: /投资账户/ }).click();
+  await page.getByTestId("home-action-assets").click();
 
   await page.locator('[name="investmentAccountName"]').fill("纳指 + 标普");
   await page.locator('[name="investmentMarketValue"]').fill("78724.80");
@@ -31,26 +37,26 @@ test("investment account keeps asset value separate from cycle cash flow", async
   await page.getByRole("button", { name: "保存资金变化", exact: true }).click();
   await expect(page.getByText("¥75,000.00", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "小满", exact: true }).click();
+  await page.getByRole("button", { name: /返回/ }).click();
   await expect(page.getByTestId("safe-to-spend")).toHaveText("¥5,000.00");
-  await page.getByRole("button", { name: "财务", exact: true }).click();
+  await page.getByTestId("home-action-bills").click();
   await expect(page.getByText("¥5,000.00 / ¥2,500.00", { exact: true })).toBeVisible();
+  await returnHome(page);
 
-  await page.getByRole("button", { name: "我的", exact: true }).click();
-  await page.getByRole("button", { name: /投资账户/ }).click();
+  await page.getByTestId("home-action-assets").click();
   await page.getByRole("button", { name: "更新市值", exact: true }).click();
   await page.locator('[name="marketValueUpdate"]').fill("80136.50");
   await page.getByRole("button", { name: "保存当前市值", exact: true }).click();
   await expect(page.getByTestId("market-value")).toHaveText("¥80,136.50");
 
-  await page.getByRole("button", { name: "财务", exact: true }).click();
+  await page.getByRole("button", { name: /返回/ }).click();
+  await page.getByTestId("home-action-bills").click();
   await expect(page.locator(".tx-row")).toHaveCount(0);
-  await page.getByRole("button", { name: "小满", exact: true }).click();
+  await returnHome(page);
   await expect(page.getByTestId("safe-to-spend")).toHaveText("¥5,000.00");
 
   await page.reload();
-  await page.getByRole("button", { name: "我的", exact: true }).click();
-  await page.getByRole("button", { name: /投资账户/ }).click();
+  await page.getByTestId("home-action-assets").click();
   await expect(page.getByTestId("market-value")).toHaveText("¥80,136.50");
   await mkdir("docs/screenshots", { recursive: true });
   await page.screenshot({ path: "docs/screenshots/investment-account.png", fullPage: true });
