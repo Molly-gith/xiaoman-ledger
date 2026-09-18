@@ -5,6 +5,10 @@ async function open(page: Page) { await page.clock.install({ time: fixedNow }); 
 async function setup(page: Page) {
   await page.locator('[name="salaryDay"]').fill('20');
   await page.locator('[name="availableIncome"]').fill('10000');
+  await expect(page.getByTestId('ratio-consume')).toContainText('70%');
+  await expect(page.getByTestId('ratio-invest')).toContainText('25%');
+  await expect(page.getByTestId('ratio-waste')).toContainText('≤5%');
+  await expect(page.getByText('29–31 日遇到短月时，按月末发薪。')).toHaveCount(0);
   await expect(page.locator('[name="plannedSavings"]')).toHaveValue('2500');
   await expect(page.locator('[name="necessaryReserve"]')).toHaveCount(0);
   await page.getByRole('button', { name: '开始这个周期', exact: true }).click();
