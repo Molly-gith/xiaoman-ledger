@@ -25,7 +25,7 @@ test('70 5 25 suggestions preserve explicit investment edits and persist new str
   await page.getByRole('button',{name:'调整结构',exact:true}).click();
   await page.locator('[name="availableIncome"]').fill('6000');
   await expect(page.locator('[name="plannedSavings"]')).toHaveValue('0');
-  await page.getByRole('button',{name:'恢复 25% 投资目标'}).click();
+  await page.getByRole('button',{name:'恢复默认 25%'}).click();
   await expect(page.locator('[name="plannedSavings"]')).toHaveValue('1500');
   await page.getByRole('button',{name:'保存这个周期',exact:true}).click();
   await expect(page.getByText(/周期结构已保存/)).toBeVisible();
