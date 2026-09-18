@@ -101,3 +101,54 @@ body{background:var(--xm-v4-bg)}
   .home-action-card small{display:none}
   .assistant-dock{padding-left:8px;padding-right:8px}
 }
+
+
+/* Cycle setup — Cleo-inspired progressive disclosure, Xiaoman voice. */
+.cycle-form{max-width:520px;margin:0 auto}
+.cycle-form .cycle-illustration{display:none}
+.cycle-form .cycle-head{margin:0 0 24px}
+.cycle-form .cycle-head>span{display:grid;width:40px;height:40px;place-items:center;border-radius:12px;background:var(--xm-v4-brand-soft);color:var(--xm-v4-brand)}
+.cycle-form .cycle-head h2{margin-top:3px;font-size:24px;color:var(--xm-v4-ink);letter-spacing:-.035em}
+.cycle-form .cycle-head p{font-size:12px;color:var(--xm-v4-muted);line-height:1.6}
+.cycle-form .cycle-kicker{margin:0!important;color:var(--xm-v4-brand)!important;font-size:11px!important;font-weight:700!important;letter-spacing:.04em}
+.cycle-core-fields{padding:2px 0 4px}
+.cycle-form .compact-helper{margin:6px 0 4px;font-size:11px;color:#8a908b}
+.micro-disclosure{margin:5px 0 15px;color:#777e79;font-size:11px}
+.micro-disclosure summary{width:max-content;max-width:100%;min-height:32px;padding:6px 0;cursor:pointer;color:#737b76;font-size:11px}
+.micro-disclosure summary:hover{color:var(--xm-v4-brand)}
+.micro-disclosure p{max-width:440px;margin:3px 0 0;line-height:1.7;color:#7b827d}
+.allocation-reference{margin:20px 0 18px;padding:16px;border:1px solid var(--xm-v4-line);border-radius:16px;background:#fff}
+.allocation-reference-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+.allocation-reference-head>div{display:grid;gap:2px}
+.allocation-reference-head span{font-size:11px;color:#7f8681}
+.allocation-reference-head b{font-size:13px;color:var(--xm-v4-ink);font-weight:650}
+.allocation-reference-badge{flex:none;padding:4px 7px;border-radius:999px;background:var(--xm-v4-brand-soft);color:var(--xm-v4-brand)!important;font-size:10px!important;font-weight:650}
+.allocation-ratios{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.allocation-ratios>div{display:grid;gap:2px;padding:12px;border-radius:13px;background:#f8f8f5}
+.allocation-ratios strong{font-size:22px;line-height:1.1;color:var(--xm-v4-ink);letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.allocation-ratios span{font-size:11px;color:#565e59}
+.allocation-ratios small{font-size:10px;color:#929893;font-variant-numeric:tabular-nums}
+.allocation-reference>p{margin:11px 0 0;color:#8a908b;font-size:10px;line-height:1.6}
+.investment-target-field{margin-top:17px!important}
+.investment-target-field>span{display:flex;align-items:center;justify-content:space-between}
+.investment-target-field small{font-size:10px;color:#8c928d;font-weight:500}
+.cycle-form .reset-suggestion{min-height:34px;margin:2px 0 0;color:var(--xm-v4-brand);font-size:11px}
+.cycle-form .allocation-preview{margin:17px 0 10px;padding:15px 16px;border:1px solid #dfe6e2;border-radius:15px;background:var(--xm-v4-brand-soft);color:#3e5349}
+.cycle-form .allocation-preview .story-icon{width:24px;height:24px}
+.cycle-form .allocation-preview span{font-size:11px;color:#68746e}
+.cycle-form .allocation-preview strong{margin-top:2px;font-size:26px;color:var(--xm-v4-ink);letter-spacing:-.04em}
+.cycle-form .finance-method-note{margin-top:6px}
+.cycle-form .cycle-preview{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:16px 0 5px;padding:10px 12px;border-radius:12px;background:#f4f4f1;color:#606762;font-size:11px;font-variant-numeric:tabular-nums}
+.cycle-form .cycle-preview span{color:#959a96}
+.cycle-form .data-rule-note{margin-bottom:5px}
+.cycle-form>.primary{margin-top:12px}
+@media(max-width:420px){
+  .cycle-form .cycle-head{align-items:flex-start}
+  .cycle-form .cycle-head>span{display:none}
+  .cycle-form .cycle-head h2{font-size:22px}
+  .allocation-reference{padding:14px}
+  .allocation-ratios{gap:6px}
+  .allocation-ratios>div{padding:10px 9px}
+  .allocation-ratios strong{font-size:20px}
+  .allocation-reference-head b{font-size:12px}
+}
