@@ -16,21 +16,24 @@ export function CycleForm({ today, cycle, plan, salaryDay, onSave }: { today: st
   const [error, setError] = useState("");
   let preview: FinancialCycle | null = null;
   try { preview = cycle ?? salaryCycle(today, Number(day)); } catch { /* Incomplete form. */ }
+
   function applyIncome(value: string, reset = false) {
     setIncome(value);
     try {
-      if (!value.trim()) { if (!customInvestment || reset) setInvestment(''); return; }
+      if (!value.trim()) { if (!customInvestment || reset) setInvestment(""); return; }
       const suggestion = suggestBudget(Number(value));
       if (!customInvestment || reset) setInvestment(String(suggestion.investmentTarget));
       if (reset) setCustomInvestment(false);
     } catch { /* Keep the user's inputs while income is incomplete. */ }
   }
+
   let suggestion: ReturnType<typeof suggestBudget> | null = null;
   let periodSpendable: number | null = null;
   try {
-    if (income !== '') suggestion = suggestBudget(Number(income));
-    if (income !== '' && investment !== '') periodSpendable = (cents(Number(income)) - cents(Number(investment))) / 100;
+    if (income !== "") suggestion = suggestBudget(Number(income));
+    if (income !== "" && investment !== "") periodSpendable = (cents(Number(income)) - cents(Number(investment))) / 100;
   } catch { /* Invalid input is explained on submit. */ }
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
     try {
@@ -38,28 +41,85 @@ export function CycleForm({ today, cycle, plan, salaryDay, onSave }: { today: st
       const budget: BudgetPlan = { cycleId: next.id, availableIncome: Number(income), plannedSavings: Number(investment), necessaryReserve: 0, model: "nature" };
       [budget.availableIncome, budget.plannedSavings].forEach(cents);
       if (budget.plannedSavings > budget.availableIncome) throw new Error("投资目标不能超过本周期收入");
-      setError(""); onSave(next, budget);
-    } catch (e) { setError((e as Error).message); }
+      setError("");
+      onSave(next, budget);
+    } catch (e) {
+      setError((e as Error).message);
+    }
   };
-  return <form className="cycle-form" onSubmit={submit}><div className="cycle-illustration" role="img" aria-label="小满种子精灵在森林小屋旁等你"/><div className="sheet-head"><span><StoryIcon name="leaf"/></span><div><h2>{cycle ? "给这个周期，重新定个方向" : "先看清这个周期的钱"}</h2><p>不用提前列房租账单，先按一套简单结构开始。</p></div></div>
-    <label>每月发薪日<input name="salaryDay" type="number" min="1" max="31" step="1" required value={day} readOnly={!!cycle} onChange={e => setDay(e.target.value)} placeholder="例如 20" /></label>
-    <p className="helper">29–31 日遇到短月时，按月末发薪。{cycle ? "本周期日期已确定，下一周期可调整发薪日。" : ""}</p>
-    <label className="income-label">这次到手工资<input name="availableIncome" type="number" inputMode="decimal" min="0" step="0.01" max="999999999999.99" required value={income} onChange={e => applyIncome(e.target.value)} placeholder="输入后，小满帮你算出参考结构" /></label>
-    <p className="helper">作为本周期可用收入；有其他可安排的钱，也可以加在这里。</p>
-    {suggestion && <section className="budget-reference" aria-label="默认财务结构"><h3>小满的起步结构</h3><div className="budget-suggestions">
-      <div><span><StoryIcon name="wallet"/>消费参考 <small>约 70%</small></span><b>{money(suggestion.consumptionReference)}</b></div>
-      <div><span><StoryIcon name="cup"/>浪费上限 <small>≤ 5%</small></span><b>{money(suggestion.wasteLimit)}</b></div>
-      <div><span><StoryIcon name="leaf"/>投资目标 <small>≥ 25%</small></span><b>{money(suggestion.investmentTarget)}</b></div>
-    </div><p className="helper">消费是参考、浪费是上限、投资是目标，不是三个必须花完的钱包。</p></section>}
-    <label><span>本周期投资目标 <small>{customInvestment ? '已手动调整' : '默认 25%'}</small></span><input name="plannedSavings" type="number" inputMode="decimal" min="0" step="0.01" max="999999999999.99" required value={investment} onChange={e => {setInvestment(e.target.value);setCustomInvestment(true);}} placeholder="输入工资后计算" /></label>
-    <p className="helper">可包含储蓄、长期资产、学习和健康等面向未来的投入。</p>
-    {income !== '' && <button type="button" className="reset-suggestion" onClick={() => applyIncome(income, true)}>恢复 25% 投资目标</button>}
-    <div className={`allocation-preview ${periodSpendable !== null && periodSpendable < 0 ? 'over-budget' : ''}`}><StoryIcon name="wallet"/><div><span>本周期可支出基线</span><strong data-testid="budget-preview">{periodSpendable === null ? '等你填好工资' : money(periodSpendable)}</strong></div></div>
-    {periodSpendable !== null && periodSpendable < 0 && <p className="helper">投资目标已超过收入，请先调整。</p>}
-    <details className="budget-reference"><summary>70 / 5 / 25 怎么理解？</summary><p>消费约 70% 是正常生活的参考，浪费不超过 5% 是提醒上限，投资至少 25% 是面向未来的目标。房租、水电等实际发生时正常记账，不需要提前做“预留”。</p></details>
-    {preview && <p className="cycle-preview">{preview.startDate} — {preview.endDate}</p>}
-    <p className="helper">收入账目仅作记录；新增收入后，在这里确认可用收入。账本只保存在这台设备。</p>
-    {error && <p role="alert">{error}</p>}<button className="primary">{cycle ? "保存新的周期结构" : "开始这个周期"}</button>
+
+  return <form className="cycle-form" onSubmit={submit}>
+    <div className="sheet-head cycle-head">
+      <span><StoryIcon name="leaf"/></span>
+      <div>
+        <p className="cycle-kicker">{cycle ? "本周期设置" : "先认识一下你的发薪节奏"}</p>
+        <h2>{cycle ? "这个周期，想怎么安排？" : "先告诉小满两件事"}</h2>
+        <p>{cycle ? "只改真正需要调整的部分。" : "通常几号发工资，以及这次实际到手多少。其他先交给小满。"}</p>
+      </div>
+    </div>
+
+    <div className="cycle-core-fields">
+      <label>
+        {cycle ? "本周期发薪日" : "通常几号发工资？"}
+        <input name="salaryDay" type="number" min="1" max="31" step="1" required value={day} readOnly={!!cycle} onChange={e => setDay(e.target.value)} placeholder="例如 20" />
+      </label>
+      <details className="micro-disclosure">
+        <summary>{cycle ? "为什么这里不能改？" : "特殊日期怎么处理？"}</summary>
+        <p>{cycle ? "当前周期日期已经确定；如果你的发薪日变化，可以在开启下一周期时调整。" : "如果设置 29–31 日，遇到短月时按当月最后一天作为发薪日。"}</p>
+      </details>
+
+      <label className="income-label">
+        这次实际到手多少？
+        <input name="availableIncome" type="number" inputMode="decimal" min="0" step="0.01" max="999999999999.99" required value={income} onChange={e => applyIncome(e.target.value)} placeholder="例如 10000" />
+      </label>
+      <p className="helper compact-helper">只填这个周期真正可安排的钱；其他临时收入以后可以再补。</p>
+    </div>
+
+    {suggestion && <section className="allocation-reference" aria-label="小满默认起步方案">
+      <div className="allocation-reference-head">
+        <div>
+          <span>小满建议先这样起步</span>
+          <b>先用一个简单结构，后面再按你的习惯调整。</b>
+        </div>
+        <span className="allocation-reference-badge">可随时改</span>
+      </div>
+      <div className="allocation-ratios">
+        <div data-testid="ratio-consume"><strong>70%</strong><span>消费</span><small>{money(suggestion.consumptionReference)}</small></div>
+        <div data-testid="ratio-invest"><strong>25%</strong><span>投资</span><small>{money(suggestion.investmentTarget)}</small></div>
+        <div data-testid="ratio-waste"><strong>≤5%</strong><span>浪费</span><small>{money(suggestion.wasteLimit)}</small></div>
+      </div>
+      <p>它们是方向，不是三个必须花完的钱包。</p>
+    </section>}
+
+    <label className="investment-target-field">
+      <span>投资目标 <small>{customInvestment ? "已调整" : "默认 25%"}</small></span>
+      <input name="plannedSavings" type="number" inputMode="decimal" min="0" step="0.01" max="999999999999.99" required value={investment} onChange={e => { setInvestment(e.target.value); setCustomInvestment(true); }} placeholder="输入工资后自动计算" />
+    </label>
+    <p className="helper compact-helper">可以包含长期储蓄、ETF / 基金、学习和健康等面向未来的投入。</p>
+    {income !== "" && customInvestment && <button type="button" className="reset-suggestion" onClick={() => applyIncome(income, true)}>恢复默认 25%</button>}
+
+    <div className={`allocation-preview ${periodSpendable !== null && periodSpendable < 0 ? "over-budget" : ""}`}>
+      <StoryIcon name="wallet"/>
+      <div>
+        <span>扣除投资目标后，这个周期还能安排</span>
+        <strong data-testid="budget-preview">{periodSpendable === null ? "等你填好工资" : money(periodSpendable)}</strong>
+      </div>
+    </div>
+    {periodSpendable !== null && periodSpendable < 0 && <p className="helper">投资目标已经超过本周期收入，先把目标调低一些。</p>}
+
+    <details className="micro-disclosure finance-method-note">
+      <summary>为什么是 70% / 25% / ≤5%？</summary>
+      <p>70% 是正常生活消费的参考，25% 是面向未来的投资目标，≤5% 是提醒自己少一点后悔型支出的上限。房租、水电发生时直接记账，不需要提前“预留”。</p>
+    </details>
+
+    {preview && <p className="cycle-preview"><span>本周期</span>{preview.startDate} — {preview.endDate}</p>}
+    <details className="micro-disclosure data-rule-note">
+      <summary>收入与数据怎么记录？</summary>
+      <p>收入账目用于记录流水；这里的“到手工资”决定本周期可安排金额。数据只保存在当前设备，除非你主动导出或以后开启云同步。</p>
+    </details>
+
+    {error && <p role="alert">{error}</p>}
+    <button className="primary">{cycle ? "保存这个周期" : "开始这个周期"}</button>
   </form>;
 }
 
