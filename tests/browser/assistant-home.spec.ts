@@ -8,7 +8,6 @@ async function open(page: Page) {
 }
 
 async function setup(page: Page) {
-  await page.locator('[name="salaryDay"]').fill('20');
   await page.locator('[name="availableIncome"]').fill('10000');
   await page.getByRole('button', { name: '开始这个周期', exact: true }).click();
 }
@@ -83,7 +82,6 @@ test('conversation-first home downgrades certainty when legacy data still needs 
   })));
 
   await open(page);
-  await page.locator('[name="salaryDay"]').fill('20');
   await page.locator('[name="availableIncome"]').fill('1000');
   await page.locator('[name="plannedSavings"]').fill('0');
   await page.getByRole('button', { name: '开始这个周期', exact: true }).click();
