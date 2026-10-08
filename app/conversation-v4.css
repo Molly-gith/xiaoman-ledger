@@ -152,3 +152,35 @@ body{background:var(--xm-v4-bg)}
   .allocation-ratios strong{font-size:20px}
   .allocation-reference-head b{font-size:12px}
 }
+
+
+/* V6 — financial cycle modes + optional funding sources */
+.cycle-type-field{margin:4px 0 20px;padding:0;border:0}
+.cycle-type-field legend{margin-bottom:9px;color:#59605b;font-size:12px;font-weight:650}
+.cycle-type-picker{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.cycle-type-picker button{display:grid;gap:3px;min-height:72px;padding:12px;text-align:left;border:1px solid var(--xm-v4-line);border-radius:14px;background:#fff;color:var(--xm-v4-ink)}
+.cycle-type-picker button[aria-pressed="true"]{border-color:#9bbbad;background:var(--xm-v4-brand-soft);box-shadow:0 0 0 2px rgba(40,107,87,.07)}
+.cycle-type-picker b{font-size:12px}
+.cycle-type-picker small{color:#888f8a;font-size:10px;line-height:1.4}
+.cycle-mode-summary{display:flex;align-items:center;justify-content:space-between;margin:0 0 18px;padding:10px 12px;border-radius:12px;background:#f4f4f1;font-size:11px}
+.cycle-mode-summary span{color:#8c928d}
+.cycle-mode-summary b{color:var(--xm-v4-ink)}
+.custom-cycle-dates{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.funding-source-section{margin:18px 0;padding:14px;border:1px solid var(--xm-v4-line);border-radius:16px;background:#fff}
+.funding-source-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.funding-source-head>div{display:grid;gap:1px}
+.funding-source-head b{font-size:12px;color:var(--xm-v4-ink)}
+.funding-source-head small{font-size:10px;color:#8b918d}
+.funding-source-head button,.funding-source-total button{min-height:32px;padding:0 9px;border-radius:10px;background:var(--xm-v4-brand-soft);color:var(--xm-v4-brand);font-size:10px}
+.funding-source-list{display:grid;gap:8px;margin-top:12px}
+.funding-source-row{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) 34px;gap:7px;align-items:center}
+.funding-source-row select,.funding-source-row input{min-width:0;height:40px;padding:0 10px;border:1px solid var(--xm-v4-line);border-radius:10px;background:#fafaf8;color:var(--xm-v4-ink);font-size:11px}
+.funding-source-row>button{width:34px;height:34px;border:0;border-radius:9px;background:#f3f3ef;color:#777e79;font-size:16px}
+.funding-source-total{display:flex;align-items:center;gap:8px;padding-top:3px;color:#737a75;font-size:11px}
+.funding-source-total b{margin-left:auto;color:var(--xm-v4-ink);font-variant-numeric:tabular-nums}
+@media(max-width:520px){
+  .cycle-type-picker{grid-template-columns:1fr}
+  .cycle-type-picker button{min-height:58px}
+  .custom-cycle-dates{grid-template-columns:1fr}
+  .funding-source-row{grid-template-columns:1fr 1fr 32px}
+}
