@@ -1,5 +1,5 @@
-import { cents, parseDate, salaryCycle } from "../domain/finance.ts";
-import type { InvestmentAccount, InvestmentFlow, LedgerState, MarketValueSnapshot, Transaction } from "../domain/types.ts";
+import { calendarMonthCycle, cents, customCycle, parseDate, salaryCycle } from "../domain/finance.ts";
+import type { FundingSource, FundingSourceType, InvestmentAccount, InvestmentFlow, LedgerState, MarketValueSnapshot, Transaction } from "../domain/types.ts";
 
 export function defaultState(): LedgerState {
   return { app: "xiaoman-ledger", version: 3, revision: 0, ledgerKind: "personal", profile: null, activeCycleId: null,
@@ -20,6 +20,19 @@ function string(value: unknown, limit = 200): string {
 }
 function dateOnly(value: unknown): string {
   const valueString = string(value, 10); parseDate(valueString); return valueString;
+}
+const FUNDING_SOURCE_TYPES = new Set<FundingSourceType>(["salary", "bonus", "freelance", "business", "family_transfer", "savings_draw", "other"]);
+function normalizeFundingSources(value: unknown): FundingSource[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 20) throw new Error("资金来源格式无效");
+  return value.map(item => {
+    const v = record(item), type = String(v.type) as FundingSourceType;
+    if (!FUNDING_SOURCE_TYPES.has(type)) throw new Error("资金来源类型无效");
+    const source: FundingSource = { id: string(String(v.id ?? ""), 100), type, amount: amount(v.amount) };
+    if (!source.id || source.amount <= 0) throw new Error("资金来源编号或金额无效");
+    if (v.note !== undefined) source.note = string(v.note, 60);
+    return source;
+  });
 }
 export function normalizeTransaction(value: unknown, legacy = false): Transaction {
   const v = record(value);
@@ -84,9 +97,13 @@ export function normalizeBackup(value: unknown): LedgerState {
     state.profile = { salaryDay: Number(p.salaryDay) };
   }
   state.cycles = v.cycles.map(value => {
-    const c = record(value), startDate = string(c.startDate);
-    const expected = salaryCycle(startDate, Number(c.salaryDay));
-    if (c.id !== expected.id || c.endDate !== expected.endDate || c.nextSalaryDate !== expected.nextSalaryDate || c.startDate !== expected.startDate) throw new Error("工资周期日期不一致");
+    const c = record(value), startDate = string(c.startDate), cycleType = c.cycleType === "calendar_month" || c.cycleType === "custom" ? c.cycleType : "salary_based";
+    const expected = cycleType === "calendar_month"
+      ? calendarMonthCycle(startDate)
+      : cycleType === "custom"
+        ? customCycle(startDate, string(c.endDate))
+        : salaryCycle(startDate, Number(c.salaryDay));
+    if (c.id !== expected.id || c.endDate !== expected.endDate || c.nextSalaryDate !== expected.nextSalaryDate || c.startDate !== expected.startDate) throw new Error("财务周期日期不一致");
     return expected;
   });
   const sorted = [...state.cycles].sort((a, b) => a.startDate.localeCompare(b.startDate));
@@ -94,7 +111,7 @@ export function normalizeBackup(value: unknown): LedgerState {
   state.budgets = v.budgets.map(value => {
     const b = record(value);
     const model = b.model === "nature" ? "nature" as const : "legacy" as const;
-    return { cycleId: string(b.cycleId), availableIncome: amount(b.availableIncome), plannedSavings: amount(b.plannedSavings), necessaryReserve: amount(b.necessaryReserve), model };
+    return { cycleId: string(b.cycleId), availableIncome: amount(b.availableIncome), plannedSavings: amount(b.plannedSavings), necessaryReserve: amount(b.necessaryReserve), model, fundingSources: normalizeFundingSources(b.fundingSources) };
   });
   if (state.budgets.length !== state.cycles.length || new Set(state.budgets.map(b => b.cycleId)).size !== state.budgets.length || state.budgets.some(b => !state.cycles.some(c => c.id === b.cycleId))) throw new Error("周期预算缺失或重复");
   state.activeCycleId = v.activeCycleId === null ? null : string(v.activeCycleId);
