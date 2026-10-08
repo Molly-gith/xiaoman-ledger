@@ -4,7 +4,7 @@ const today = new Date('2026-09-15T04:00:00Z');
 test('70 5 25 suggestions preserve explicit investment edits and persist new structure', async ({page}) => {
   await page.clock.install({time:today});
   await page.goto('./');
-  await page.locator('[name="salaryDay"]').fill('20');
+  await page.getByRole('button',{name:/按发薪日/}).click();
   await page.locator('[name="availableIncome"]').fill('3000');
   await expect(page.locator('[name="plannedSavings"]')).toHaveValue('750');
   await expect(page.locator('[name="necessaryReserve"]')).toHaveCount(0);
@@ -42,7 +42,6 @@ test('70 5 25 suggestions preserve explicit investment edits and persist new str
 test('conversation-first v3 keeps chat primary, removes visible tabbar and keeps four actions one tap away', async ({page})=>{
   await page.clock.install({time:today});
   await page.goto('./');
-  await page.locator('[name="salaryDay"]').fill('20');
   await page.locator('[name="availableIncome"]').fill('3000');
   await page.getByRole('button',{name:'开始这个周期',exact:true}).click();
   await expect(page.getByTestId('assistant-conversation')).toBeVisible();
@@ -73,7 +72,6 @@ test('conversation-first v3 keeps chat primary, removes visible tabbar and keeps
 test('manual entry remains usable after v3 navigation changes',async({page})=>{
   await page.clock.install({time:today});
   await page.goto('./');
-  await page.locator('[name="salaryDay"]').fill('20');
   await page.locator('[name="availableIncome"]').fill('3000');
   await page.getByRole('button',{name:'开始这个周期',exact:true}).click();
   await page.getByTestId('home-action-add').click();
