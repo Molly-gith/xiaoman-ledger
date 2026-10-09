@@ -39,6 +39,8 @@ Deployment uses a separate Vercel project with this repository root and `vercel.
 ## 验证与边界 / Verification and limits
 
 - `npm run typecheck -- --incremental false`、`npm run lint`、`npm run test:unit`、`npm run test:ai`。
+- 问小满 Smoke 的离线输入校验：`npm run eval:question`，检查 20 条合成用例，不读取密钥或调用模型。`npm run test:unit` 同时运行执行器的 13 条离线行为测试，覆盖限次、间隔、错误停机、脱敏与语义待审状态；CI 不执行线上模型调用。
+- 线上 Smoke 需明确授权，并显式使用 `--live --report`（完整用法：`npm run eval:question -- --help`）。报告的结构与事实引用检查通过后，仍须逐条人工复核自然语言结论、口径和安全边界；`pending_review` 不能当作语义通过或 Beta 就绪。
 - 默认模式：`npm test`、`npm run build:github`、`npm run test:browser`。
 - AI 界面模拟：构建时设 `VITE_AI_API_URL=https://xiaoman-ai-test.example/api/ai/question`；运行时设 `AI_BROWSER_TEST=1` 后执行 `npm run test:browser -- tests/browser/ai-question.spec.ts`。所有网络回包是虚构测试数据，不调用真实模型。
 - 输入限 16 KiB、问题限 500 字符、只接收确定的摘要字段；响应限 32 KiB，验证 JSON、字段、长度、置信度和事实引用。后端模型超时 25 秒，前端 30 秒，Function 35 秒。不自动重试付费请求。

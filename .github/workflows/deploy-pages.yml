@@ -4,6 +4,17 @@ on:
   push:
     branches: ["main", "master"]
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Publish the stable root, or compose the private beta with retained V6
+        type: choice
+        options: [root, preview-compose]
+        default: root
+        required: true
+      preview_sha:
+        description: Full validated PR24 commit SHA; required for preview-compose
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -16,6 +27,9 @@ concurrency:
 
 jobs:
   build:
+    if: >-
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
+      inputs.mode != 'preview-compose'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,12 +46,94 @@ jobs:
         with:
           path: github-dist
 
+  build-preview:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/codex/xiaoman-ai-beta' &&
+      inputs.mode == 'preview-compose'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Require the reviewed PR24 commit
+        env:
+          PREVIEW_SHA: ${{ inputs.preview_sha }}
+        run: |
+          [[ "$PREVIEW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$PREVIEW_SHA" = "$GITHUB_SHA"
+
+      - name: Checkout verified stable root
+        uses: actions/checkout@v4
+        with:
+          ref: c667b9a58da70ce6c91ea4cd9e4a34c072878b95
+          path: main-src
+          persist-credentials: false
+
+      - name: Checkout accepted V6 preview
+        uses: actions/checkout@v4
+        with:
+          ref: 6d5b139f0e11e14b76a0abcc06fb515920af4b68
+          path: v6-src
+          persist-credentials: false
+
+      - name: Checkout reviewed private AI preview
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.preview_sha }}
+          path: preview-src
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check composition safeguards
+        working-directory: preview-src
+        run: node --test tests/pages-composition.test.mjs
+
+      - name: Build stable root without AI
+        working-directory: main-src
+        env:
+          GITHUB_PAGES_BASE: /xiaoman-ledger/
+          VITE_AI_API_URL: ""
+        run: |
+          npm ci
+          npm run build:github
+
+      - name: Build retained V6 without AI
+        working-directory: v6-src
+        env:
+          GITHUB_PAGES_BASE: /xiaoman-ledger/previews/pr-23/
+          VITE_AI_API_URL: ""
+        run: |
+          npm ci
+          npm run build:github
+
+      - name: Build private PR24 AI preview
+        working-directory: preview-src
+        env:
+          GITHUB_PAGES_BASE: /xiaoman-ledger/previews/pr-24/
+          VITE_AI_API_URL: https://xiaoman-ai-beta.vercel.app/api/ai/question
+        run: |
+          npm ci
+          npm run build:github
+
+      - name: Compose all three validated sites
+        run: node preview-src/scripts/compose-preview-pages.mjs main-src/github-dist v6-src/github-dist preview-src/github-dist pages-dist
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages-dist
+
   deploy:
+    if: >-
+      !cancelled() &&
+      (needs.build.result == 'success' || needs.build-preview.result == 'success')
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url }}${{ inputs.mode == 'preview-compose' && 'previews/pr-24/' || '' }}
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, build-preview]
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
