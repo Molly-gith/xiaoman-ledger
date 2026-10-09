@@ -24,7 +24,7 @@ Only Ask Xiaoman (`answerFinancialQuestion`) is integrated. AI bookkeeping and A
 | v0.2 | 完整 20 条合成 Smoke | 18 / 20 | 01、09 本轮修复；07、19 仍建议未支持的产品操作。06 的缺失引用检查过严，回答的目标与缺口足以回应题意，并非金额错误。[原始报告](dify/question-smoke-live-v0.2-20261010.json) / [复核](dify/question-smoke-review-v0.2-20261010.json) |
 | v0.3 | 01 / 07 / 09 / 19，共 4 条重点回归 | 3 / 4 | 19 仍把“本次摘要没有历史数据”说成“整个账本没有历史记录”；01、07 另有措辞建议。[原始报告](dify/question-targeted-v03-20261010.json) / [复核](dify/question-targeted-review-v03-20261010.json) |
 
-**v0.4 最终网页联调：待执行。** Dify #4 已发布，Vercel 生产部署已就绪（代码 `0f5ead8`，工作流标签 `xiaoman-question-v0.4`）；修正了摘要缺失不等于整个账本没有及“数据完整”的表述。最后 1 次授权模型调用留给网页端复测 19，尚未使用。完成后仅更新本行，记录网页地址、时间、实际工作流版本、HTTP/页面结果、语义结论与证据链接。
+**v0.4 最终网页联调：用例 19 通过独立 AI 语义复核。** 2026-10-10 约 01:09 HKT，在隔离的临时浏览器存储中打开 [PR #24 Preview](https://molly-gith.github.io/xiaoman-ledger/previews/pr-24/)（前端 `d5ed4aee`），用全虚构账本主动同意并发送一次，页面完整显示“本次收到的摘要没有上个周期的数据，暂时无法比较变化。”，无建议列表或错误；输入清空、加载结束，剩余可支出仍为 7500、账目仍为空。Dify #4 / Vercel 配置标签为 `xiaoman-question-v0.4`（后端代码 `0f5ead8`）；未捕获原始网络响应，不断言精确 HTTP 状态或响应版本字段。[实测记录](dify/browser-check-v0.4-20261010.json) / [同意弹窗](dify/web-ai-consent-v04.png) / [最终回答](dify/web-ai-answer-v04.png)。追加 25 次授权额度已用完；这是单条网页端到端验证，不是用户验收，最新版尚未完成完整 20 条回归或 180 条评测。
 
 早期 [Studio 试跑](dify/studio-trial-record.json) 共 6 次、3 类场景，保留为历史过程证据。180 条完整真实模型评测尚未运行；不能将不同版本的通过项拼成最新版完整通过。
 
@@ -48,7 +48,7 @@ The separate Vercel project and live Dify API were used for the synthetic runs a
 4. 在该项目配置 **唯一一条** `@vercel/firewall` 限流规则，Rate limit ID 为 `xiaoman-question`，固定窗口 60 秒、6 次、超限 429。代码使用固定私人体验键，所有授权请求共享该地区计数。核对并发布后实测限流；不存在规则、返回错误或 1.5 秒超时均阻止模型调用。启用系统环境变量自动暴露：生产环境使用 `VERCEL_PROJECT_PRODUCTION_URL` 查询限流，只要生产主域公开可达，就不需要额外的保护绕过 Secret；主域缺失或格式不合法时关闭调用，不回退到受保护的部署地址。预览环境使用 `VERCEL_URL`，按官方要求启用自动化保护绕过，相关 Secret 仅限后端。Pages 的跨域调用不能携带 Vercel 登录页，公开可达的私人体验 API 由自身体验码鉴权；不能把部署保护绕过 Secret 放进网页。
 5. 导入或保留 `docs/dify/xiaoman-finance-assistant.yml` 的工作流，确认 DeepSeek 模型配置和额度。输入为三个字符串 `operation`、`payload`、`context`，输出为 `result_json`，使用 blocking API。工作流发布后再创建/使用该应用专属 API Key，放入 Vercel Secret。发布前重新查看同目录 Prompt、Schema 与试跑记录。
 6. 用虚构账本验证鉴权、同意、数值回答、未知值、拒绝荐股、失败兜底、限流及浏览器到模型的完整链路。[PR #25](https://github.com/Molly-gith/xiaoman-ledger/pull/25) 已将组合发布流程合入 `main`（`8570b2e`）：该工作流仅为 PR #24 的构建环境直接设置 `VITE_AI_API_URL=https://xiaoman-ai-beta.vercel.app/api/ai/question`，不依赖仓库变量；主站与 PR #23 构建时该值为空。这个公开地址不含密钥。使用此正式发布流程，不恢复已删除的临时分支拼接脚本。
-7. 保留历次 Smoke 与重点回归结果，完成剩余网页联调后再记录结论；180 条真实模型评测仍未运行。对外多用户 Beta 前仍需按项目既有决策完成用户身份与云账本方案；当前体验码仅用于私人验证，AI 记账和 AI 周期复盘不在本次启用范围。
+7. 保留历次 Smoke、重点回归与网页联调结果；v0.4 尚未重跑完整 20 条，180 条真实模型评测仍未运行。追加 25 次授权额度已用完，后续模型调用需另获授权。对外多用户 Beta 前仍需按项目既有决策完成用户身份与云账本方案；当前体验码仅用于私人验证，AI 记账和 AI 周期复盘不在本次启用范围。
 
 Deployment uses the separate Vercel project with this repository root and `vercel.json`. Missing secrets intentionally leave AI disabled. Server-only Secrets, metadata and origin Config values accompany a single `xiaoman-question` Firewall SDK rule (6 requests / 60 seconds). Expose system environment variables. Production checks use `VERCEL_PROJECT_PRODUCTION_URL` and need no additional bypass Secret when that domain is public; missing or invalid host configuration fails closed. Preview function checks use `VERCEL_URL` and require server-only Protection Bypass for Automation. Workflow labels must match the published prompt. The PR #25 Pages workflow directly sets the fixed public API URL only for PR #24, without repository variables; the main site and PR #23 receive an empty value. Final browser verification, the 180-case live evaluation and the existing pre-Beta identity/storage requirements remain separate gates.
 
