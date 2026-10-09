@@ -11,7 +11,10 @@ const specs = [
   ["state-011", ["investment_spend", "investment_target", "investment_gap"]],
   ["structure-001", ["consumption_spend", "waste_spend", "investment_spend"]],
   ["structure-006", ["waste_spend"]],
-  ["structure-011", ["investment_spend", "investment_target", "investment_gap"]],
+  // The question asks only for the gap; the target and spent amount are optional context.
+  ["structure-011", ["investment_gap"], {
+    expectedBehavior: "准确回答投资缺口 3000，并引用缺口事实。目标与已投入金额为可选补充；若提及，须正确且引用对应快照事实。",
+  }],
   ["investment-001", ["investment_market_value"]],
   ["investment-006", ["investment_floating_pnl"]],
   ["investment-011", ["investment_net_contribution"]],

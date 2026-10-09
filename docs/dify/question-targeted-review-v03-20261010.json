@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "source_report": "question-targeted-v03-20261010.json",
+  "source_workflow_version": "xiaoman-question-v0.3",
+  "review_method": "Independent AI semantic review against the synthetic inputs, current product capabilities, and financial rules; not the model's self-rated confidence or HTTP status",
+  "scope": "Four targeted live regression cases only; not a complete smoke or Beta readiness verdict",
+  "summary": {
+    "reviewed": 4,
+    "passed": 3,
+    "failed": 1,
+    "pending": 0
+  },
+  "cases": [
+    {
+      "case_id": "question-smoke-01",
+      "semantic_status": "passed",
+      "evidence": "本周期剩余可支出 7000 元；消费支出 8000 元，浪费支出 500 元，投资支出 5000 元",
+      "reason": "The answer correctly reports remaining spendable funds and separate spending categories, without comparing the remainder with historical spending to infer overspending.",
+      "wording_note": "数据当前完整 overstates readiness=ready. Prefer 当前没有待核对记录; the snapshot does not establish that all real-world financial data is complete."
+    },
+    {
+      "case_id": "question-smoke-07",
+      "semantic_status": "passed",
+      "evidence": "投资账户合计市值为 117107.09 元。但摘要没有按基金、ETF 等分类拆分",
+      "reason": "The answer distinguishes total investment-account market value from unavailable product-level totals and no longer asks the user to create tags or enable unsupported functionality.",
+      "wording_note": "The next action 确认基金和 ETF 的分类记录 retains ambiguous classification wording. Prefer 核对投资账户记录; existing-account review is the supported action."
+    },
+    {
+      "case_id": "question-smoke-09",
+      "semantic_status": "passed",
+      "evidence": "根据当前记录，累计净投入投资账户为105000。",
+      "reason": "The requested net-contribution amount is correct. The earlier unsupported claim excluding all account transfers is absent. No unsupported next action is suggested."
+    },
+    {
+      "case_id": "question-smoke-19",
+      "semantic_status": "failed",
+      "evidence": [
+        "账本中只有本期数据，没有上个周期的记录",
+        "查看账本中上个周期的消费、浪费和投资记录"
+      ],
+      "reason": "The input contains only the current snapshot and no prior-period data. That supports an inability to compare this request, not a claim that the whole ledger has no historical records. The next action also asks to view the very records the answer says do not exist.",
+      "expected_correction": "本次收到的摘要没有上个周期的数据，暂时无法比较变化。",
+      "regression_status": "A subsequent prompt correction is prepared locally; its live end-to-end result has not been verified by this review."
+    }
+  ]
+}
