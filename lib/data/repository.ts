@@ -51,7 +51,7 @@ export function createRepository(store: LedgerStore): LedgerRepository {
   return {
     read: () => store.read().then(validateLedger),
     saveCycle: (cycle, plan, revision) => mutate(revision, state => ({ ...state,
-      profile: (cycle.cycleType ?? "salary_based") === "salary_based" ? { salaryDay: cycle.salaryDay } : state.profile,
+      profile: (cycle.cycleType ?? "salary_based") === "salary_based" ? { salaryDay: cycle.salaryDay } : null,
       activeCycleId: cycle.id,
       cycles: [...state.cycles.filter(c => c.id !== cycle.id), cycle], budgets: [...state.budgets.filter(b => b.cycleId !== cycle.id), plan] })),
     saveTransaction: (value, revision, editing = false) => mutate(revision, state => {
