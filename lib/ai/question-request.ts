@@ -70,5 +70,5 @@ export async function readLimitedJson(message: Request | Response, maxBytes: num
   const body = new Uint8Array(length);
   let offset = 0;
   for (const chunk of chunks) { body.set(chunk, offset); offset += chunk.byteLength; }
-  return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body));
+  return JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(body));
 }
