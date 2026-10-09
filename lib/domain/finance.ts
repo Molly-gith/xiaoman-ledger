@@ -21,7 +21,20 @@ export function salaryCycle(date: string, salaryDay: number): FinancialCycle {
   const thisPayday = payday(y, m, salaryDay);
   const start = today < thisPayday ? payday(y, m - 1, salaryDay) : thisPayday;
   const next = payday(start.getUTCFullYear(), start.getUTCMonth() + 1, salaryDay);
-  return { id: `cycle-${iso(start)}-${salaryDay}`, salaryDay, startDate: iso(start), endDate: iso(new Date(+next - DAY)), nextSalaryDate: iso(next) };
+  return { id: `cycle-${iso(start)}-${salaryDay}`, salaryDay, startDate: iso(start), endDate: iso(new Date(+next - DAY)), nextSalaryDate: iso(next), cycleType: "salary_based" };
+}
+export function calendarMonthCycle(date: string): FinancialCycle {
+  const today = parseDate(date), y = today.getUTCFullYear(), m = today.getUTCMonth();
+  const start = new Date(Date.UTC(y, m, 1));
+  const next = new Date(Date.UTC(y, m + 1, 1));
+  return { id: `cycle-${iso(start)}-calendar`, salaryDay: 1, startDate: iso(start), endDate: iso(new Date(+next - DAY)), nextSalaryDate: iso(next), cycleType: "calendar_month" };
+}
+export function customCycle(startDate: string, endDate: string): FinancialCycle {
+  const start = parseDate(startDate), end = parseDate(endDate);
+  if (+end < +start) throw new Error("自定义周期结束日期不能早于开始日期");
+  if (+end - +start > 366 * DAY) throw new Error("自定义周期最长支持 366 天");
+  const next = new Date(+end + DAY);
+  return { id: `cycle-${startDate}-${endDate}-custom`, salaryDay: start.getUTCDate(), startDate, endDate, nextSalaryDate: iso(next), cycleType: "custom" };
 }
 export function remainingDays(cycle: FinancialCycle, today: string): number {
   return Math.max(0, Math.round((+parseDate(cycle.nextSalaryDate) - +parseDate(today)) / DAY));

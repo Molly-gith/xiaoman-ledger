@@ -3,7 +3,6 @@ import { test, expect, type Page } from '@playwright/test';
 async function setup(page: Page) {
   await page.clock.install({ time: new Date('2026-09-15T04:00:00Z') });
   await page.goto('./');
-  await page.locator('[name="salaryDay"]').fill('20');
   await page.locator('[name="availableIncome"]').fill('10000');
   await page.getByRole('button', { name: '开始这个周期', exact: true }).click();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥7,500.00');

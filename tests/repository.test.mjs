@@ -45,6 +45,19 @@ test('reserve overspend and reducing reserve below recorded usage leave state un
   await assert.rejects(repo.saveCycle(cycle,{...plan,necessaryReserve:2700},s.revision),/预留额度不足/);
   assert.equal((await repo.read()).budgets[0].necessaryReserve,3000);
 });
+test('V6 funding sources round-trip without changing the deterministic available-funds total',async()=>{
+  const repo=createRepository(memoryStore());
+  const v6Plan={...plan,model:'nature',necessaryReserve:0,plannedSavings:2500,fundingSources:[
+    {id:'salary',type:'salary',amount:8000},{id:'side',type:'freelance',amount:2000}
+  ]};
+  const state=await repo.saveCycle(cycle,v6Plan,0);
+  assert.equal(state.budgets[0].fundingSources.length,2);
+  assert.equal(state.budgets[0].availableIncome,10000);
+  assert.equal(calculateFinance(state.cycles[0],state.budgets[0],[]).safeToSpend,7500);
+  const restored=normalizeBackup(JSON.parse(JSON.stringify(state)));
+  assert.deepEqual(restored.budgets[0].fundingSources,state.budgets[0].fundingSources);
+});
+
 test('failed persistence does not mutate saved data',async()=>{
   const store=memoryStore(), repo=createRepository(store);await repo.saveCycle(cycle,plan,0);
   store.commit=async()=>{throw Error('quota');};

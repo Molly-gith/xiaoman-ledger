@@ -3,12 +3,11 @@ import { mkdir } from "node:fs/promises";
 const fixedNow = new Date('2026-09-15T04:00:00Z');
 async function open(page: Page) { await page.clock.install({ time: fixedNow }); await page.goto('./'); }
 async function setup(page: Page) {
-  await page.locator('[name="salaryDay"]').fill('20');
   await page.locator('[name="availableIncome"]').fill('10000');
   await expect(page.getByTestId('ratio-consume')).toContainText('70%');
   await expect(page.getByTestId('ratio-invest')).toContainText('25%');
   await expect(page.getByTestId('ratio-waste')).toContainText('≤5%');
-  await expect(page.getByText('29–31 日遇到短月时，按月末发薪。')).toHaveCount(0);
+  await expect(page.getByText(/29–31 日遇到短月/)).toHaveCount(0);
   await expect(page.locator('[name="plannedSavings"]')).toHaveValue('2500');
   await expect(page.locator('[name="necessaryReserve"]')).toHaveCount(0);
   await page.getByRole('button', { name: '开始这个周期', exact: true }).click();
@@ -80,7 +79,7 @@ test('manual cycle, CRUD, rent as normal spending, nature targets, backups and o
   const backup=await pending; const path=await backup.path(); expect(path).toBeTruthy();
   await page.getByRole('button',{name:'清空这台设备的数据',exact:true}).click();
   await page.getByRole('button',{name:'确认清空',exact:true}).click();
-  await expect(page.locator('[name="salaryDay"]')).toBeVisible();
+  await expect(page.getByRole('button',{name:/按自然月/})).toBeVisible();
   await page.locator('input[type="file"]').setInputFiles(path!);
   await page.getByRole('button',{name:'确认恢复',exact:true}).click();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥5,500.00');
@@ -94,7 +93,7 @@ test('manual cycle, CRUD, rent as normal spending, nature targets, backups and o
 test('legacy data requires confirmation and manual editing preserves user choices',async({page})=>{
   await page.addInitScript(()=>localStorage.setItem('xiaoman-ledger-local-v1',JSON.stringify({app:'xiaoman-ledger',version:1,ledgerKind:'personal',settings:{monthlyBudget:15000,savingsCurrent:0,savingsGoal:100000},transactions:[{id:'old',type:'expense',amount:50,date:'2026-09-15',category:'购物',note:'旧账',icon:'购',source:'text'}]})));
   await open(page);
-  await page.locator('[name="salaryDay"]').fill('20'); await page.locator('[name="availableIncome"]').fill('1000');
+  await page.locator('[name="availableIncome"]').fill('1000');
   await page.locator('[name="plannedSavings"]').fill('0');
   await page.getByRole('button',{name:'开始这个周期',exact:true}).click();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('待核对旧账');
@@ -121,7 +120,7 @@ test('stale tabs cannot overwrite newer data',async({page,context})=>{
 });
 
 test('zero income, negative period spendable and salary rollover preserve history',async({page})=>{
-  await open(page);await page.locator('[name="salaryDay"]').fill('20');await page.locator('[name="availableIncome"]').fill('0');
+  await open(page);await page.getByRole('button',{name:/按发薪日/}).click();await page.locator('[name="salaryDay"]').fill('20');await page.locator('[name="availableIncome"]').fill('0');
   await page.getByRole('button',{name:'开始这个周期',exact:true}).click();await expect(page.getByTestId('safe-to-spend')).toHaveText('¥0.00');
   await page.getByTestId('home-action-add').click();await page.locator('[name="amount"]').fill('10');await page.getByRole('button',{name:'消费',exact:true}).click();await page.getByRole('button',{name:'记好了',exact:true}).click();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥-10.00');
@@ -137,7 +136,7 @@ test('failed durable write retains the form and does not report success',async({
     localStorage.setItem('xiaoman-ledger-local-v1',JSON.stringify({app:'xiaoman-ledger',version:2,revision:0,ledgerKind:'personal',profile:null,activeCycleId:null,cycles:[],budgets:[],transactions:[],settings:{monthlyBudget:0,savingsCurrent:0,savingsGoal:0}}));
     Storage.prototype.setItem=()=>{throw new DOMException('空间不足','QuotaExceededError');};
   });
-  await open(page);await page.locator('[name="salaryDay"]').fill('20');await page.locator('[name="availableIncome"]').fill('100');
+  await open(page);await page.locator('[name="availableIncome"]').fill('100');
   await page.getByRole('button',{name:'开始这个周期',exact:true}).click();await expect(page.getByRole('alert')).toContainText('空间不足');
   await expect(page.locator('[name="availableIncome"]')).toHaveValue('100');await expect(page.getByTestId('safe-to-spend')).toHaveCount(0);
   expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('xiaoman-ledger-local-v1')!).revision)).toBe(0);
@@ -146,17 +145,17 @@ test('failed durable write retains the form and does not report success',async({
 test('online navigation refreshes an older offline shell after an app update',async({page})=>{
   await open(page);
   await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
-  await page.reload();await expect(page.locator('[name="salaryDay"]')).toBeVisible();
+  await page.reload();await expect(page.getByRole('button',{name:/按自然月/})).toBeVisible();
   await page.evaluate(async()=>{
     const registration=await navigator.serviceWorker.ready, cache=await caches.open('xiaoman-shell-v3');
     await cache.put(new URL('./',registration.scope),new Response('<html>old-release-marker</html>',{headers:{'content-type':'text/html'}}));
   });
-  await page.reload();await expect(page.locator('[name="salaryDay"]')).toBeVisible();
+  await page.reload();await expect(page.getByRole('button',{name:/按自然月/})).toBeVisible();
   await expect.poll(()=>page.evaluate(async()=>{
     const registration=await navigator.serviceWorker.ready, cache=await caches.open('xiaoman-shell-v3');
     return (await (await cache.match(new URL('./',registration.scope)))!.text()).includes('old-release-marker');
   })).toBe(false);
-  await page.context().setOffline(true);await page.reload();await expect(page.locator('[name="salaryDay"]')).toBeVisible();
+  await page.context().setOffline(true);await page.reload();await expect(page.getByRole('button',{name:/按自然月/})).toBeVisible();
 });
 
 test('ambiguous legacy timestamps require an explicit date instead of a timezone guess',async({page})=>{

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { salaryCycle, remainingDays, cents, parseDate, calculateFinance } from '../lib/domain/finance.ts';
+import { calendarMonthCycle, customCycle, salaryCycle, remainingDays, cents, parseDate, calculateFinance } from '../lib/domain/finance.ts';
 import { suggestBudget } from '../lib/domain/budget-suggestion.ts';
 const cycle = salaryCycle('2026-09-15', 20);
 const plan = {cycleId:cycle.id, availableIncome:10000, plannedSavings:2000, necessaryReserve:3000};
@@ -24,6 +24,15 @@ test('CR-001 starter structure computes 70/5/25 with integer-fen remainder', () 
     assert.equal(cents(suggestion.consumptionReference)+cents(suggestion.wasteLimit)+cents(suggestion.investmentTarget),cents(income));
   }
   for (const income of [-1,NaN,Infinity,0.001]) assert.throws(()=>suggestBudget(income));
+});
+
+
+test('V6 supports calendar-month and custom financial cycles', () => {
+  const month=calendarMonthCycle('2026-09-15');
+  assert.deepEqual([month.cycleType,month.startDate,month.endDate,month.nextSalaryDate],['calendar_month','2026-09-01','2026-09-30','2026-10-01']);
+  const custom=customCycle('2026-09-10','2026-10-09');
+  assert.deepEqual([custom.cycleType,custom.startDate,custom.endDate,custom.nextSalaryDate],['custom','2026-09-10','2026-10-09','2026-10-10']);
+  assert.throws(()=>customCycle('2026-10-10','2026-10-09'));
 });
 
 test('salary 20 cycle crosses months and includes salary day', () => {
