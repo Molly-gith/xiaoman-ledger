@@ -22,19 +22,19 @@ Before the first request, the user explicitly consents and enters a private beta
 
 ## 部署准备 / Deployment preparation
 
-代码与部署步骤已准备；实际部署状态见关联 PR 的验证记录。Dify 按用户选择保留草稿，密钥由用户自行配置。下面是后续接入步骤；密钥只在对应平台私密输入，不在聊天中发送。
+代码与部署步骤已准备；Dify 工作流发布与实际部署状态见关联 PR 的验证记录，密钥由用户自行配置。下面是接入步骤；密钥只在对应平台私密输入，不在聊天中发送。
 
-The code and deployment steps are prepared; see the linked PR's verification record for the actual deployment status. Dify remains a draft at the user's request, and the user configures secrets personally. The steps below describe future integration. Secrets belong only in the relevant platform's private settings, never in chat.
+The code and deployment steps are prepared; see the linked PR's verification record for Dify workflow publication and actual deployment status. The user configures secrets personally. The steps below describe integration. Secrets belong only in the relevant platform's private settings, never in chat.
 
 1. 在现有 Vercel 账号中创建独立 `xiaoman-ai-beta` 项目，项目根目录为本仓库，使用 `vercel.json`（Framework: Other / null）。构建只产生简短说明页与 `api/ai/question.ts`，不迁移 Pages 网站。Node.js 22 或更新受支持的 LTS。
 2. 先可无密钥部署。来源允许列表为空或请求来源不匹配时，接口先返回 `403 origin_denied`；已配置匹配的来源且收到 POST 请求，但仍缺少密钥时，返回 `503 not_configured`。确认目标与部署产物后，由用户在该项目私密环境变量中配置 `DIFY_API_KEY`、`AI_BETA_TOKEN`（Secret）。体验码使用密码学随机生成的至少 32 字符值，只分发给本人/明确邀请的体验者，不放构建变量、仓库或 URL。
 3. Config 变量为 `AI_ALLOWED_ORIGINS=https://molly-gith.github.io`、`DIFY_MODEL_VERSION=deepseek-v4-pro`、`DIFY_WORKFLOW_VERSION=xiaoman-question-v0.1`。更新实际模型或 Prompt 时同步修改版本标签。完整无密钥示例见 `.env.ai.example`。
-4. 在该项目配置 **唯一一条** `@vercel/firewall` 限流规则，Rate limit ID 为 `xiaoman-question`，固定窗口 60 秒、6 次、超限 429。代码使用固定私人体验键，所有授权请求共享该地区计数。核对并发布后实测限流；不存在规则、返回错误或 1.5 秒超时均阻止模型调用。预览部署按官方要求启用自动化保护绕过与系统环境变量，相关绕过 Secret 仅限后端。Pages 的跨域调用不能携带 Vercel 登录页，公开可达的私人体验 API 由自身体验码鉴权；不能把部署保护绕过 Secret 放进网页。
+4. 在该项目配置 **唯一一条** `@vercel/firewall` 限流规则，Rate limit ID 为 `xiaoman-question`，固定窗口 60 秒、6 次、超限 429。代码使用固定私人体验键，所有授权请求共享该地区计数。核对并发布后实测限流；不存在规则、返回错误或 1.5 秒超时均阻止模型调用。启用系统环境变量自动暴露：生产环境使用 `VERCEL_PROJECT_PRODUCTION_URL` 查询限流，只要生产主域公开可达，就不需要额外的保护绕过 Secret；主域缺失或格式不合法时关闭调用，不回退到受保护的部署地址。预览环境使用 `VERCEL_URL`，按官方要求启用自动化保护绕过，相关 Secret 仅限后端。Pages 的跨域调用不能携带 Vercel 登录页，公开可达的私人体验 API 由自身体验码鉴权；不能把部署保护绕过 Secret 放进网页。
 5. 导入或保留 `docs/dify/xiaoman-finance-assistant.yml` 的工作流，确认 DeepSeek 模型配置和额度。输入为三个字符串 `operation`、`payload`、`context`，输出为 `result_json`，使用 blocking API。工作流发布后再创建/使用该应用专属 API Key，放入 Vercel Secret。发布前重新查看同目录 Prompt、Schema 与试跑记录。
 6. 用虚构账本在真实 API 验收：鉴权、同意、数值回答、未知值、拒绝荐股、失败兜底、限流。通过后将完整接口地址 `https://<verified-host>/api/ai/question` 写入 GitHub Actions **变量** `VITE_AI_API_URL` 并重新构建 Pages；该变量不含密钥。PR Preview 工作流如由其他分支维护，也要明确传入此变量。
 7. 继续完成正式 20 条 Smoke、失败用例修正与 180 条评测。当前 3 类场景不是正式完整基线。对外多用户 Beta 前仍需按项目既有决策完成用户身份与云账本方案；当前体验码仅用于私人验证。
 
-Deployment uses a separate Vercel project with this repository root and `vercel.json`. Deploying without secrets intentionally leaves AI disabled. Configure server-only Secrets, metadata and origin Config values, then a single `xiaoman-question` Firewall SDK rule (6 requests / 60 seconds). Confirm Dify is published and verify synthetic requests before adding the public API URL to the Pages build. Keep deployment-bypass credentials server-only. Formal smoke/full evaluation and the existing pre-Beta identity/storage requirements remain outstanding.
+Deployment uses a separate Vercel project with this repository root and `vercel.json`. Deploying without secrets intentionally leaves AI disabled. Configure server-only Secrets, metadata and origin Config values, then a single `xiaoman-question` Firewall SDK rule (6 requests / 60 seconds). Expose system environment variables. Production checks use `VERCEL_PROJECT_PRODUCTION_URL` and need no additional bypass Secret when that domain is public; missing or invalid host configuration fails closed. Preview checks use `VERCEL_URL` and require server-only Protection Bypass for Automation. Confirm Dify is published and verify synthetic requests before adding the public API URL to the Pages build. Formal smoke/full evaluation and the existing pre-Beta identity/storage requirements remain outstanding.
 
 ## 验证与边界 / Verification and limits
 
@@ -49,4 +49,4 @@ Deployment uses a separate Vercel project with this repository root and `vercel.
 
 Tests cover contract, privacy, auth, bounds, limiter failure, provider failure and browser consent/revocation. Mock pass counts are not live model accuracy. Reference validation cannot guarantee prose correctness. Regional rate limits are abuse protection, not a hard global spend cap. No additional database is required.
 
-官方依据 / Primary references: [Vercel Node Functions](https://vercel.com/docs/functions/runtimes/node-js), [Firewall SDK](https://vercel.com/docs/vercel-firewall/vercel-waf/rate-limiting-sdk), [Rate-limiting availability](https://vercel.com/docs/vercel-firewall/vercel-waf/rate-limiting), [Dify Workflow API](https://docs.dify.ai/en/api-reference/workflow-runs/run-workflow).
+官方依据 / Primary references: [Vercel Node Functions](https://vercel.com/docs/functions/runtimes/node-js), [Firewall SDK](https://vercel.com/docs/vercel-firewall/vercel-waf/rate-limiting-sdk), [Deployment Protection](https://vercel.com/docs/deployment-protection#how-to-migrate-to-standard-protection), [System environment variables](https://vercel.com/docs/environment-variables/system-environment-variables#vercel_project_production_url), [Rate-limiting availability](https://vercel.com/docs/vercel-firewall/vercel-waf/rate-limiting), [Dify Workflow API](https://docs.dify.ai/en/api-reference/workflow-runs/run-workflow).

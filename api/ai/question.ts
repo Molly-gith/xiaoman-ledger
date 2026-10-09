@@ -13,9 +13,17 @@ export default {
     }, {
       checkLimit: async () => {
         // The SDK skips enforcement in development. Never use that path for live AI calls.
-        if (process.env.NODE_ENV !== "production" || process.env.VERCEL !== "1" || !process.env.VERCEL_URL) throw new Error("Limiter unavailable");
+        // Standard Protection gates the generated deployment URL, including in production.
+        // Never fall back to it when the public production domain is missing.
+        const host = process.env.VERCEL_ENV === "production"
+          ? process.env.VERCEL_PROJECT_PRODUCTION_URL
+          : process.env.VERCEL_URL;
+        if (process.env.NODE_ENV !== "production" || process.env.VERCEL !== "1"
+          || !host || host.length > 253 || host !== host.trim()
+          || !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(host)) throw new Error("Limiter unavailable");
         return checkRateLimit("xiaoman-question", {
-          headers: new Headers({ host: process.env.VERCEL_URL }),
+          // Do not forward the caller's Authorization, cookies or arbitrary host.
+          headers: new Headers({ host }),
           rateLimitKey: "xiaoman-private-beta", timeout: 1500,
         });
       },

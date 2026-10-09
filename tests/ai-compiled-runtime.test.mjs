@@ -5,10 +5,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import ts from "typescript";
+import { BETA_TOKEN, PROVIDER_KEY, questionBody } from "./ai-fixture.mjs";
 
 const projectDir = fileURLToPath(new URL("../", import.meta.url));
 
-test("compiled Vercel API loads from JavaScript-only output and fails closed without secrets", async () => {
+test("compiled Vercel API loads, isolates credentials and selects a valid limiter host", async () => {
   const outputParent = join(projectDir, ".vercel");
   await mkdir(outputParent, { recursive: true });
   const outputDir = await mkdtemp(join(outputParent, "ai-compiled-test-"));
@@ -42,7 +43,61 @@ test("compiled Vercel API loads from JavaScript-only output and fails closed wit
       assert.equal(response.status, 503);
       assert.deepEqual(await response.json(), { error: "not_configured" });
       assert.equal((await api.fetch(new Request(url, { method: "POST", headers: { Origin: "https://untrusted.example" } }))).status, 403);
-    `, pathToFileURL(entrypoint).href], {
+
+      // Synthetic configuration only: no parent secrets or credentials enter this process.
+      const fixture = JSON.parse(process.argv[2]);
+      Object.assign(process.env, {
+        VERCEL: "1", AI_BETA_TOKEN: fixture.token, DIFY_API_KEY: fixture.providerKey,
+        DIFY_MODEL_VERSION: "test-model", DIFY_WORKFLOW_VERSION: "test-workflow",
+      });
+      let calls = [];
+      globalThis.fetch = async (url, options) => {
+        calls.push({ url, options });
+        return new Response(null, { status: 429 });
+      };
+      const invoke = () => api.fetch(new Request(url, {
+        method: "POST", body: JSON.stringify(fixture.body), headers: {
+          Origin: origin, "Content-Type": "application/json",
+          Authorization: "Bearer " + fixture.token, Cookie: "private-cookie=test",
+          Host: "attacker.example", "X-Forwarded-Host": "attacker.example",
+        },
+      }));
+      const productionHost = "xiaoman-ai-beta.vercel.app";
+      const deploymentHost = "xiaoman-ai-beta-test-deployment.vercel.app";
+      for (const [environment, expectedHost] of [["production", productionHost], ["preview", deploymentHost]]) {
+        Object.assign(process.env, {
+          VERCEL_ENV: environment, VERCEL_PROJECT_PRODUCTION_URL: productionHost, VERCEL_URL: deploymentHost,
+        });
+        calls = [];
+        assert.equal((await invoke()).status, 429, environment);
+        assert.equal(calls.length, 1);
+        assert.equal(calls[0].url, "https://" + expectedHost + "/.well-known/vercel/rate-limit-api/xiaoman-question");
+        const headers = new Headers(calls[0].options.headers);
+        assert.equal(headers.get("x-rr-host"), expectedHost);
+        assert.equal(headers.has("authorization"), false);
+        assert.equal(headers.has("x-rr-authorization"), false);
+        assert.equal(headers.has("cookie"), false);
+        assert.equal(headers.has("x-rr-cookie"), false);
+        assert.equal(headers.has("x-rr-x-forwarded-host"), false);
+        assert.equal(JSON.stringify([...headers]).includes(fixture.token), false);
+        assert.equal(JSON.stringify([...headers]).includes(fixture.providerKey), false);
+      }
+      for (const environment of ["production", "preview"]) {
+        for (const invalidHost of [undefined, "", "https://example.com", "example.com/path", "example.com:443", "user@example.com", "example.com?x=1", "example.com#x", "localhost", "127.0.0.1", "bad_label.example", "-bad.example", "example.com\\n", "a".repeat(254)]) {
+          Object.assign(process.env, {
+            VERCEL_ENV: environment, VERCEL_PROJECT_PRODUCTION_URL: productionHost, VERCEL_URL: deploymentHost,
+          });
+          const variable = environment === "production" ? "VERCEL_PROJECT_PRODUCTION_URL" : "VERCEL_URL";
+          if (invalidHost === undefined) delete process.env[variable];
+          else process.env[variable] = invalidHost;
+          calls = [];
+          const blocked = await invoke();
+          assert.equal(blocked.status, 503, environment + ": " + invalidHost);
+          assert.deepEqual(await blocked.json(), { error: "unavailable" });
+          assert.equal(calls.length, 0, "invalid host must not reach limiter or provider");
+        }
+      }
+    `, pathToFileURL(entrypoint).href, JSON.stringify({ token: BETA_TOKEN, providerKey: PROVIDER_KEY, body: questionBody() })], {
       cwd: projectDir, encoding: "utf8",
       env: { SystemRoot: process.env.SystemRoot ?? "", NODE_ENV: "production", AI_ALLOWED_ORIGINS: "https://molly-gith.github.io" },
     });
