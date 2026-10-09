@@ -37,6 +37,14 @@ jobs:
       - run: npm run build:github
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
+      - name: Build AI consent test fixture
+        run: npm run build:github
+        env:
+          VITE_AI_API_URL: https://xiaoman-ai-test.example/api/ai/question
+      - name: Verify AI consent and fallback in browser
+        run: npm run test:browser -- tests/browser/ai-question.spec.ts
+        env:
+          AI_BROWSER_TEST: "1"
       - run: npm run eval -- --fixture-provider
       - uses: actions/upload-artifact@v4
         if: always()

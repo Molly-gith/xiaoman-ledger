@@ -1,6 +1,7 @@
 "use client";
 import { useState, type ChangeEvent } from "react";
 import type { Transaction } from "../lib/domain/types";
+import { cents } from "../lib/domain/finance";
 import { StoryIcon, categoryIcon } from './story-icons';
 export type Period = "day" | "week" | "month" | "year";
 export type LedgerKind = "personal" | "family" | "travel";
@@ -17,7 +18,26 @@ export function TransactionRow({ item, onEdit, onDelete, removingId }: { item: T
 export function PageHeader({ title, subtitle }: { title: string; subtitle: string }) { return <header className="page-header"><h1>{title}</h1><p>{subtitle}</p></header>; }
 export function PeriodTabs({ period, setPeriod }: { period: Period; setPeriod: (period: Period) => void }) { return <div className="period-tabs">{PERIODS.map((item) => <button key={item.key} className={period === item.key ? "active" : ""} onClick={() => setPeriod(item.key)}>{item.label}</button>)}</div>; }
 export function EmptyState({ text, action, compact = false }: { text: string; action?: () => void; compact?: boolean }) { return <div className={`empty ${compact ? "compact" : ""}`}><span className="empty-mark" aria-hidden="true" /><p>{text}</p>{action && <button onClick={action}>记下第一笔</button>}</div>; }
-export function GoalForm({ saved, goal, onSave }: { saved: number; goal: number; onSave: (saved: number, goal: number) => void }) { const [current, setCurrent] = useState(String(saved)); const [target, setTarget] = useState(String(goal)); return <form onSubmit={(event) => { event.preventDefault(); onSave(Number(current) || 0, Number(target)); }}><div className="sheet-head"><span>存</span><div><p>每一步都算数</p><h2>更新存款目标</h2></div></div><label>目前已存<div className="amount-field"><span>¥</span><input inputMode="decimal" value={current} onChange={(event) => setCurrent(event.target.value)} /></div></label><label>目标金额<div className="amount-field"><span>¥</span><input inputMode="decimal" value={target} onChange={(event) => setTarget(event.target.value)} /></div></label><button className="primary">保存目标</button></form>; }
+export function GoalForm({ saved, goal, onSave }: { saved: number; goal: number; onSave: (saved: number, goal: number) => void }) {
+  const [current, setCurrent] = useState(String(saved));
+  const [target, setTarget] = useState(String(goal));
+  const [error, setError] = useState("");
+  return <form onSubmit={event => {
+    event.preventDefault();
+    try {
+      if (!current.trim() || !target.trim()) throw new Error("请填写已存金额和目标金额");
+      const currentAmount = Number(current), targetAmount = Number(target);
+      cents(currentAmount); cents(targetAmount);
+      setError(""); onSave(currentAmount, targetAmount);
+    } catch (e) { setError(e instanceof Error ? e.message : "请检查金额"); }
+  }}>
+    <div className="sheet-head"><span><StoryIcon name="jar" /></span><div><h2>更新存款目标</h2><p>记录已经存下的钱和想达到的金额。</p></div></div>
+    <label>目前已存（必填）<div className="amount-field"><span>¥</span><input name="savingsCurrent" type="number" inputMode="decimal" required min="0" max="999999999999.99" step="0.01" value={current} onChange={event => setCurrent(event.target.value)} /></div></label>
+    <label>目标金额（必填）<div className="amount-field"><span>¥</span><input name="savingsGoal" type="number" inputMode="decimal" required min="0" max="999999999999.99" step="0.01" value={target} onChange={event => setTarget(event.target.value)} /></div></label>
+    {error && <p className="error-message" role="alert">{error}</p>}
+    <button className="primary">保存目标</button>
+  </form>;
+}
 export function ConfirmPanel({ mark, title, hint, summary, cancel, confirm, onCancel, onConfirm }: { mark: string; title: string; hint: string; summary?: React.ReactNode; cancel: string; confirm: string; onCancel: () => void; onConfirm: () => void }) { return <div className="delete-confirm"><div className="sheet-head"><span>{mark}</span><div><p>{hint}</p><h2>{title}</h2></div></div>{summary && <div className="delete-summary">{summary}</div>}<div className="confirm-actions"><button onClick={onCancel}>{cancel}</button><button className="danger" onClick={onConfirm}>{confirm}</button></div></div>; }
 export function DataPanel({ ledgerKind, count, onKind, onBackup, onCsv, onImport, onClear }: { ledgerKind: LedgerKind; count: number; onKind: (kind: LedgerKind) => void; onBackup: () => void; onCsv: () => void; onImport: (event: ChangeEvent<HTMLInputElement>) => void; onClear: () => void }) {
   return <div className="data-panel"><div className="sheet-head"><span>本</span><div><p>无需账户，也不上传云端</p><h2>本机数据与备份</h2></div></div><div className="local-privacy"><b>只保存在这台设备</b><p>清理浏览器数据或更换手机前，请先导出 JSON 备份。</p><span>{count} 笔账目</span></div><div className="data-section"><span>账本用途</span><div className="data-kinds">{LEDGER_KINDS.map((item) => <button key={item.key} className={ledgerKind === item.key ? "selected" : ""} onClick={() => onKind(item.key)}>{item.label}</button>)}</div></div><div className="data-actions"><button onClick={onBackup}><b>导出完整备份</b><span>换手机时用于恢复 · JSON</span></button><label><b>导入备份</b><span>替换当前设备上的账本</span><input type="file" accept="application/json,.json" onChange={onImport} /></label><button onClick={onCsv}><b>导出表格</b><span>用 Excel 或 Numbers 查看 · CSV</span></button></div><button className="clear-data" onClick={onClear}>清空这台设备的数据</button></div>;

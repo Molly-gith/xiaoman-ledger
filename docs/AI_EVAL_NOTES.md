@@ -1,5 +1,7 @@
 # Sprint 1 AI adapter and evaluation boundary
 
+This document records the historical Sprint 1 foundation and its original three-case harness. It is not the current live integration status. Ask Xiaoman now has two 20-case live runs (18 semantic passes each) and a v0.3 four-case targeted regression (3 passes). The latest browser integration status and original evidence are maintained in [AI runtime verification](AI_BETA_RUNTIME.md#真实验证记录--live-verification-record). AI bookkeeping and cycle reviews remain disabled, and the 180-case live evaluation has not run. The historical results below are preserved rather than relabeled as live model evaluation.
+
 ## Delivered
 
 - `lib/ai/adapter.ts` provides the four product-facing operations without a Dify/LangGraph dependency. The default adapter is disabled and makes no requests.

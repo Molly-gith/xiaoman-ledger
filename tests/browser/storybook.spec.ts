@@ -1,85 +1,51 @@
-import { test, expect } from '@playwright/test';
-const today = new Date('2026-09-15T04:00:00Z');
+import { test, expect } from "@playwright/test";
+import { addExpense, expandInvestmentTarget, expectBalance, openCycle, openLedger, saveCycle, setFunds } from "./ledger-helpers";
 
-test('70 5 25 suggestions preserve explicit investment edits and persist new structure', async ({page}) => {
-  await page.clock.install({time:today});
-  await page.goto('./');
-  await page.getByRole('button',{name:/按发薪日/}).click();
-  await page.locator('[name="availableIncome"]').fill('3000');
-  await expect(page.locator('[name="plannedSavings"]')).toHaveValue('750');
-  await expect(page.locator('[name="necessaryReserve"]')).toHaveCount(0);
-  await expect(page.getByTestId('budget-preview')).toHaveText('¥2,250.00');
-  await expect(page.getByTestId('ratio-consume')).toContainText('70%');
-  await expect(page.getByTestId('ratio-consume')).toContainText('消费');
-  await expect(page.getByTestId('ratio-invest')).toContainText('25%');
-  await expect(page.getByTestId('ratio-invest')).toContainText('投资');
-  await expect(page.getByTestId('ratio-waste')).toContainText('≤5%');
-  await expect(page.getByTestId('ratio-waste')).toContainText('浪费');
-  await page.locator('[name="plannedSavings"]').fill('0');
-  await page.locator('[name="availableIncome"]').fill('4000');
-  await expect(page.locator('[name="plannedSavings"]')).toHaveValue('0');
-  await expect(page.getByTestId('budget-preview')).toHaveText('¥4,000.00');
-  await page.getByRole('button',{name:'开始这个周期',exact:true}).click();
-  await expect(page.getByTestId('safe-to-spend')).toHaveText('¥4,000.00');
-  await page.getByTestId('home-action-bills').click();
-  await page.getByRole('button',{name:'调整结构',exact:true}).click();
-  await page.locator('[name="availableIncome"]').fill('6000');
-  await expect(page.locator('[name="plannedSavings"]')).toHaveValue('0');
-  await page.getByRole('button',{name:'恢复默认 25%'}).click();
-  await expect(page.locator('[name="plannedSavings"]')).toHaveValue('1500');
-  await page.getByRole('button',{name:'保存这个周期',exact:true}).click();
-  await expect(page.getByText(/周期结构已保存/)).toBeVisible();
+test("optional cycle amounts stay blank until chosen and investment references preserve explicit edits", async ({ page }) => {
+  await openLedger(page);
+  await openCycle(page);
+  const income = page.locator('[name="availableIncome"]');
+  const target = page.locator('[name="plannedSavings"]');
+  await expect(income).toHaveValue("");
+  await expect(income).not.toHaveAttribute("required", "");
+  await expect(page.getByText("本周期可用资金（选填）", { exact: true })).toBeVisible();
+  await expect(target).toBeHidden();
+  await expect(page.locator("summary").filter({ hasText: "资金来源（选填）" })).toBeVisible();
+  await income.fill("3000");
+  await expandInvestmentTarget(page);
+  await expect(target).toHaveValue("");
+  await expect(target).not.toHaveAttribute("required", "");
+  await page.getByRole("button", { name: /^采用 25% 参考/ }).click();
+  await expect(target).toHaveValue("750");
+  await target.fill("0");
+  await income.fill("4000");
+  await expect(target).toHaveValue("0");
+  await saveCycle(page);
+  await expectBalance(page, "¥4,000.00");
+  await openCycle(page);
+  await income.fill("6000");
+  await expandInvestmentTarget(page);
+  await expect(target).toHaveValue("0");
+  await page.getByRole("button", { name: /^采用 25% 参考/ }).click();
+  await expect(target).toHaveValue("1500");
+  await saveCycle(page);
   await page.reload();
-  await expect(page.getByTestId('safe-to-spend')).toHaveText('¥4,500.00');
-  await page.clock.setSystemTime(new Date('2026-09-20T04:00:00Z'));
-  await page.reload();
-  await page.getByRole('button',{name:'确认收入，开启新周期'}).click();
-  await page.locator('[name="availableIncome"]').fill('3000');
-  await expect(page.locator('[name="plannedSavings"]')).toHaveValue('750');
-  await expect(page.locator('[name="necessaryReserve"]')).toHaveCount(0);
+  await expectBalance(page, "¥4,500.00");
 });
 
-test('conversation-first v3 keeps chat primary, removes visible tabbar and keeps four actions one tap away', async ({page})=>{
-  await page.clock.install({time:today});
-  await page.goto('./');
-  await page.locator('[name="availableIncome"]').fill('3000');
-  await page.getByRole('button',{name:'开始这个周期',exact:true}).click();
-  await expect(page.getByTestId('assistant-conversation')).toBeVisible();
-  await expect(page.getByPlaceholder('问小满：我这个月还能花多少？')).toBeVisible();
-  await expect(page.getByText('AI 分析暂未启用',{exact:false})).toBeVisible();
-  await expect(page.locator('.bottom-nav')).toBeHidden();
-  await expect(page.getByTestId('home-action-add')).toBeVisible();
-  await expect(page.getByTestId('home-action-bills')).toBeVisible();
-  await expect(page.getByTestId('home-action-assets')).toBeVisible();
-  await expect(page.getByTestId('home-action-review')).toBeVisible();
-
-  await page.getByTestId('home-action-add').click();
-  await expect(page.getByRole('dialog',{name:'记账'})).toBeVisible();
-  await page.getByRole('button',{name:'关闭'}).click();
-
-  await page.getByTestId('home-action-bills').click();
-  await expect(page.getByRole('heading',{name:'财务',exact:true})).toBeVisible();
+test("manual entry marks requirements clearly and persists a user-selected category and nature", async ({ page }) => {
+  await openLedger(page);
+  await setFunds(page, "3000", "750");
+  await page.getByTestId("home-action-add").click();
+  await expect(page.getByText("金额（必填）", { exact: true })).toBeVisible();
+  await expect(page.getByText("备注（选填）", { exact: true })).toBeVisible();
+  await expect(page.locator('[name="date"]')).toHaveValue("2026-09-15");
+  await page.locator('[name="amount"]').fill("10");
+  await page.getByRole("button", { name: "记好了", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "记账", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "关闭", exact: true }).click();
+  await addExpense(page, "10", "手动记录", "餐饮", "消费");
+  await expectBalance(page, "¥2,240.00");
   await page.reload();
-
-  await page.getByTestId('home-action-assets').click();
-  await expect(page.getByText('投资账户',{exact:true}).first()).toBeVisible();
-  await page.reload();
-
-  await page.getByTestId('home-action-review').click();
-  await expect(page.getByRole('heading',{name:'周期复盘',exact:true})).toBeVisible();
-});
-
-test('manual entry remains usable after v3 navigation changes',async({page})=>{
-  await page.clock.install({time:today});
-  await page.goto('./');
-  await page.locator('[name="availableIncome"]').fill('3000');
-  await page.getByRole('button',{name:'开始这个周期',exact:true}).click();
-  await page.getByTestId('home-action-add').click();
-  await page.locator('[name="note"]').fill('手动记录');
-  await page.locator('[name="amount"]').fill('10');
-  await page.getByRole('button',{name:'消费',exact:true}).click();
-  await page.getByRole('button',{name:'记好了',exact:true}).click();
-  await expect(page.getByTestId('safe-to-spend')).toHaveText('¥2,240.00');
-  await page.reload();
-  await expect(page.getByTestId('safe-to-spend')).toHaveText('¥2,240.00');
+  await expectBalance(page, "¥2,240.00");
 });

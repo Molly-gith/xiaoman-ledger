@@ -1,5 +1,5 @@
 import { createRepository, type LedgerStore } from "./repository.ts";
-import { defaultState, normalizeBackup } from "./schema.ts";
+import { defaultState, encodeBackup, normalizeBackup } from "./schema.ts";
 import type { LedgerState } from "../domain/types.ts";
 
 const DB_NAME = "xiaoman-ledger-db", STORE_NAME = "ledger", STATE_KEY = "current";
@@ -60,7 +60,7 @@ export function createLocalStore(): LedgerStore {
           const raw = localStorage.getItem(FALLBACK_KEY);
           const current = raw === null ? legacyState() : normalizeBackup(JSON.parse(raw));
           if (current.revision !== expectedRevision) throw new Error("账本已在其他页面更新，请重新载入");
-          localStorage.setItem(FALLBACK_KEY, JSON.stringify(state));
+          localStorage.setItem(FALLBACK_KEY, JSON.stringify(encodeBackup(state)));
         });
         return;
       }
@@ -74,7 +74,7 @@ export function createLocalStore(): LedgerStore {
               const current = request.result === undefined ? legacyState() : normalizeBackup(request.result);
               const fallback = localStorage.getItem(FALLBACK_KEY);
               if (isAdoptedFallback(fallback) || current.revision !== expectedRevision) throw new Error("账本已在其他页面更新，请重新载入");
-              store.put(state, STATE_KEY);
+              store.put(encodeBackup(state), STATE_KEY);
             } catch (error) { failure = error; tx.abort(); }
           };
           tx.oncomplete = () => resolve();

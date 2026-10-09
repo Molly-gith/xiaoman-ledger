@@ -10,7 +10,8 @@ export type FinancialCycle = { id: string; salaryDay: number; startDate: DateOnl
 // All persisted amounts are yuan with at most two decimals. Arithmetic uses integer fen.
 // `plannedSavings` is kept for backwards compatibility. In the `nature` model it is the
 // protected investment/savings target amount shown to users as “投资目标”.
-export type BudgetPlan = { cycleId: string; availableIncome: number; plannedSavings: number; necessaryReserve: number; model?: BudgetModel; fundingSources?: FundingSource[] };
+// Null means not configured; an explicit zero remains a known amount.
+export type BudgetPlan = { cycleId: string; availableIncome: number | null; plannedSavings: number | null; necessaryReserve: number; model?: BudgetModel; fundingSources?: FundingSource[] };
 export type Transaction = {
   id: string; type: "expense" | "income"; amount: number; date: string;
   category: string; note: string; icon: string; source: "text" | "voice" | "import";

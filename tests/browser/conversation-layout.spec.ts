@@ -1,11 +1,9 @@
 import { test, expect, type Page } from '@playwright/test';
+import { openLedger, setFunds } from './ledger-helpers';
 
 async function setup(page: Page) {
-  await page.clock.install({ time: new Date('2026-09-15T04:00:00Z') });
-  await page.goto('./');
-  await page.locator('[name="availableIncome"]').fill('10000');
-  await page.getByRole('button', { name: '开始这个周期', exact: true }).click();
-  await expect(page.getByTestId('safe-to-spend')).toHaveText('¥7,500.00');
+  await openLedger(page);
+  await setFunds(page);
   await page.clock.runFor(4500);
 }
 
@@ -53,7 +51,8 @@ for (const size of [{ width: 390, height: 844 }, { width: 1440, height: 1000 }, 
     await page.getByRole('button', { name: '我的设置', exact: true }).click();
     await expect(page.getByRole('button', { name: '更新存款目标', exact: true })).toBeVisible();
     await page.getByRole('button', { name: '返回小满', exact: true }).click();
-    await expect(page.getByTestId('assistant-conversation')).toBeVisible();
+    await expect(page.getByTestId('assistant-conversation')).toHaveCount(0);
+    await expect(page.getByRole('textbox', { name: '问小满', exact: true })).toBeVisible();
   });
 }
 
@@ -92,6 +91,7 @@ test('mobile and desktop evidence uses real manual-entry and asset journeys', as
     await page.getByTestId('home-action-add').click();
     await page.locator('[name="note"]').fill(note);
     await page.locator('[name="amount"]').fill(amount);
+    await page.getByRole('button', { name: '餐饮', exact: true }).click();
     await page.getByRole('button', { name: '消费', exact: true }).click();
     await page.getByRole('button', { name: '记好了', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
