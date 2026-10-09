@@ -14,6 +14,15 @@ function amount(value: unknown): number {
   if (typeof value !== "number") throw new Error("账本金额格式无效");
   cents(value); return value;
 }
+function optionalAmount(value: unknown, known: unknown): number | null {
+  if (known !== undefined && typeof known !== "boolean") throw new Error("预算金额状态无效");
+  if (known === false) {
+    // The zero is a legacy storage placeholder, never the newer app's amount.
+    if (value !== 0) throw new Error("未知预算金额的兼容字段无效");
+    return null;
+  }
+  return value === null && known !== true ? null : amount(value);
+}
 function string(value: unknown, limit = 200): string {
   if (typeof value !== "string" || value.length > limit) throw new Error("账本字段格式无效");
   return value;
@@ -111,7 +120,7 @@ export function normalizeBackup(value: unknown): LedgerState {
   state.budgets = v.budgets.map(value => {
     const b = record(value);
     const model = b.model === "nature" ? "nature" as const : "legacy" as const;
-    return { cycleId: string(b.cycleId), availableIncome: amount(b.availableIncome), plannedSavings: amount(b.plannedSavings), necessaryReserve: amount(b.necessaryReserve), model, fundingSources: normalizeFundingSources(b.fundingSources) };
+    return { cycleId: string(b.cycleId), availableIncome: optionalAmount(b.availableIncome, b.availableIncomeKnown), plannedSavings: optionalAmount(b.plannedSavings, b.plannedSavingsKnown), necessaryReserve: amount(b.necessaryReserve), model, fundingSources: normalizeFundingSources(b.fundingSources) };
   });
   if (state.budgets.length !== state.cycles.length || new Set(state.budgets.map(b => b.cycleId)).size !== state.budgets.length || state.budgets.some(b => !state.cycles.some(c => c.id === b.cycleId))) throw new Error("周期预算缺失或重复");
   state.activeCycleId = v.activeCycleId === null ? null : string(v.activeCycleId);
@@ -136,4 +145,17 @@ export function normalizeBackup(value: unknown): LedgerState {
     }
   }
   return state;
+}
+
+/** Keep shared v3 storage/backups readable by old clients while preserving unknowns here.
+ * Old clients ignore these flags; saving from an old client can discard them.
+ */
+export function encodeBackup(state: LedgerState) {
+  const normalized = normalizeBackup(state);
+  return { ...normalized, budgets: normalized.budgets.map(plan => ({ ...plan,
+    availableIncome: plan.availableIncome ?? 0,
+    plannedSavings: plan.plannedSavings ?? 0,
+    ...(plan.availableIncome === null ? { availableIncomeKnown: false } : {}),
+    ...(plan.plannedSavings === null ? { plannedSavingsKnown: false } : {}),
+  })) };
 }

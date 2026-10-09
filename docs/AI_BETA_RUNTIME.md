@@ -2,9 +2,20 @@
 
 ## 当前成果 / What is implemented
 
-在 V6 `6d5b139` 上增量接入「问小满」。保留原来的周期规则、本机账本与 GitHub Pages 网站；仅复用 PR #13/#15 的 AI 契约和 Dify 调用层，不合入旧分支的界面和周期代码。
+在 V6 `6d5b139` 上增量接入「问小满」，并按用户确认的要求简化首页、周期设置和表单。保留本机账本与 GitHub Pages 网站；仅复用 PR #13/#15 的 AI 契约和 Dify 调用层，不合入旧分支的界面和周期代码。
 
-The change adds Ask Xiaoman on top of V6 `6d5b139`. It reuses the AI contract/provider from PRs #13/#15 without importing their older UI or financial-cycle implementation.
+The change adds Ask Xiaoman and the user-approved simpler ledger experience on top of V6 `6d5b139`. It reuses the AI contract/provider from PRs #13/#15 without importing their older UI or financial-cycle implementation.
+
+## 精简版界面与金额选填 / Simplified UI and optional funds
+
+- 沿用正式主站的森林绿、暖色与卡片风格；移除首页固定财务概览，保留常用操作、最近账目和主动提问后的 AI 回答。
+- 新账本直接进入首页，默认自然月，无首次必填设置。周期入口统一为「我的 → 记账周期」，资金来源和投资目标按需展开，各表单明确必填、选填或默认值。
+- 可用资金和投资目标分别允许留空。未知资金不显示假零元、不报超支；目标留空时不额外预留投资金额，仍扣除实际投资。自然月跨月自动开启新周期，不复制上月资金，历史记录保留。
+- 用户主动切换周期时，原子更新关联记录的周期编号，金额、日期和记录内容不变。日期越界、与其他周期重叠或旧日期待核对会拒绝保存。既有发薪日及自定义周期不会被默认月覆盖。
+- 新旧 Pages 链接共用本机存储。存储和备份以数值加 `availableIncomeKnown` / `plannedSavingsKnown` 标记编码未知金额，新版恢复为 `null`，旧版仍能读取历史账目。**旧版忽略这些标记，旧版保存可能把未知金额变成明确的 0；使用新版后应统一在新版记账。**
+- AI 摘要的 `investmentTarget` / `investmentGap` 及对应事实支持未知值；后端必须与新网页同步部署，否则旧验证器会拒绝默认空目标。授权、密钥、限流与 Dify 工作流不变。本轮新增验证使用模拟回答，没有追加付费模型调用。
+
+Local verification includes 170 unit tests, two rendered-output tests, type checking, lint, browser regression with synthetic ledgers, and mocked AI consent/fallback checks. This is application verification, not another live model evaluation. The PR release record identifies the deployed commit and successful CI runs.
 
 链路 / Flow:
 

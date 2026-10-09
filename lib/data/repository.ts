@@ -1,5 +1,5 @@
 import type { BudgetPlan, FinancialCycle, InvestmentAccount, InvestmentFlow, LedgerState, Transaction } from "../domain/types.ts";
-import { calculateFinance, cents, parseDate, transactionDay } from "../domain/finance.ts";
+import { calendarMonthCycle, calculateFinance, cents, parseDate, transactionDay } from "../domain/finance.ts";
 import { normalizeBackup, normalizeInvestmentAccount, normalizeInvestmentFlow, normalizeMarketValueSnapshot, normalizeTransaction } from "./schema.ts";
 
 export interface LedgerStore {
@@ -9,7 +9,9 @@ export interface LedgerStore {
 }
 export interface LedgerRepository {
   read(): Promise<LedgerState>;
+  ensureCurrentCycle(today: string): Promise<LedgerState>;
   saveCycle(cycle: FinancialCycle, plan: BudgetPlan, revision: number): Promise<LedgerState>;
+  replaceCurrentCycle(cycle: FinancialCycle, plan: BudgetPlan, revision: number): Promise<LedgerState>;
   saveTransaction(tx: Transaction, revision: number, editing?: boolean): Promise<LedgerState>;
   deleteTransaction(id: string, revision: number): Promise<LedgerState>;
   saveInvestmentAccount(account: InvestmentAccount, revision: number, editing?: boolean): Promise<LedgerState>;
@@ -48,12 +50,57 @@ export function createRepository(store: LedgerStore): LedgerRepository {
     const next = validateLedger({ ...change(structuredClone(state)), version: 3, revision: revision + 1 });
     await store.commit(next, revision); return next;
   }
+  async function ensureCurrentCycle(today: string): Promise<LedgerState> {
+    const month = calendarMonthCycle(today);
+    // Deterministic IDs plus the store's atomic revision guard prevent two tabs
+    // from creating duplicate months or overwriting a user's concurrent edit.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const state = validateLedger(await store.read());
+      const active = state.cycles.find(item => item.id === state.activeCycleId);
+      if (active && (active.cycleType !== "calendar_month" || today <= active.endDate)) return state;
+      const overlap = state.cycles.find(item => item.startDate <= month.endDate && item.endDate >= month.startDate);
+      // Never reshape historical/custom periods to make room for an automatic month.
+      if (overlap && overlap.id !== month.id) return state;
+      const next = validateLedger({ ...state, revision: state.revision + 1,
+        profile: null, activeCycleId: month.id,
+        cycles: overlap ? state.cycles : [...state.cycles, month],
+        budgets: overlap ? state.budgets : [...state.budgets, { cycleId: month.id, model: "nature",
+          availableIncome: null, plannedSavings: null, necessaryReserve: 0, fundingSources: [] }],
+      });
+      try { await store.commit(next, state.revision); return next; }
+      catch (error) {
+        // Retry only a real concurrent revision change; storage failures stay visible.
+        if ((await store.read()).revision === state.revision) throw error;
+      }
+    }
+    throw new Error("账本已在其他页面更新，请重新载入后重试");
+  }
   return {
     read: () => store.read().then(validateLedger),
+    ensureCurrentCycle,
     saveCycle: (cycle, plan, revision) => mutate(revision, state => ({ ...state,
       profile: (cycle.cycleType ?? "salary_based") === "salary_based" ? { salaryDay: cycle.salaryDay } : null,
       activeCycleId: cycle.id,
-      cycles: [...state.cycles.filter(c => c.id !== cycle.id), cycle], budgets: [...state.budgets.filter(b => b.cycleId !== cycle.id), plan] })),
+      cycles: [...state.cycles.filter(c => c.id !== cycle.id), cycle],
+      budgets: [...state.budgets.filter(b => b.cycleId !== cycle.id), plan],
+    })),
+    replaceCurrentCycle: (cycle, plan, revision) => mutate(revision, state => {
+      const active = state.cycles.find(item => item.id === state.activeCycleId);
+      if (!active) throw new Error("当前周期不存在，请重新载入后重试");
+      if (active.id !== cycle.id && state.transactions.some(tx => tx.cycleId === active.id && (tx.dateNeedsConfirmation || tx.date.length > 10))) {
+        throw new Error("旧账日期待核对，请先核对后再更换周期日期或方式");
+      }
+      // validateLedger verifies the canonical ID, every retained date, other
+      // periods and budget invariants before any durable write takes place.
+      return { ...state,
+        profile: (cycle.cycleType ?? "salary_based") === "salary_based" ? { salaryDay: cycle.salaryDay } : null,
+        activeCycleId: cycle.id,
+        cycles: state.cycles.map(item => item.id === active.id ? cycle : item),
+        budgets: state.budgets.map(item => item.cycleId === active.id ? plan : item),
+        transactions: state.transactions.map(tx => tx.cycleId === active.id ? { ...tx, cycleId: cycle.id } : tx),
+        investmentFlows: state.investmentFlows.map(flow => flow.cycleId === active.id ? { ...flow, cycleId: cycle.id } : flow),
+      };
+    }),
     saveTransaction: (value, revision, editing = false) => mutate(revision, state => {
       const tx = normalizeTransaction(value);
       tx.date = transactionDay(tx);

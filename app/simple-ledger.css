@@ -1,0 +1,76 @@
+/* Keep the original forest palette while putting everyday actions first. */
+:root {
+  --xm-bg: #faf9f2;
+  --xm-surface: #fffdf5;
+  --xm-ink: #303e2c;
+  --xm-muted: #63705a;
+  --xm-line: #e2e6d5;
+  --xm-brand: #3c6440;
+  --xm-brand-strong: #365734;
+  --xm-brand-soft: #e8edda;
+  --xm-v4-bg: #faf9f2;
+  --xm-v4-surface: #fffdf5;
+  --xm-v4-ink: #303e2c;
+  --xm-v4-muted: #63705a;
+  --xm-v4-line: #e2e6d5;
+  --xm-v4-brand: #3c6440;
+  --xm-v4-brand-soft: #e8edda;
+}
+.conversation-home { padding-bottom: calc(var(--dock-height, 180px) + 40px); }
+.detail-page { padding-bottom: 48px; }
+.home-actions-section { max-width: none; margin: 30px 0; }
+.home-actions-section .section-title h2 { font-size: 15px; color: var(--muted); }
+.home-action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.home-action-card { min-height: 96px; padding: 18px; grid-template-columns: 38px minmax(0, 1fr); gap: 12px; border-radius: 21px; background: #f0f2e4; border-color: #e1e5cc; }
+.home-action-card:first-child { background: #f1e5cb; border-color: #e5d3af; }
+.home-action-card:hover { background: #e8edda; border-color: #c7d4b4; }
+.home-action-card>.story-icon { width: 38px; height: 38px; padding: 7px; background: #e4ead3; color: #5b7846; }
+.home-action-card:first-child>.story-icon { background: #e8d9b4; color: #706c43; }
+.home-action-card b { font-size: 16px; }
+.home-action-card small { margin-top: 5px; font-size: 12px; color: #63705a; line-height: 1.5; }
+.transactions.section-block { max-width: none; }
+.transactions.section-block>.section-title { padding-top: 18px; }
+.recent-filters { width: 100%; }
+.assistant-dock { width: min(900px, 100%); background: linear-gradient(180deg, #faf9f200, #faf9f2f5 20%, #faf9f2 52%); }
+.assistant-prompts button { min-height: 40px; background: #fffdf5; color: #58674e; font-size: 12px; border-color: #dfe4ce; }
+.assistant-provider-note { color: #667451; font-size: 11px; }
+.assistant-composer { background: #fffdf8; border-color: #d5dec5; border-radius: 20px; }
+.assistant-composer input { font-size: 16px; }
+.assistant-composer input::placeholder { color: #6d775f; }
+.assistant-composer button:disabled { background: #eaeddf; color: #727c63; }
+.assistant-answer { max-width: none; background: #fffdf5; }
+.cycle-balance { padding-bottom: 14px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.cycle-balance b { font-size: 22px; }
+.form-disclosure { margin: 16px 0; border-top: 1px solid var(--line); }
+.form-disclosure>summary { min-height: 44px; padding: 12px 0; cursor: pointer; color: #4f653f; font-size: 13px; font-weight: 600; }
+.form-disclosure .funding-source-section { margin-top: 0; background: #fffdf5; }
+.funding-source-row { align-items: end; }
+.funding-source-row label { margin: 0; min-width: 0; font-size: 11px; }
+.funding-source-row label input,.funding-source-row label select { width: 100%; height: 44px; margin-top: 5px; }
+.funding-source-row>button { margin-bottom: 5px; }
+.investment-inline-form { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.form-actions { display: flex; align-items: center; gap: 12px; margin-top: 18px; }
+.form-actions>button { flex: 1; min-height: 44px; }
+.cycle-form .cycle-head { margin-bottom: 20px; }
+.cycle-form .cycle-head h2 { font-size: 23px; }
+.cycle-form .cycle-type-picker button { background: #fffdf5; }
+.cycle-form .cycle-type-picker button[aria-pressed="true"] { background: #e8edda; border-color: #8da671; }
+.cycle-type-picker small,.cycle-form .compact-helper { color: #687455; }
+.cycle-form .allocation-preview { background: #eaf0d9; border-color: #d5dfbd; }
+.cycle-form .cycle-preview { background: #f0f2e4; color: #536448; }
+.cycle-form .cycle-preview span { color: #687455; }
+.cycle-form .cycle-illustration { display: none; }
+@media (max-width: 720px) {
+  .home-actions-section { margin-top: 24px; }
+  .home-action-grid { gap: 10px; }
+  .home-action-card { padding: 13px; min-height: 88px; grid-template-columns: 28px minmax(0, 1fr); gap: 9px; }
+  .home-action-card b { font-size: 14px; }
+  .home-action-card small { font-size: 11px; }
+  .assistant-dock { padding-inline: 12px; }
+}
+@media (max-width: 360px) {
+  .home-action-card { grid-template-columns: 1fr; gap: 7px; min-height: 78px; }
+  .home-action-card>.story-icon { display: none; }
+  .home-action-card small { display: block; }
+  .assistant-prompts button { font-size: 11px; }
+}

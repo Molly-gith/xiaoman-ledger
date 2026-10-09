@@ -75,7 +75,8 @@ export function calculateFinance(cycle: FinancialCycle, plan: BudgetPlan, transa
   });
 
   if ((plan.model ?? "legacy") === "legacy") {
-    const budget = cents(plan.availableIncome) - cents(plan.plannedSavings) - cents(plan.necessaryReserve);
+    const budget = plan.availableIncome === null ? null
+      : cents(plan.availableIncome) - (plan.plannedSavings === null ? 0 : cents(plan.plannedSavings)) - cents(plan.necessaryReserve);
     const variable = sumMoney(expenses.filter(tx => tx.spendKind === "variable").map(tx => tx.amount));
     const reserved = sumMoney(expenses.filter(tx => tx.spendKind === "reserved").map(tx => tx.amount));
     const unresolved = transactions.filter(tx => tx.type === "expense" && (
@@ -84,17 +85,17 @@ export function calculateFinance(cycle: FinancialCycle, plan: BudgetPlan, transa
     ));
     return {
       model: "legacy" as const,
-      safeToSpend: (budget - cents(variable)) / 100,
-      variableBudget: budget / 100,
+      safeToSpend: budget === null ? null : (budget - cents(variable)) / 100,
+      variableBudget: budget === null ? null : budget / 100,
       variableSpend: variable,
       reservedSpend: reserved,
       reserveRemaining: (cents(plan.necessaryReserve) - cents(reserved)) / 100,
       totalExpense,
       natureMix,
       unresolvedCount: unresolved.length,
-      budgetPercent: budget > 0 ? cents(variable) / budget * 100 : null,
-      consumptionReference: plan.availableIncome * 0.7,
-      wasteLimit: plan.availableIncome * 0.05,
+      budgetPercent: budget !== null && budget > 0 ? cents(variable) / budget * 100 : null,
+      consumptionReference: plan.availableIncome === null ? null : plan.availableIncome * 0.7,
+      wasteLimit: plan.availableIncome === null ? null : plan.availableIncome * 0.05,
       investmentTarget: plan.plannedSavings,
       investmentSpend: natureAmount(expenses, "投资"),
     };
@@ -103,10 +104,12 @@ export function calculateFinance(cycle: FinancialCycle, plan: BudgetPlan, transa
   const consumptionSpend = natureAmount(expenses, "消费");
   const wasteSpend = natureAmount(expenses, "浪费");
   const investmentSpend = sumMoney([natureAmount(expenses, "投资"), flowInvestmentAmount(cycle, investmentFlows)]);
-  const income = cents(plan.availableIncome);
-  const investmentTarget = cents(plan.plannedSavings);
-  const protectedInvestment = Math.max(investmentTarget, cents(investmentSpend));
-  const everydayBudget = income - investmentTarget;
+  const income = plan.availableIncome === null ? null : cents(plan.availableIncome);
+  const investmentTarget = plan.plannedSavings === null ? null : cents(plan.plannedSavings);
+  // An unset target reserves no extra funds. It remains unknown in the facts;
+  // actual investment is always deducted, including account contributions.
+  const protectedInvestment = Math.max(investmentTarget ?? 0, cents(investmentSpend));
+  const everydayBudget = income === null ? null : income - (investmentTarget ?? 0);
   const everydaySpend = cents(consumptionSpend) + cents(wasteSpend);
   const unresolved = transactions.filter(tx => tx.type === "expense" && (
     (tx.dateNeedsConfirmation && tx.cycleId === cycle.id) ||
@@ -114,17 +117,17 @@ export function calculateFinance(cycle: FinancialCycle, plan: BudgetPlan, transa
   ));
   return {
     model: "nature" as const,
-    safeToSpend: (income - everydaySpend - protectedInvestment) / 100,
-    variableBudget: everydayBudget / 100,
+    safeToSpend: income === null ? null : (income - everydaySpend - protectedInvestment) / 100,
+    variableBudget: everydayBudget === null ? null : everydayBudget / 100,
     variableSpend: everydaySpend / 100,
     reservedSpend: 0,
     reserveRemaining: 0,
     totalExpense,
     natureMix,
     unresolvedCount: unresolved.length,
-    budgetPercent: everydayBudget > 0 ? everydaySpend / everydayBudget * 100 : null,
-    consumptionReference: plan.availableIncome * 0.7,
-    wasteLimit: plan.availableIncome * 0.05,
+    budgetPercent: everydayBudget !== null && everydayBudget > 0 ? everydaySpend / everydayBudget * 100 : null,
+    consumptionReference: plan.availableIncome === null ? null : plan.availableIncome * 0.7,
+    wasteLimit: plan.availableIncome === null ? null : plan.availableIncome * 0.05,
     investmentTarget: plan.plannedSavings,
     investmentSpend,
   };

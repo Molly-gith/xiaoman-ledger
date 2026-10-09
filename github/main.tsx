@@ -3,9 +3,10 @@ import { createRoot } from "react-dom/client";
 import Home from "../app/page";
 import "../app/globals.css";
 import "../app/interactions.css";
-import "../app/storybook.css";
 import "../app/conversation.css";
 import "../app/conversation-v4.css";
+import "../app/storybook.css";
+import "../app/simple-ledger.css";
 
 if (!location.hash) history.replaceState(null, "", `${location.pathname}${location.search}#/`);
 

@@ -24,7 +24,8 @@ export function validateQuestionRequest(value: unknown): value is QuestionReques
   const p = s.period, a = s.investmentAssets;
   if (!keys(p, ["safeToSpend", "consumptionSpend", "wasteSpend", "investmentSpend", "investmentTarget", "investmentGap"])
     || !(p.safeToSpend === null || amount(p.safeToSpend))
-    || ![p.consumptionSpend, p.wasteSpend, p.investmentSpend, p.investmentTarget, p.investmentGap].every(positive)
+    || ![p.consumptionSpend, p.wasteSpend, p.investmentSpend].every(positive)
+    || !(p.investmentTarget === null ? p.investmentGap === null : positive(p.investmentTarget) && positive(p.investmentGap))
     || !keys(a, ["accountCount", "totalMarketValue", "totalNetContribution", "totalFloatingPnL", "hasUnknownCost"])
     || !count(a.accountCount) || !positive(a.totalMarketValue) || typeof a.hasUnknownCost !== "boolean"
     || !(a.totalNetContribution === null || amount(a.totalNetContribution))
@@ -44,7 +45,9 @@ export function snapshotFacts(s: AssistantFinancialSnapshot): string[] {
     `as_of:${s.asOfDate}`, `readiness:${s.readiness}`, `unresolved_count:${s.unresolvedCount}`,
     p.safeToSpend === null ? "safe_to_spend:unknown" : `safe_to_spend:${p.safeToSpend}`,
     `consumption_spend:${p.consumptionSpend}`, `waste_spend:${p.wasteSpend}`,
-    `investment_spend:${p.investmentSpend}`, `investment_target:${p.investmentTarget}`, `investment_gap:${p.investmentGap}`,
+    `investment_spend:${p.investmentSpend}`,
+    p.investmentTarget === null ? "investment_target:unknown" : `investment_target:${p.investmentTarget}`,
+    p.investmentGap === null ? "investment_gap:unknown" : `investment_gap:${p.investmentGap}`,
     `investment_market_value:${a.totalMarketValue}`,
     a.hasUnknownCost ? "investment_cost_basis:partial_or_unknown" : `investment_net_contribution:${a.totalNetContribution}`,
     a.hasUnknownCost ? "investment_floating_pnl:unknown" : `investment_floating_pnl:${a.totalFloatingPnL}`,

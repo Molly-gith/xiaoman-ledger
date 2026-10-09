@@ -15,7 +15,7 @@ export type AssistantFinancialSnapshotInput = {
   consumptionSpend: number;
   wasteSpend: number;
   investmentSpend: number;
-  investmentTarget: number;
+  investmentTarget: number | null;
   investmentAccounts: AssistantInvestmentAccountFact[];
 };
 
@@ -28,8 +28,8 @@ export type AssistantFinancialSnapshot = {
     consumptionSpend: number;
     wasteSpend: number;
     investmentSpend: number;
-    investmentTarget: number;
-    investmentGap: number;
+    investmentTarget: number | null;
+    investmentGap: number | null;
   };
   investmentAssets: {
     accountCount: number;
@@ -68,7 +68,7 @@ export function buildAssistantFinancialSnapshot(input: AssistantFinancialSnapsho
   const consumptionSpend = nonNegative(input.consumptionSpend, "consumptionSpend");
   const wasteSpend = nonNegative(input.wasteSpend, "wasteSpend");
   const investmentSpend = nonNegative(input.investmentSpend, "investmentSpend");
-  const investmentTarget = nonNegative(input.investmentTarget, "investmentTarget");
+  const investmentTarget = input.investmentTarget === null ? null : nonNegative(input.investmentTarget, "investmentTarget");
 
   let totalMarketValue = 0;
   let totalNetContribution = 0;
@@ -85,7 +85,7 @@ export function buildAssistantFinancialSnapshot(input: AssistantFinancialSnapsho
     totalFloatingPnL += finite(account.floatingPnL, `investmentAccounts.${account.id}.floatingPnL`);
   }
 
-  const investmentGap = Math.max(0, investmentTarget - investmentSpend);
+  const investmentGap = investmentTarget === null ? null : Math.max(0, investmentTarget - investmentSpend);
   const readiness: AssistantReadiness = input.unresolvedCount > 0 || safeToSpend === null ? "needs_review" : "ready";
 
   const referencedFacts = [
@@ -96,8 +96,8 @@ export function buildAssistantFinancialSnapshot(input: AssistantFinancialSnapsho
     `consumption_spend:${consumptionSpend}`,
     `waste_spend:${wasteSpend}`,
     `investment_spend:${investmentSpend}`,
-    `investment_target:${investmentTarget}`,
-    `investment_gap:${investmentGap}`,
+    investmentTarget === null ? "investment_target:unknown" : `investment_target:${investmentTarget}`,
+    investmentGap === null ? "investment_gap:unknown" : `investment_gap:${investmentGap}`,
     `investment_market_value:${totalMarketValue}`,
     hasUnknownCost ? "investment_cost_basis:partial_or_unknown" : `investment_net_contribution:${totalNetContribution}`,
     hasUnknownCost ? "investment_floating_pnl:unknown" : `investment_floating_pnl:${totalFloatingPnL}`,

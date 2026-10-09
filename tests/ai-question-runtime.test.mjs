@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { handleAIRequest } from "../lib/ai/question-handler.ts";
-import { validateQuestionRequest } from "../lib/ai/question-request.ts";
+import { snapshotFacts, validateQuestionRequest } from "../lib/ai/question-request.ts";
 import {
   BETA_TOKEN, ORIGIN, PRIVATE_ERROR, PROVIDER_KEY, answerValue, difyResponse, env,
   questionBody, questionRequest, suggestion,
@@ -30,6 +30,33 @@ test("V6 aggregate snapshot passes request validation and excludes account ident
   const body = questionBody();
   assert.equal(validateQuestionRequest(body), true);
   assert.equal(JSON.stringify(body).includes("private-account"), false);
+});
+
+test("optional budget facts pass the runtime without substituting zero for unknown", async () => {
+  const body=questionBody();
+  Object.assign(body.snapshot.period,{safeToSpend:null,investmentTarget:null,investmentGap:null});
+  body.snapshot.readiness='needs_review';
+  body.snapshot.referencedFacts=snapshotFacts(body.snapshot);
+  const answer={answer:'本次摘要未提供可用资金和投资目标，暂时无法判断还能花多少。',next_actions:[],referenced_facts:['safe_to_spend:unknown','investment_target:unknown','investment_gap:unknown'],confidence:0.9};
+  let received;
+  const deps=dependencies({fetchFn:async(_url,options)=>{received=JSON.parse(JSON.parse(options.body).inputs.payload);return difyResponse(answer);}});
+  const response=await handleAIRequest(questionRequest(body),env,deps);
+  assert.equal(response.status,200);
+  assert.deepEqual((await response.json()).value,answer);
+  assert.equal(received.snapshot.period.safeToSpend,null);
+  assert.equal(received.snapshot.period.investmentTarget,null);
+  assert.equal(received.snapshot.period.investmentGap,null);
+  body.snapshot.period.safeToSpend=1000;
+  body.snapshot.readiness='ready';
+  body.snapshot.referencedFacts=snapshotFacts(body.snapshot);
+  assert.equal(validateQuestionRequest(body),true);
+  body.snapshot.period.investmentGap=0;
+  body.snapshot.referencedFacts=snapshotFacts(body.snapshot);
+  assert.equal(validateQuestionRequest(body),false,'unknown target cannot claim a completed zero gap');
+  body.snapshot.period.investmentTarget=100;
+  body.snapshot.period.investmentGap=null;
+  body.snapshot.referencedFacts=snapshotFacts(body.snapshot);
+  assert.equal(validateQuestionRequest(body),false,'known target cannot carry an unknown gap');
 });
 
 test("successful runtime only invokes answerFinancialQuestion with aggregate data", async () => {

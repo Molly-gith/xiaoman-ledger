@@ -1,21 +1,10 @@
 import { test, expect } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
-
-const fixedNow = new Date("2026-09-15T04:00:00Z");
+import { openLedger, setFunds, expectBalance, returnHome } from './ledger-helpers';
 
 async function setup(page: import("@playwright/test").Page) {
-  await page.clock.install({ time: fixedNow });
-  await page.goto("./");
-  await page.locator('[name="availableIncome"]').fill("10000");
-  await page.getByRole("button", { name: "开始这个周期", exact: true }).click();
-  await expect(page.getByTestId("safe-to-spend")).toHaveText("¥7,500.00");
-}
-
-async function returnHome(page: import("@playwright/test").Page) {
-  const back = page.getByRole('button', { name: '返回小满', exact: true });
-  await expect(back).toBeVisible();
-  await back.click();
-  await expect(page.getByTestId('assistant-conversation')).toBeVisible();
+  await openLedger(page);
+  await setFunds(page);
 }
 
 test("investment account keeps asset value separate from cycle cash flow", async ({ page }) => {
@@ -37,9 +26,10 @@ test("investment account keeps asset value separate from cycle cash flow", async
   await expect(page.getByText("¥75,000.00", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: /返回/ }).click();
-  await expect(page.getByTestId("safe-to-spend")).toHaveText("¥5,000.00");
+  await expectBalance(page, "¥5,000.00");
   await page.getByTestId("home-action-bills").click();
-  await expect(page.getByText("¥5,000.00 / ¥2,500.00", { exact: true })).toBeVisible();
+  await expect(page.locator('.budget-row').filter({ hasText: '已发生投资' })).toContainText('¥5,000.00');
+  await expect(page.locator('.budget-row').filter({ hasText: '投资目标' })).toContainText('¥2,500.00');
   await returnHome(page);
 
   await page.getByTestId("home-action-assets").click();
@@ -52,7 +42,7 @@ test("investment account keeps asset value separate from cycle cash flow", async
   await page.getByTestId("home-action-bills").click();
   await expect(page.locator(".tx-row")).toHaveCount(0);
   await returnHome(page);
-  await expect(page.getByTestId("safe-to-spend")).toHaveText("¥5,000.00");
+  await expectBalance(page, "¥5,000.00");
 
   await page.reload();
   await page.getByTestId("home-action-assets").click();
