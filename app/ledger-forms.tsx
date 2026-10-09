@@ -26,7 +26,7 @@ function cycleModeLabel(type: CycleType) {
 
 export function CycleForm({ today, cycle, plan, salaryDay, onSave }: { today: string; cycle?: FinancialCycle; plan?: BudgetPlan; salaryDay?: number; onSave: (cycle: FinancialCycle, plan: BudgetPlan) => void }) {
   const calendar = calendarMonthCycle(today);
-  const initialType: CycleType = cycle?.cycleType ?? (cycle ? "salary_based" : "calendar_month");
+  const initialType: CycleType = cycle?.cycleType ?? (cycle ? "salary_based" : salaryDay ? "salary_based" : "calendar_month");
   const [cycleType, setCycleType] = useState<CycleType>(initialType);
   const [day, setDay] = useState(String(cycle?.salaryDay ?? salaryDay ?? "20"));
   const [customStart, setCustomStart] = useState(cycle?.cycleType === "custom" ? cycle.startDate : today);
