@@ -3,6 +3,8 @@ import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "r
 import type { LedgerState, Transaction } from "../lib/domain/types";
 import { calculateFinance, cents, localDate, sumMoney, transactionDay } from "../lib/domain/finance";
 import { buildAssistantContext } from "../lib/domain/assistant-context";
+import { askFinancialQuestion } from "../lib/ai/question-client";
+import type { FinancialQuestionAnswer } from "../lib/ai/adapter";
 import { createLocalRepository } from "../lib/data/local-adapter";
 import { defaultState, normalizeBackup } from "../lib/data/schema";
 import { CycleForm, EntryForm } from "./ledger-forms";
@@ -11,7 +13,8 @@ import { StoryIcon } from './story-icons';
 import { ConfirmPanel, DataPanel, EmptyState, GoalForm, LoadingScreen, PageHeader, PeriodTabs, TransactionRow, money, type Period } from "./ledger-components";
 
 type Tab = "home" | "bills" | "review" | "me" | "assets";
-type Modal = "add" | "edit" | "delete" | "cycle" | "data" | "import" | "clear" | "goal" | null;
+type Modal = "add" | "edit" | "delete" | "cycle" | "data" | "import" | "clear" | "goal" | "ai" | null;
+const AI_API_URL = import.meta.env.VITE_AI_API_URL?.trim() ?? "";
 const FILTERS = [{ key: "all", label: "全部" }, { key: "income", label: "收入" }, { key: "expense", label: "支出" }] as const;
 const QUICK_QUESTIONS = ["这周花多了吗？", "帮我复盘这个周期", "我现在最该关注什么？"];
 
@@ -41,6 +44,11 @@ export default function Home() {
   const [tab, setTab] = useState<Tab>("home");
   const [assetReturnTab, setAssetReturnTab] = useState<"home" | "bills" | "me">("home");
   const [assistantQuestion, setAssistantQuestion] = useState("");
+  const [aiToken, setAiToken] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiMessage, setAiMessage] = useState("");
+  const [aiAnswer, setAiAnswer] = useState<{ question: string; value: FinancialQuestionAnswer } | null>(null);
+  const aiRequest = useRef<AbortController | null>(null);
   const dockRef = useRef<HTMLDivElement>(null);
   const questionRef = useRef<HTMLInputElement>(null);
   const [period, setPeriod] = useState<Period>("month");
@@ -52,6 +60,17 @@ export default function Home() {
   const [today, setToday] = useState(() => localDate());
   const showDialog = !!state && (!state.activeCycleId || modal !== null);
   const canDismiss = !!state?.activeCycleId;
+
+  useEffect(() => () => { aiRequest.current?.abort(); }, []);
+
+  function stopAI(revoke = false) {
+    aiRequest.current?.abort();
+    aiRequest.current = null;
+    setAiBusy(false);
+    setAiAnswer(null);
+    setAiMessage("");
+    if (revoke) setAiToken("");
+  }
 
   // Keep the dock above the on-screen keyboard; reserve its actual height so
   // the last content row can always be scrolled completely above it.
@@ -123,6 +142,7 @@ export default function Home() {
     setError("");
     try {
       const next = await action();
+      stopAI();
       setState(next);
       setModal(null);
       setEditing(null);
@@ -145,6 +165,7 @@ export default function Home() {
   async function reload() {
     try {
       const next = await repository.read();
+      stopAI();
       setState(next);
       setError("");
       setModal(null);
@@ -197,10 +218,36 @@ export default function Home() {
       setError(e instanceof Error ? e.message : "备份无效");
     }
   };
+  const sendAssistantQuestion = async (token = aiToken) => {
+    const question = assistantQuestion.trim();
+    if (!question || !assistantSnapshot || aiRequest.current) return;
+    if (expired) { setAiMessage("这个周期已经结束，请先开启新周期，再问我当前的安排。"); return; }
+    const controller = new AbortController();
+    aiRequest.current = controller;
+    setAiBusy(true);
+    setAiMessage("");
+    setAiAnswer(null);
+    const answer = await askFinancialQuestion(AI_API_URL, token, {
+      question, snapshot: assistantSnapshot, consent: true,
+      context: { today, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+    }, { signal: controller.signal });
+    if (aiRequest.current !== controller || controller.signal.aborted) return;
+    aiRequest.current = null;
+    setAiBusy(false);
+    if (answer.ok) {
+      setAiAnswer({ question, value: answer.result.value });
+      setAssistantQuestion("");
+    } else {
+      setAiMessage(answer.message);
+      if (answer.reauthorize) setAiToken("");
+    }
+  };
   const submitAssistantQuestion = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!assistantQuestion.trim()) return;
-    setToast("AI 分析暂未启用。财务事实与基础功能仍可正常使用。");
+    if (!AI_API_URL) { setToast("AI 分析暂未启用。财务事实与基础功能仍可正常使用。"); return; }
+    if (!aiToken) { setModal("ai"); return; }
+    void sendAssistantQuestion();
   };
 
   const filters = <div className="recent-filters" aria-label="筛选账目">{FILTERS.map(item => <button key={item.key} aria-pressed={filter === item.key} className={filter === item.key ? "active" : ""} onClick={() => setFilter(item.key)}>{item.label}</button>)}</div>;
@@ -256,6 +303,16 @@ export default function Home() {
           </div>
           <p className="assistant-fact-note"><StoryIcon name="lock"/>根据本机账本计算 · 数据由你掌控</p>
         </section>
+        {(aiBusy || aiAnswer || aiMessage) && <section className="assistant-answer section-block" aria-live="polite" aria-busy={aiBusy} data-testid="ai-answer">
+          {aiBusy && <p role="status">小满正在阅读本次账本摘要…</p>}
+          {aiMessage && <p role="alert">{aiMessage}</p>}
+          {aiAnswer && <>
+            <p className="ai-question">你：{aiAnswer.question}</p>
+            <p className="ai-answer-text">{aiAnswer.value.answer}</p>
+            {aiAnswer.value.next_actions.length > 0 && <ul>{aiAnswer.value.next_actions.map((action, index) => <li key={index}>{action}</li>)}</ul>}
+            <p className="helper">AI 解释 · 依据本次提问时的账本摘要，建议由你决定。每次提问独立回答。</p>
+          </>}
+        </section>}
         {expired && <button className="primary" onClick={() => setModal("cycle")}>确认收入，开启新周期</button>}
         {!!metrics.unresolvedCount && <div className="gentle-tip"><p>{metrics.unresolvedCount} 笔旧支出尚需核对日期、周期或消费性质。完成后再生成强结论。</p><button onClick={() => { setTab("bills"); setPeriod("year"); setFilter("expense"); }}>核对账单</button></div>}
         {!metrics.unresolvedCount && metrics.safeToSpend < 0 && <div className="gentle-tip" role="status"><p>本周期已超出当前结构目标 {money(-metrics.safeToSpend)}。可以查看财务明细或调整目标。</p></div>}
@@ -272,11 +329,11 @@ export default function Home() {
       <section className="section-block transactions"><div className="section-title"><h2>最近账目</h2><button onClick={() => setTab("bills")}>查看全部</button></div>{filters}{recent.length ? recent.map(tx => <TransactionRow key={tx.id} item={tx} {...rowActions} />) : <EmptyState compact text="从第一笔开始，让小满慢慢理解你的钱" action={() => openEntry()} />}</section>
       {cycle && <div ref={dockRef} className="assistant-dock" aria-label="与小满对话">
         <div className="assistant-prompts" aria-label="快捷问题">{QUICK_QUESTIONS.map(question => <button key={question} type="button" onClick={() => { setAssistantQuestion(question); questionRef.current?.focus(); }}>{question}</button>)}</div>
-        <p id="assistant-availability" className="assistant-provider-note">AI 分析暂未启用 · 记账与财务看板可正常使用</p>
+        <p id="assistant-availability" className="assistant-provider-note">{!AI_API_URL ? "AI 分析暂未启用 · 记账与财务看板可正常使用" : aiToken ? <>仅在发送时上传摘要 <button type="button" onClick={() => stopAI(true)}>关闭 AI</button></> : "AI 私人体验 · 首次发送前由你确认共享摘要"}</p>
         <form className="assistant-composer" onSubmit={submitAssistantQuestion}>
           <label className="sr-only" htmlFor="assistant-question">问小满</label>
-          <input ref={questionRef} id="assistant-question" aria-describedby="assistant-availability" value={assistantQuestion} onChange={event => setAssistantQuestion(event.target.value)} placeholder="问小满：我这个月还能花多少？" autoComplete="off" enterKeyHint="send" />
-          <button type="submit" aria-label="发送给小满" disabled={!assistantQuestion.trim()}>发送</button>
+          <input ref={questionRef} id="assistant-question" aria-describedby="assistant-availability" value={assistantQuestion} onChange={event => setAssistantQuestion(event.target.value)} placeholder="问小满：我这个周期还能花多少？" autoComplete="off" enterKeyHint="send" maxLength={500} disabled={aiBusy} />
+          <button type="submit" aria-label="发送给小满" disabled={!assistantQuestion.trim() || aiBusy}>{aiBusy ? "回答中" : "发送"}</button>
         </form>
       </div>}
     </>}
@@ -311,6 +368,31 @@ export default function Home() {
       {(setup && !modal) || modal === "cycle" ? <><CycleForm key={cycle?.id ?? "first"} today={today} cycle={!expired ? cycle : undefined} plan={!expired ? plan : undefined} salaryDay={state.profile?.salaryDay} onSave={(c, p) => void commit(() => repository.saveCycle(c, p, state.revision), "周期结构已保存")} />{setup && <label>已有账本？导入完整备份<input type="file" accept="application/json,.json" onChange={event => void chooseBackup(event)} /></label>}</>
       : modal === "add" || modal === "edit" ? <EntryForm key={editing?.id ?? "new"} today={today} item={editing} cycles={state.cycles} onSave={tx => void commit(() => repository.saveTransaction(tx, state.revision, !!editing), editing ? "账目已修改" : "已记账")} />
       : modal === "delete" && editing ? <ConfirmPanel mark="删" title="确定删除这笔账？" hint="删除后无法恢复" summary={<><span>{editing.note || editing.category}</span><b>{money(editing.amount)}</b></>} cancel="保留账目" confirm="确认删除" onCancel={() => setModal(null)} onConfirm={() => void commit(() => repository.deleteTransaction(editing.id, state.revision), "账目已删除")} />
+      : modal === "ai" ? <form className="ai-consent" onSubmit={event => {
+        event.preventDefault();
+        const fields = new FormData(event.currentTarget);
+        const token = String(fields.get("aiBetaCode") ?? "").trim();
+        if (fields.get("aiConsent") !== "on" || !/^[A-Za-z0-9_-]{32,128}$/.test(token)) return;
+        setAiToken(token);
+        setModal(null);
+        void sendAssistantQuestion(token);
+      }}>
+        <h2>让小满理解这次提问</h2>
+        <p>发送时，你的问题和本周期财务摘要会交给小满服务、Dify 及模型供应商，用于生成回答。</p>
+        <p className="helper">摘要包含金额、消费结构、待核对数量和投资汇总，不包含逐笔账目、备注和账户名称。你写在问题里的内容也会发送；Dify 与模型供应商可能保留调用记录。</p>
+        {assistantSnapshot && <details><summary>查看将发送的摘要范围</summary><ul>
+          <li>截至 {today}，{assistantSnapshot.unresolvedCount} 笔数据待核对</li>
+          <li>本周期可支出：{assistantSnapshot.period.safeToSpend === null ? "未知" : money(assistantSnapshot.period.safeToSpend)}</li>
+          <li>消费 {money(assistantSnapshot.period.consumptionSpend)}、浪费 {money(assistantSnapshot.period.wasteSpend)}、投资 {money(assistantSnapshot.period.investmentSpend)}</li>
+          <li>投资目标 {money(assistantSnapshot.period.investmentTarget)}，缺口 {money(assistantSnapshot.period.investmentGap)}</li>
+          <li>{assistantSnapshot.investmentAssets.accountCount} 个投资账户的市值、净投入和盈亏汇总；未知成本会标记为未知</li>
+        </ul></details>}
+        <label>私人体验码<input name="aiBetaCode" type="password" autoComplete="off" minLength={32} maxLength={128} pattern="[A-Za-z0-9_-]{32,128}" required /></label>
+        <p className="helper">使用小满提供的体验码，无需填写 Dify 或模型密钥。</p>
+        <label className="ai-consent-check"><input name="aiConsent" type="checkbox" required />我同意在本次会话提问时共享这些内容。刷新页面或关闭 AI 后需要重新确认。</label>
+        <button className="primary" type="submit">同意并发送</button>
+        <button type="button" onClick={() => setModal(null)}>暂不使用</button>
+      </form>
       : modal === "data" ? <DataPanel ledgerKind={state.ledgerKind} count={state.transactions.length} onKind={kind => changeState({ ...state, ledgerKind: kind }, "账本标签已保存")} onBackup={exportBackup} onCsv={exportCsv} onImport={event => void chooseBackup(event)} onClear={() => setModal("clear")} />
       : modal === "import" && pendingImport ? <ConfirmPanel mark="入" title="用备份替换当前账本？" hint={`将恢复 ${pendingImport.transactions.length} 笔账目，当前数据会被覆盖。建议先导出备份。`} cancel="暂不导入" confirm="确认恢复" onCancel={() => setModal("data")} onConfirm={() => changeState(pendingImport, "备份已恢复")} />
       : modal === "goal" ? <GoalForm saved={state.settings.savingsCurrent} goal={state.settings.savingsGoal} onSave={(current, target) => { try { cents(current); cents(target); changeState({ ...state, settings: { ...state.settings, savingsCurrent: current, savingsGoal: target } }, "存款目标已保存"); } catch (e) { setError((e as Error).message); } }} />

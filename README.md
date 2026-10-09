@@ -25,6 +25,7 @@ This starter does not use `wrangler.jsonc`.
 - CSV 导出用于 Excel、Numbers 等表格软件查看。
 - 清理浏览器数据可能造成未备份的账目丢失。
 - Supabase 相关文件暂时保留，供后续可选云同步版本使用；第一版不会上传账目。
+- 「问小满」私人体验只有在你明确同意并发送问题时，才会发送问题与财务汇总给 AI 服务；逐笔账目继续保存在本机。部署与验收边界见 [AI 接入说明](docs/AI_BETA_RUNTIME.md)。
 
 ## Useful Commands
 

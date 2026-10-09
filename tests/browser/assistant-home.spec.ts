@@ -30,7 +30,7 @@ test('conversation-first v4 keeps trusted facts, bottom composer and task-orient
   await expect(page.getByTestId('assistant-readiness')).toContainText('数据已就绪');
   await expect(page.getByText('这个周期整体还稳。', { exact: true })).toBeVisible();
   await expect(page.getByTestId('safe-to-spend')).toHaveText('¥7,500.00');
-  await expect(page.getByPlaceholder('问小满：我这个月还能花多少？')).toBeVisible();
+  await expect(page.getByPlaceholder('问小满：我这个周期还能花多少？')).toBeVisible();
   await expect(page.getByText('AI 分析暂未启用 · 记账与财务看板可正常使用', { exact: true })).toBeVisible();
   await expect(page.getByText('这周花多了吗？', { exact: true })).toBeVisible();
   await expectComposerAtBottom(page);
@@ -90,6 +90,6 @@ test('conversation-first home downgrades certainty when legacy data still needs 
   await expect(page.getByTestId('safe-to-spend')).toHaveText('待核对旧账');
   await expect(page.getByText('先把几笔旧账核对清楚，我再给你更确定的判断。', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '核对账单', exact: true })).toBeVisible();
-  await expect(page.getByPlaceholder('问小满：我这个月还能花多少？')).toBeVisible();
+  await expect(page.getByPlaceholder('问小满：我这个周期还能花多少？')).toBeVisible();
   await expectComposerAtBottom(page);
 });

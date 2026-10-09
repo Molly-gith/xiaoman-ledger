@@ -13,7 +13,8 @@
     "test": "npm run build && npm run test:unit && node --test tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern github-dist",
     "db:generate": "drizzle-kit generate",
-    "test:unit": "node --experimental-strip-types --test tests/classification.test.mjs tests/finance.test.mjs tests/repository.test.mjs tests/ai-adapter.test.mjs tests/investment.test.mjs",
+    "test:unit": "node --experimental-strip-types --test tests/classification.test.mjs tests/finance.test.mjs tests/repository.test.mjs tests/ai-adapter.test.mjs tests/investment.test.mjs tests/ai-financial-question-contract.test.mjs tests/dify-provider.test.mjs tests/ai-question-runtime.test.mjs tests/ai-question-client.test.mjs tests/assistant-snapshot.test.mjs",
+    "test:ai": "node --experimental-strip-types --test tests/ai-financial-question-contract.test.mjs tests/dify-provider.test.mjs tests/ai-question-runtime.test.mjs tests/ai-question-client.test.mjs tests/assistant-snapshot.test.mjs",
     "typecheck": "tsc --noEmit",
     "eval": "node evals/run-smoke.mjs",
     "preview:github": "vite preview --config vite.github.config.ts --host 127.0.0.1 --port 4173",
@@ -21,6 +22,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
+    "@vercel/firewall": "1.2.6",
     "drizzle-orm": "0.45.2",
     "react": "19.2.6",
     "react-dom": "19.2.6"

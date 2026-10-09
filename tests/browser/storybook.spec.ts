@@ -45,7 +45,7 @@ test('conversation-first v3 keeps chat primary, removes visible tabbar and keeps
   await page.locator('[name="availableIncome"]').fill('3000');
   await page.getByRole('button',{name:'开始这个周期',exact:true}).click();
   await expect(page.getByTestId('assistant-conversation')).toBeVisible();
-  await expect(page.getByPlaceholder('问小满：我这个月还能花多少？')).toBeVisible();
+  await expect(page.getByPlaceholder('问小满：我这个周期还能花多少？')).toBeVisible();
   await expect(page.getByText('AI 分析暂未启用',{exact:false})).toBeVisible();
   await expect(page.locator('.bottom-nav')).toBeHidden();
   await expect(page.getByTestId('home-action-add')).toBeVisible();

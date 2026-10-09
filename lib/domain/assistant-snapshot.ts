@@ -101,6 +101,7 @@ export function buildAssistantFinancialSnapshot(input: AssistantFinancialSnapsho
     `investment_market_value:${totalMarketValue}`,
     hasUnknownCost ? "investment_cost_basis:partial_or_unknown" : `investment_net_contribution:${totalNetContribution}`,
     hasUnknownCost ? "investment_floating_pnl:unknown" : `investment_floating_pnl:${totalFloatingPnL}`,
+    `investment_account_count:${input.investmentAccounts.length}`,
   ];
 
   return {
