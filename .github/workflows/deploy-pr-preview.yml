@@ -1,72 +1,165 @@
 name: Deploy validated PR preview
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows: ["Sprint validation"]
     types: [completed]
 
 permissions:
   contents: read
+  actions: read
   pull-requests: read
   pages: write
   id-token: write
 
-concurrency:
-  group: pages-preview
-  cancel-in-progress: true
-
 jobs:
   build-and-deploy:
     if: >-
-      github.event.workflow_run.conclusion == 'success' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.workflow_id == 358468136 &&
       github.event.workflow_run.event == 'pull_request' &&
-      github.event.workflow_run.pull_requests[0].number != null
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.pull_requests[0].number != null))
+    # Only an eligible deploy job may contend with the root release.
+    concurrency:
+      group: pages
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}previews/pr-${{ github.event.workflow_run.pull_requests[0].number }}/
+      url: ${{ steps.deployment.outputs.page_url }}previews/pr-${{ steps.plan.outputs.entry_pr }}/
     steps:
       - name: Checkout main for stable public root
         uses: actions/checkout@v4
         with:
           ref: main
           path: main-src
+          persist-credentials: false
 
-      - name: Checkout validated PR head
+      - name: Record current main commit
+        id: main
+        run: echo "sha=$(git -C main-src rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Select retained and current validated previews
+        id: plan
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { selectPreviewPlan } = await import(`${process.env.GITHUB_WORKSPACE}/main-src/scripts/preview-plan.mjs`);
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              ...context.repo, workflow_id: 358468136,
+              branch: 'codex/xiaoman-ai-beta', event: 'pull_request',
+              status: 'success', per_page: 100
+            });
+            const plan = selectPreviewPlan({
+              repository: `${context.repo.owner}/${context.repo.repo}`,
+              eventName: context.eventName, eventRun: context.payload.workflow_run,
+              retainedRuns: data.workflow_runs
+            });
+            for (const [key, value] of Object.entries(plan)) core.setOutput(key, value);
+
+      - name: Checkout accepted V6 preview
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          path: preview-src
+          ref: 6d5b139f0e11e14b76a0abcc06fb515920af4b68
+          path: v6-src
+          persist-credentials: false
+
+      - name: Checkout retained validated AI preview
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.plan.outputs.ai_sha }}
+          path: ai-src
+          persist-credentials: false
+
+      - name: Checkout other current validated PR
+        if: steps.plan.outputs.current_pr != ''
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.plan.outputs.current_sha }}
+          path: current-src
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
 
+      - name: Verify preview selection rules
+        working-directory: main-src
+        run: node --test tests/preview-plan.test.mjs
+
       - name: Build current main root
         working-directory: main-src
-        run: |
-          npm ci
-          npm run build:github
-
-      - name: Build validated PR preview
-        working-directory: preview-src
         env:
-          GITHUB_PAGES_BASE: /xiaoman-ledger/previews/pr-${{ github.event.workflow_run.pull_requests[0].number }}/
+          GITHUB_PAGES_BASE: /xiaoman-ledger/
+          VITE_AI_API_URL: ""
         run: |
           npm ci
           npm run build:github
 
-      - name: Compose main + current PR preview
+      - name: Build retained accepted V6 preview
+        working-directory: v6-src
+        env:
+          GITHUB_PAGES_BASE: /xiaoman-ledger/previews/pr-23/
+          VITE_AI_API_URL: ""
         run: |
-          mkdir -p pages-dist/previews/pr-${{ github.event.workflow_run.pull_requests[0].number }}
+          npm ci
+          npm run build:github
+
+      - name: Build retained validated AI preview
+        working-directory: ai-src
+        env:
+          GITHUB_PAGES_BASE: /xiaoman-ledger/previews/pr-24/
+          VITE_AI_API_URL: https://xiaoman-ai-beta.vercel.app/api/ai/question
+        run: |
+          npm ci
+          npm run build:github
+
+      - name: Build other current validated PR
+        if: steps.plan.outputs.current_pr != ''
+        working-directory: current-src
+        env:
+          GITHUB_PAGES_BASE: /xiaoman-ledger/previews/pr-${{ steps.plan.outputs.current_pr }}/
+          VITE_AI_API_URL: ""
+        run: |
+          npm ci
+          npm run build:github
+
+      - name: Compose current main and retained previews
+        env:
+          CURRENT_PR: ${{ steps.plan.outputs.current_pr }}
+        run: |
+          mkdir -p pages-dist/previews/pr-23 pages-dist/previews/pr-24
           cp -R main-src/github-dist/. pages-dist/
-          cp -R preview-src/github-dist/. pages-dist/previews/pr-${{ github.event.workflow_run.pull_requests[0].number }}/
+          cp -R v6-src/github-dist/. pages-dist/previews/pr-23/
+          cp -R ai-src/github-dist/. pages-dist/previews/pr-24/
+          if [ -n "$CURRENT_PR" ]; then
+            mkdir -p "pages-dist/previews/pr-$CURRENT_PR"
+            cp -R current-src/github-dist/. "pages-dist/previews/pr-$CURRENT_PR/"
+          fi
+          test -s pages-dist/index.html
+          test -s pages-dist/previews/pr-23/index.html
+          test -s pages-dist/previews/pr-24/index.html
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: pages-dist
+
+      - name: Refuse to replace a newer main release
+        uses: actions/github-script@v7
+        env:
+          BUILT_MAIN_SHA: ${{ steps.main.outputs.sha }}
+        with:
+          script: |
+            const { data } = await github.rest.repos.getBranch({ ...context.repo, branch: 'main' });
+            if (data.commit.sha !== process.env.BUILT_MAIN_SHA) {
+              core.setFailed('Main changed during this build. Run this workflow again on main.');
+            }
 
       - name: Deploy Pages
         id: deployment
