@@ -4,8 +4,8 @@ import { readLimitedJson, validateQuestionRequest, type QuestionRequest } from "
 export type QuestionClientResult = { ok: true; result: Extract<AIResult<FinancialQuestionAnswer>, { status: "suggestion" }> }
   | { ok: false; message: string; reauthorize?: boolean };
 
-/** Only the short-lived beta access code enters the browser; never a Dify/model key. */
-export async function askFinancialQuestion(endpoint: string, token: string, body: QuestionRequest, options: { signal?: AbortSignal; fetchFn?: typeof fetch; timeoutMs?: number } = {}): Promise<QuestionClientResult> {
+/** Legacy call signature retained; its old token argument is ignored. No browser credential is sent. */
+export async function askFinancialQuestion(endpoint: string, _token: string, body: QuestionRequest, options: { signal?: AbortSignal; fetchFn?: typeof fetch; timeoutMs?: number } = {}): Promise<QuestionClientResult> {
   if (!validateQuestionRequest(body)) return { ok: false, message: "账本摘要还需核对，请先检查本周期数据。" };
   const controller = new AbortController();
   const cancel = () => controller.abort();
@@ -18,10 +18,9 @@ export async function askFinancialQuestion(endpoint: string, token: string, body
     if (url.username || url.password || url.search || url.hash) throw new Error("Invalid endpoint");
     const operation = async (): Promise<QuestionClientResult> => {
       const response = await (options.fetchFn ?? fetch)(url.href, {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body), signal: controller.signal, cache: "no-store", credentials: "omit", redirect: "error",
       });
-      if (response.status === 401) return { ok: false, reauthorize: true, message: "体验码无效或已更新，请重新填写。" };
       if (response.status === 429) return { ok: false, message: "刚刚问得有些频繁，请一分钟后再试。" };
       if (!response.ok) return { ok: false, message: "小满暂时无法回答，你的问题已保留，可以稍后重试。" };
       const data = await readLimitedJson(response, 16384);

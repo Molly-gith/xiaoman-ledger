@@ -13,7 +13,9 @@ export interface LedgerRepository {
   saveCycle(cycle: FinancialCycle, plan: BudgetPlan, revision: number): Promise<LedgerState>;
   replaceCurrentCycle(cycle: FinancialCycle, plan: BudgetPlan, revision: number): Promise<LedgerState>;
   saveTransaction(tx: Transaction, revision: number, editing?: boolean): Promise<LedgerState>;
+  saveTransactions(transactions: readonly Transaction[], revision: number): Promise<LedgerState>;
   deleteTransaction(id: string, revision: number): Promise<LedgerState>;
+  deleteTransactions(ids: readonly string[], revision: number): Promise<LedgerState>;
   saveInvestmentAccount(account: InvestmentAccount, revision: number, editing?: boolean): Promise<LedgerState>;
   saveInvestmentFlow(flow: InvestmentFlow, revision: number): Promise<LedgerState>;
   saveMarketValue(accountId: string, marketValue: number, date: string, revision: number): Promise<LedgerState>;
@@ -44,6 +46,17 @@ export function validateLedger(state: LedgerState): LedgerState {
   return normalized;
 }
 export function createRepository(store: LedgerStore): LedgerRepository {
+  function prepareTransaction(value: Transaction): Transaction {
+    const tx = normalizeTransaction(value);
+    tx.date = transactionDay(tx);
+    delete tx.dateNeedsConfirmation;
+    if (tx.type === "expense" && !tx.nature) throw new Error("请确认消费性质");
+    // A cycle is optional. The legacy spend kind is retained for old clients;
+    // any explicit cycle still receives the full date and budget validation.
+    if (tx.type === "expense" && !tx.spendKind) tx.spendKind = "variable";
+    if (tx.type === "income" && (tx.nature !== null || tx.spendKind !== null)) throw new Error("收入不设置消费性质或支出来源");
+    return tx;
+  }
   async function mutate(revision: number, change: (state: LedgerState) => LedgerState) {
     const state = await store.read();
     if (state.revision !== revision) throw new Error("账本已在其他页面更新，请重新载入后重试");
@@ -102,21 +115,34 @@ export function createRepository(store: LedgerStore): LedgerRepository {
       };
     }),
     saveTransaction: (value, revision, editing = false) => mutate(revision, state => {
-      const tx = normalizeTransaction(value);
-      tx.date = transactionDay(tx);
-      delete tx.dateNeedsConfirmation;
+      const tx = prepareTransaction(value);
       const exists = state.transactions.some(item => item.id === tx.id);
       if (editing !== exists) throw new Error(editing ? "账目已不存在" : "账目编号重复");
-      if (!tx.cycleId || (tx.type === "expense" && !tx.nature)) throw new Error("请确认财务周期和消费性质");
-      // spendKind is retained only for legacy schema compatibility. Users no longer
-      // choose it; missing legacy values are safely normalized to variable spending.
-      if (tx.type === "expense" && !tx.spendKind) tx.spendKind = "variable";
-      if (tx.type === "income" && (tx.nature !== null || tx.spendKind !== null)) throw new Error("收入不设置消费性质或支出来源");
       return { ...state, transactions: [tx, ...state.transactions.filter(item => item.id !== tx.id)].sort((a, b) => b.date.localeCompare(a.date)) };
+    }),
+    saveTransactions: (values, revision) => mutate(revision, state => {
+      if (!Array.isArray(values) || values.length === 0) throw new Error("请先确认要保存的账目");
+      const transactions = values.map(prepareTransaction);
+      const ids = new Set(state.transactions.map(tx => tx.id));
+      for (const tx of transactions) {
+        if (ids.has(tx.id)) throw new Error("账目编号重复");
+        ids.add(tx.id);
+      }
+      // One revision and one durable commit: invalid drafts never partially save.
+      return { ...state, transactions: [...transactions, ...state.transactions].sort((a, b) => b.date.localeCompare(a.date)) };
     }),
     deleteTransaction: (id, revision) => mutate(revision, state => {
       if (!state.transactions.some(tx => tx.id === id)) throw new Error("账目已不存在");
       return { ...state, transactions: state.transactions.filter(tx => tx.id !== id) };
+    }),
+    deleteTransactions: (ids, revision) => mutate(revision, state => {
+      if (!Array.isArray(ids) || ids.length === 0 || new Set(ids).size !== ids.length) throw new Error("撤销账目列表无效");
+      const existing = new Set(state.transactions.map(tx => tx.id));
+      if (ids.some(id => !existing.has(id))) throw new Error("账目已不存在");
+      const removed = new Set(ids);
+      // For undo, pass the revision returned by saveTransactions. Any intervening
+      // edit makes it stale instead of silently deleting the newer user changes.
+      return { ...state, transactions: state.transactions.filter(tx => !removed.has(tx.id)) };
     }),
     saveInvestmentAccount: (value, revision, editing = false) => mutate(revision, state => {
       const account = normalizeInvestmentAccount(value);

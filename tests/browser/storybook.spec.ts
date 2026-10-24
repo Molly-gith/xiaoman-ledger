@@ -1,51 +1,26 @@
 import { test, expect } from "@playwright/test";
-import { addExpense, expandInvestmentTarget, expectBalance, openCycle, openLedger, saveCycle, setFunds } from "./ledger-helpers";
-
-test("optional cycle amounts stay blank until chosen and investment references preserve explicit edits", async ({ page }) => {
-  await openLedger(page);
-  await openCycle(page);
-  const income = page.locator('[name="availableIncome"]');
-  const target = page.locator('[name="plannedSavings"]');
-  await expect(income).toHaveValue("");
-  await expect(income).not.toHaveAttribute("required", "");
-  await expect(page.getByText("本周期可用资金（选填）", { exact: true })).toBeVisible();
-  await expect(target).toBeHidden();
-  await expect(page.locator("summary").filter({ hasText: "资金来源（选填）" })).toBeVisible();
-  await income.fill("3000");
-  await expandInvestmentTarget(page);
-  await expect(target).toHaveValue("");
-  await expect(target).not.toHaveAttribute("required", "");
-  await page.getByRole("button", { name: /^采用 25% 参考/ }).click();
-  await expect(target).toHaveValue("750");
-  await target.fill("0");
-  await income.fill("4000");
-  await expect(target).toHaveValue("0");
-  await saveCycle(page);
-  await expectBalance(page, "¥4,000.00");
-  await openCycle(page);
-  await income.fill("6000");
-  await expandInvestmentTarget(page);
-  await expect(target).toHaveValue("0");
-  await page.getByRole("button", { name: /^采用 25% 参考/ }).click();
-  await expect(target).toHaveValue("1500");
-  await saveCycle(page);
-  await page.reload();
-  await expectBalance(page, "¥4,500.00");
+import { expandInvestmentTarget, exportLedger, openCycle, openLedger, saveCycle } from "./ledger-helpers";
+test("optional budget settings keep blank distinct from zero and do not alter recorded income", async ({ page }) => {
+  await openLedger(page); await openCycle(page);
+  const income=page.locator('[name="availableIncome"]'), target=page.locator('[name="plannedSavings"]');
+  await expect(income).toHaveValue(""); await expect(income).not.toHaveAttribute("required","");
+  await expect(target).toBeHidden(); await income.fill("3000"); await expandInvestmentTarget(page);
+  await expect(target).toHaveValue(""); await page.getByRole("button",{name:/^采用 25% 参考/}).click();
+  await expect(target).toHaveValue("750"); await target.fill("0"); await income.fill("4000");
+  await expect(target).toHaveValue("0"); await saveCycle(page);
+  const state=(await exportLedger(page)).state;
+  expect(state.budgets[0]).toMatchObject({availableIncome:4000,plannedSavings:0}); expect(state.transactions).toEqual([]);
 });
-
-test("manual entry marks requirements clearly and persists a user-selected category and nature", async ({ page }) => {
-  await openLedger(page);
-  await setFunds(page, "3000", "750");
-  await page.getByTestId("home-action-add").click();
-  await expect(page.getByText("金额（必填）", { exact: true })).toBeVisible();
-  await expect(page.getByText("备注（选填）", { exact: true })).toBeVisible();
-  await expect(page.locator('[name="date"]')).toHaveValue("2026-09-15");
-  await page.locator('[name="amount"]').fill("10");
-  await page.getByRole("button", { name: "记好了", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "记账", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "关闭", exact: true }).click();
-  await addExpense(page, "10", "手动记录", "餐饮", "消费");
-  await expectBalance(page, "¥2,240.00");
-  await page.reload();
-  await expectBalance(page, "¥2,240.00");
+test("manual entry needs only an amount and keeps category, nature, date and note editable", async ({page})=>{
+  await openLedger(page); await page.getByRole("button",{name:"手动记一笔",exact:true}).click();
+  await expect(page.locator('[name="amount"]')).toHaveAttribute("required","");
+  await expect(page.locator('[name="category"]')).toHaveValue("其他");
+  await expect(page.getByRole("button",{name:"消费",exact:true})).toHaveAttribute("aria-pressed","true");
+  await expect(page.locator('[name="note"]')).toBeHidden();
+  await page.getByRole("button",{name:"记好了",exact:true}).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.locator('[name="amount"]').fill("10"); await page.getByRole("button",{name:"记好了",exact:true}).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const state=(await exportLedger(page)).state;
+  expect(state.transactions[0]).toMatchObject({amount:10,category:"其他",nature:"消费",date:"2026-09-15",cycleId:null});
 });

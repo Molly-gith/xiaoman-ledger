@@ -5,8 +5,7 @@ import { calendarMonthCycle, cents, customCycle, parseDate, salaryCycle, transac
 import { CATEGORY_ICONS, EXPENSE_CATEGORIES, classifyTransaction, type LedgerCategory } from "../lib/classify";
 import { suggestBudget } from '../lib/domain/budget-suggestion';
 import { money } from './ledger-components';
-import { StoryIcon, categoryIcon } from './story-icons';
-import { VoiceNote } from './voice-note';
+import { StoryIcon } from './story-icons';
 
 const FUNDING_SOURCE_OPTIONS: { value: FundingSourceType; label: string }[] = [
   { value: "salary", label: "工资" },
@@ -187,15 +186,18 @@ export function CycleForm({ today, cycle, plan, salaryDay, initialCycleType, all
   </form>;
 }
 
-export function EntryForm({ today, item, cycles, onSave }: { today: string; item: Transaction | null; cycles: FinancialCycle[]; onSave: (tx: Transaction) => void }) {
-  const [type, setType] = useState<"income" | "expense">(item?.type ?? "expense");
-  const [amount, setAmount] = useState(item ? String(item.amount) : "");
-  const [category, setCategory] = useState(item?.type === "expense" ? item.category : "");
-  const [nature, setNature] = useState<ExpenseNature | "">(item?.nature ?? "");
-  const [note, setNote] = useState(item?.note ?? "");
-  const [date, setDate] = useState(item?.dateNeedsConfirmation ? "" : item ? transactionDay(item) : today);
+export type EntryDraft = Partial<Pick<Transaction, "type" | "amount" | "category" | "nature" | "note" | "date" | "source">>;
+
+export function EntryForm({ today, item, cycles = [], draft, onSave }: { today: string; item: Transaction | null; cycles?: FinancialCycle[]; draft?: EntryDraft; onSave: (tx: Transaction) => void }) {
+  const initial = item ?? draft;
+  const [type, setType] = useState<"income" | "expense">(initial?.type ?? "expense");
+  const [amount, setAmount] = useState(initial?.amount !== undefined ? String(initial.amount) : "");
+  const [category, setCategory] = useState(initial?.type === "expense" && initial.category ? initial.category : "其他");
+  const [nature, setNature] = useState<ExpenseNature>(initial?.nature ?? "消费");
+  const [note, setNote] = useState(initial?.note ?? "");
+  const [date, setDate] = useState(item?.dateNeedsConfirmation ? "" : item ? transactionDay(item) : draft?.date ?? today);
   const [error, setError] = useState("");
-  const [source, setSource] = useState<Transaction["source"]>(item?.source ?? "text");
+  const [source, setSource] = useState<Transaction["source"]>(initial?.source ?? "text");
   const chosenCycle = cycles.find(c => date >= c.startDate && date <= c.endDate);
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -204,32 +206,42 @@ export function EntryForm({ today, item, cycles, onSave }: { today: string; item
       if (value <= 0) throw new Error("金额需大于零");
       parseDate(date);
       if (date > today) throw new Error("请记录已发生的收支，日期不能晚于今天");
-      if (!chosenCycle) throw new Error("这一天尚未建立周期，请到「我的 → 记账周期」设置，或选择已有周期内的日期");
-      if (type === "expense" && !category) throw new Error("请选择这笔支出的分类");
-      if (type === "expense" && !nature) throw new Error("请选择消费、浪费或投资");
+      if (note.length > 100) throw new Error("备注最多 100 字，请精简后保存");
       const selectedCategory = type === "income" ? "收入" : category;
       onSave({ ...item, id: item?.id ?? crypto.randomUUID(), type, amount: value, category: selectedCategory,
         note: note.trim() || selectedCategory, date,
         icon: CATEGORY_ICONS[selectedCategory as LedgerCategory] ?? selectedCategory.slice(0, 1), source,
-        cycleId: chosenCycle.id, nature: type === "expense" ? nature as ExpenseNature : null,
+        cycleId: chosenCycle?.id ?? null, nature: type === "expense" ? nature : null,
         // Retained only for old-schema compatibility. CR-001 no longer exposes this choice.
         spendKind: type === "expense" ? (item?.spendKind ?? "variable") : null });
       setError("");
     } catch (e) { setError((e as Error).message); }
   }
-  const categories = !category || EXPENSE_CATEGORIES.includes(category as LedgerCategory) ? EXPENSE_CATEGORIES : [...EXPENSE_CATEGORIES, category];
+  const categories = EXPENSE_CATEGORIES.includes(category as LedgerCategory) ? EXPENSE_CATEGORIES : [...EXPENSE_CATEGORIES, category];
   const suggested = classifyTransaction(note, type).category;
-  return <form onSubmit={submit}><div className="sheet-head"><span><StoryIcon name="book"/></span><div><h2>{item ? "编辑账目" : "记下这一笔"}</h2><p>{type === "expense" ? "填金额，选好分类和性质；备注可以不填。" : item ? "确认金额和日期；备注可以不填。" : "填金额就可以，日期已默认今天。"}</p></div></div>
-    <div className="type-tabs" role="group" aria-label={item ? "收支类型（可修改）" : "收支类型（默认支出，可修改）"}><button type="button" aria-pressed={type === "expense"} className={type === "expense" ? "selected" : ""} onClick={() => setType("expense")}>支出</button><button type="button" aria-pressed={type === "income"} className={type === "income" ? "selected" : ""} onClick={() => setType("income")}>收入</button></div>
-    <label>金额（必填）<input name="amount" type="number" inputMode="decimal" min="0.01" step="0.01" max="999999999999.99" required value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" /></label>
-    {type === "expense" ? <><fieldset className="category-field"><legend>支出分类（必选）</legend><div className="category-picker">{categories.map(c => <button type="button" key={c} aria-pressed={category === c} className={category === c ? "selected" : ""} onClick={() => setCategory(c)}><StoryIcon name={categoryIcon[c]??'leaf'}/><span>{c}</span></button>)}</div></fieldset>
-    <fieldset className="category-field"><legend>支出性质（必选，由你确认）</legend><div className="nature-picker">{(["消费", "浪费", "投资"] as const).map(value => <button key={value} type="button" aria-pressed={nature === value} className={nature === value ? "selected" : ""} onClick={() => setNature(value)}>{value}</button>)}</div></fieldset></> : <p className="helper">收入账目只记录流水，不会自动增加本周期可用资金。</p>}
-    <label>备注（选填）<input name="note" maxLength={100} value={note} onChange={e => { setNote(e.target.value); setSource("text"); }} placeholder="这笔钱用在了哪里" /></label>
-    {note && type === "expense" && suggested !== category && <button type="button" className="category-suggestion" onClick={() => setCategory(suggested)}>关键词建议：{suggested} · 点击采用</button>}
-    {item?.dateNeedsConfirmation && <p className="error-message">旧账保留了原始时间 {item.date}，请确认记账日期；原财务周期 {cycles.find(c => c.id === item.cycleId)?.startDate} 起。</p>}
-    <label>{item?.dateNeedsConfirmation ? "日期（必填，请确认旧账日期）" : item ? "日期（必填，可修改）" : "日期（默认今天，可修改）"}<input name="date" type="date" required max={today} value={date} onChange={e => setDate(e.target.value)} /></label>
-    <p className="helper">{chosenCycle ? `所属周期 ${chosenCycle.startDate} — ${chosenCycle.endDate}` : "该日期尚无财务周期"}</p>
-    {!item && <VoiceNote onText={value => {setNote(value);setSource('voice');}}/>}
-    {error && <p className="error-message" role="alert">{error}</p>}<button className="primary">{item ? "保存修改" : "记好了"}</button>
+  return <form className="entry-form" onSubmit={submit} onInvalid={event => {
+    const details = (event.target as HTMLElement).closest("details");
+    if (details) details.open = true;
+  }}>
+    <div className="entry-form-body">
+      <div className="sheet-head"><span><StoryIcon name="book"/></span><div><h2>{item ? "编辑账目" : draft ? "确认这一笔" : "记下这一笔"}</h2><p>{draft ? "检查金额和日期，确认后才会保存。" : "填好金额，就可以记下。"}</p></div></div>
+      <div className="type-tabs" role="group" aria-label="收支类型（可修改）"><button type="button" aria-pressed={type === "expense"} className={type === "expense" ? "selected" : ""} onClick={() => setType("expense")}>支出</button><button type="button" aria-pressed={type === "income"} className={type === "income" ? "selected" : ""} onClick={() => setType("income")}>收入</button></div>
+      <label className="entry-amount">金额（必填）<input name="amount" type="number" inputMode="decimal" min="0.01" step="0.01" max="999999999999.99" required value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" /></label>
+      {type === "expense" && <>
+        <label className="entry-category">分类（可修改）<select name="category" value={category} onChange={e => setCategory(e.target.value)}>{categories.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+        <fieldset className="category-field entry-nature"><legend>性质（可修改）</legend><div className="nature-picker">{(["消费", "浪费", "投资"] as const).map(value => <button key={value} type="button" aria-pressed={nature === value} className={nature === value ? "selected" : ""} onClick={() => setNature(value)}>{value}</button>)}</div></fieldset>
+      </>}
+      <details className="entry-more" open={!!item || !!draft}>
+        <summary>更多选项<span>{date === today ? "今天" : date || "日期待确认"} · {note ? "有备注" : "无备注"}</span><StoryIcon name="arrow" /></summary>
+        <label>{item?.dateNeedsConfirmation ? "日期（必填，请确认）" : "日期（默认今天，可修改）"}<input name="date" type="date" required max={today} value={date} onChange={e => setDate(e.target.value)} /></label>
+        {item?.dateNeedsConfirmation && <p className="helper">旧账的原始时间为 {item.date}，请确认记账日期。</p>}
+        <label>备注（选填）<input name="note" maxLength={100} value={note} onChange={e => { setNote(e.target.value); setSource("text"); }} placeholder={type === "income" ? "例如：工资、奖金" : "例如：午餐、打车"} /></label>
+        {note && type === "expense" && suggested !== category && <button type="button" className="category-suggestion" onClick={() => setCategory(suggested)}>改为{suggested}</button>}
+      </details>
+    </div>
+    <div className="entry-form-footer">
+      {error && <p className="error-message" role="alert">{error}</p>}
+      <button className="primary" type="submit">{item ? "保存修改" : "记好了"}</button>
+    </div>
   </form>;
 }

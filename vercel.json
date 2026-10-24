@@ -3,5 +3,5 @@
   "framework": null,
   "buildCommand": "node scripts/build-ai-host.mjs",
   "outputDirectory": "ai-host",
-  "functions": { "api/ai/question.ts": { "maxDuration": 35 } }
+  "functions": { "api/ai/question.ts": { "maxDuration": 35 }, "api/ai/assistant.ts": { "maxDuration": 35 } }
 }

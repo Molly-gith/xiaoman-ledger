@@ -323,3 +323,96 @@ test('legacy timestamps remain readable across timezones until date is explicitl
     assert.equal(calculateFinance(c,p,reloaded.transactions).unresolvedCount,0);
   } finally {if(prior===undefined) delete process.env.TZ;else process.env.TZ=prior;}
 });
+
+test('date-based expense and income save into an empty ledger without creating a cycle or budget',async()=>{
+  const repo=createRepository(memoryStore());
+  let state=await repo.saveTransaction(tx({cycleId:null,date:'2026-10-24'}),0);
+  state=await repo.saveTransaction(tx({id:'income',cycleId:null,date:'2026-09-30',type:'income',nature:null,spendKind:null,amount:0.1}),state.revision);
+  assert.equal(state.transactions.length,2);
+  assert.ok(state.transactions.every(item=>item.cycleId===null));
+  assert.deepEqual(state.cycles,[]);assert.deepEqual(state.budgets,[]);assert.equal(state.activeCycleId,null);
+  assert.deepEqual(normalizeBackup(encodeBackup(state)),state);
+  await assert.rejects(repo.saveTransaction(tx({id:'no-nature',cycleId:null,nature:null}),state.revision),/确认消费性质/);
+  await assert.rejects(repo.saveTransaction(tx({id:'bad-date',cycleId:null,date:'2026-02-29'}),state.revision),/日期/);
+  await assert.rejects(repo.saveTransaction(tx({id:'bad-income',cycleId:null,type:'income'}),state.revision),/收入不设置/);
+});
+
+test('cycle-free records preserve all historical cycles, budgets, records and their budget calculation',async()=>{
+  const repo=createRepository(memoryStore());
+  let original=await repo.saveCycle(cycle,plan,0);
+  original=await repo.saveTransaction(tx(),original.revision);
+  const beforeMetrics=calculateFinance(original.cycles[0],original.budgets[0],original.transactions);
+  const next=await repo.saveTransactions([
+    tx({id:'unassigned-in-period',cycleId:null}),tx({id:'new-year',cycleId:null,date:'2027-01-01',nature:'投资'}),
+  ],original.revision);
+  assert.deepEqual(next.cycles,original.cycles);assert.deepEqual(next.budgets,original.budgets);
+  assert.deepEqual(next.profile,original.profile);assert.equal(next.activeCycleId,original.activeCycleId);
+  assert.deepEqual(next.transactions.find(item=>item.id==='a'),original.transactions[0]);
+  const afterMetrics=calculateFinance(next.cycles[0],next.budgets[0],next.transactions);
+  assert.equal(afterMetrics.variableSpend,beforeMetrics.variableSpend);
+  assert.equal(afterMetrics.safeToSpend,beforeMetrics.safeToSpend);
+  assert.deepEqual(normalizeBackup(encodeBackup(next)),next);
+});
+
+test('batch saves once with one revision and rejects stale retries or duplicate IDs without rebooking',async()=>{
+  const store=memoryStore(),repo=createRepository(store);let commits=0;
+  const commit=store.commit;store.commit=async(...args)=>{commits++;await commit(...args);};
+  const drafts=[tx({id:'first',cycleId:null,date:'2025-12-31'}),tx({id:'second',cycleId:null,date:'2026-01-01'})];
+  const saved=await repo.saveTransactions(drafts,0);
+  assert.equal(saved.revision,1);assert.equal(commits,1);assert.equal(saved.transactions.length,2);
+  await assert.rejects(repo.saveTransactions(drafts,0),/其他页面/);
+  await assert.rejects(repo.saveTransactions(drafts,1),/重复/);
+  await assert.rejects(repo.saveTransactions([tx({id:'third',cycleId:null}),tx({id:'third',cycleId:null})],1),/重复/);
+  assert.equal(commits,1);assert.deepEqual(await repo.read(),saved);
+});
+
+test('batch validation is all-or-nothing and keeps explicit cycle references and legacy reserve checks',async()=>{
+  const repo=createRepository(memoryStore()),state=await repo.saveCycle(cycle,plan,0);
+  const valid=tx({id:'valid',cycleId:null});
+  for(const invalid of [
+    tx({id:'invalid',cycleId:null,nature:null}),tx({id:'invalid',cycleId:'missing'}),
+    tx({id:'invalid',date:'2026-09-21'}),tx({id:'invalid',spendKind:'reserved',amount:3000.01}),
+    tx({id:'invalid',cycleId:null,amount:0.001}),
+  ]) {
+    await assert.rejects(repo.saveTransactions([valid,invalid],state.revision));
+    assert.deepEqual(await repo.read(),state);
+  }
+  await assert.rejects(repo.saveTransactions([],state.revision));
+});
+
+test('simultaneous batch confirmations cannot duplicate or partially mix records',async()=>{
+  const store=memoryStore(),a=createRepository(store),b=createRepository(store);
+  const records=[tx({id:'one',cycleId:null}),tx({id:'two',cycleId:null})];
+  const results=await Promise.allSettled([a.saveTransactions(records,0),b.saveTransactions(records,0)]);
+  assert.equal(results.filter(result=>result.status==='fulfilled').length,1);
+  assert.equal(results.filter(result=>result.status==='rejected').length,1);
+  const saved=await a.read();assert.equal(saved.revision,1);assert.equal(saved.transactions.length,2);
+});
+
+test('failed batch persistence does not save any draft or change revision',async()=>{
+  const store=memoryStore(),repo=createRepository(store),original=await repo.read();
+  store.commit=async()=>{throw Error('quota');};
+  await assert.rejects(repo.saveTransactions([tx({id:'one',cycleId:null}),tx({id:'two',cycleId:null})],0),/quota/);
+  assert.deepEqual(await repo.read(),original);
+});
+
+test('batch undo deletes exactly the confirmed set and leaves existing records untouched',async()=>{
+  const repo=createRepository(memoryStore());
+  const original=await repo.saveTransaction(tx({id:'existing',cycleId:null}),0);
+  const saved=await repo.saveTransactions([tx({id:'one',cycleId:null}),tx({id:'two',cycleId:null})],original.revision);
+  const undone=await repo.deleteTransactions(['one','two'],saved.revision);
+  assert.equal(undone.revision,saved.revision+1);assert.deepEqual(undone.transactions,original.transactions);
+  await assert.rejects(repo.deleteTransactions(['one','two'],undone.revision),/不存在/);
+  assert.deepEqual(await repo.read(),undone);
+});
+
+test('undo refuses stale revisions and missing or repeated IDs, preserving later edits',async()=>{
+  const repo=createRepository(memoryStore());
+  const saved=await repo.saveTransactions([tx({id:'one',cycleId:null}),tx({id:'two',cycleId:null})],0);
+  for(const ids of [[],['one','missing'],['one','one']]) {
+    await assert.rejects(repo.deleteTransactions(ids,saved.revision));assert.deepEqual(await repo.read(),saved);
+  }
+  const edited=await repo.saveTransaction({...saved.transactions.find(item=>item.id==='one'),amount:123},saved.revision,true);
+  await assert.rejects(repo.deleteTransactions(['one','two'],saved.revision),/其他页面/);
+  assert.deepEqual(await repo.read(),edited);
+});

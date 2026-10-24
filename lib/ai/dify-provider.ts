@@ -82,7 +82,19 @@ export function createDifyProvider(options: DifyProviderOptions): AIProvider {
         redirect: "error",
       });
       if (!response.ok) throw new Error(`Dify request failed with status ${response.status}`);
-      return parseWorkflowResult(await readLimitedJson(response, 32768));
+      const result = parseWorkflowResult(await readLimitedJson(response, 32768));
+      // New unified workflows retain the old question contract at this adapter
+      // boundary, so already deployed question clients continue to understand it.
+      if (operation === "answerFinancialQuestion" && typeof result === "object" && result !== null
+        && Object.keys(result).length === 7 && Object.keys(result).every(key => ["intent", "transactions", "answer", "next_actions", "referenced_facts", "clarification", "confidence"].includes(key))
+        && "transactions" in result && Array.isArray(result.transactions) && result.transactions.length === 0 && "clarification" in result && result.clarification === ""
+        && "intent" in result && result.intent === "question" && "answer" in result
+        && "next_actions" in result && "referenced_facts" in result && "confidence" in result) {
+        return { answer: result.answer, next_actions: result.next_actions, referenced_facts: result.referenced_facts, confidence: result.confidence };
+      }
+      if (operation === "parseTransaction" && typeof result === "object" && result !== null && "intent" in result && result.intent === "transactions"
+        && "transactions" in result && Array.isArray(result.transactions) && result.transactions.length === 1) return result.transactions[0];
+      return result;
     },
   };
 }

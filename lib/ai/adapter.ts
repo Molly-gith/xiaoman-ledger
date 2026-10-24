@@ -3,6 +3,7 @@ import type { AssistantFinancialSnapshot } from "../domain/assistant-snapshot.ts
 /** Provider-neutral drafts only: this module never writes ledger data or calculates money. */
 export type SuggestedNature = "消费" | "浪费" | "投资";
 export type AIOperation =
+  | "assistLedger"
   | "parseTransaction"
   | "recommendNature"
   | "generateDailyBrief"

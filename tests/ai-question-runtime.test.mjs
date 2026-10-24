@@ -94,11 +94,8 @@ test("CORS preflight grants only expected method and headers without model or li
   assert.deepEqual(deps.calls, []);
 });
 
-test("authentication, origin, route and method gates precede provider access", async t => {
+test("origin, route and method gates precede provider access", async t => {
   for (const [name, options, status, error] of [
-    ["missing auth", { headers: { Authorization: "" } }, 401, "unauthorized"],
-    ["incorrect auth", { headers: { Authorization: "Bearer wrong" } }, 401, "unauthorized"],
-    ["oversized auth", { headers: { Authorization: `Bearer ${"a".repeat(150)}` } }, 401, "unauthorized"],
     ["missing origin", { headers: { Origin: "" } }, 403, "origin_denied"],
     ["untrusted origin", { headers: { Origin: "https://attacker.example" } }, 403, "origin_denied"],
     ["null origin", { headers: { Origin: "null" } }, 403, "origin_denied"],
@@ -117,10 +114,9 @@ test("authentication, origin, route and method gates precede provider access", a
 });
 
 test("missing server configuration fails closed", async t => {
-  for (const field of ["AI_BETA_TOKEN", "DIFY_API_KEY", "DIFY_MODEL_VERSION", "DIFY_WORKFLOW_VERSION"]) {
+  for (const field of ["DIFY_API_KEY", "DIFY_MODEL_VERSION", "DIFY_WORKFLOW_VERSION"]) {
     await t.test(field, () => assertBlocked(questionRequest(), 503, "not_configured", { ...env, [field]: "" }));
   }
-  await t.test("weak beta token", () => assertBlocked(questionRequest(), 503, "not_configured", { ...env, AI_BETA_TOKEN: "short" }));
   await t.test("absent limiter", () => assertBlocked(questionRequest(), 503, "not_configured", env, { checkLimit: undefined }));
 });
 

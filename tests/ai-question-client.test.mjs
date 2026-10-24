@@ -24,7 +24,7 @@ test("client sends consent and aggregate snapshot with safe request settings", a
   assert.equal(calls[0].url, ENDPOINT);
   const options = calls[0].options;
   assert.equal(options.method, "POST");
-  assert.equal(options.headers.Authorization, `Bearer ${BETA_TOKEN}`);
+  assert.equal(options.headers.Authorization, undefined);
   assert.equal(options.headers["Content-Type"], "application/json");
   assert.deepEqual(JSON.parse(options.body), body);
   assert.equal(options.cache, "no-store");
@@ -65,7 +65,7 @@ test("client translates 401, 429 and service errors without echoing provider dat
     await t.test(String(status), async () => {
       const result = await askFinancialQuestion(ENDPOINT, BETA_TOKEN, questionBody(), { fetchFn: async () => new Response(PRIVATE_ERROR, { status }) });
       assertSafeFailure(result);
-      assert.equal(result.reauthorize === true, status === 401);
+      assert.equal(result.reauthorize, undefined);
       if (status === 429) assert.match(result.message, /一分钟/);
     });
   }

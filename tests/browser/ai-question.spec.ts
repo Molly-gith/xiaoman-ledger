@@ -1,123 +1,117 @@
 import { test, expect, type Page } from "@playwright/test";
-import { openLedger, setFunds, expectBalance } from "./ledger-helpers";
-
+import { addExpense, expectReport, exportLedger, openBills, openLedger, returnHome } from "./ledger-helpers";
 test.skip(process.env.AI_BROWSER_TEST !== "1", "Run against the AI-enabled mock endpoint build");
-const endpoint = "https://xiaoman-ai-test.example/api/ai/question";
-const token = "a".repeat(48);
-async function setup(page: Page) {
-  await openLedger(page);
-  await setFunds(page);
+const endpoint="https://xiaoman-ai-test.example/api/ai/assistant";
+const input=(page:Page)=>page.getByRole("textbox",{name:"记账或问小满",exact:true});
+const draft=(extra:Record<string,unknown>={})=>({type:"expense",amount:35,category:"餐饮",occurred_at:"2026-09-15",note:"午饭",nature_suggestion:"消费",confidence:0.9,ambiguous:false,...extra});
+const result=(drafts:unknown[])=>({status:"transactions",drafts,modelVersion:"test-only",workflowVersion:"test-only"});
+async function send(page:Page,text="今天午饭35元") {
+  await input(page).fill(text);await page.getByRole("button",{name:"发送给小满"}).click();
 }
-async function consent(page: Page) {
-  await page.getByRole("textbox", { name: "问小满", exact: true }).fill("本周期还能花多少？");
-  await page.getByRole("button", { name: "发送给小满" }).click();
-  await page.getByLabel("私人体验码（必填）", { exact: true }).fill(token);
-  await page.locator('[name="aiConsent"]').check();
-  await page.getByRole("button", { name: "同意并发送" }).click();
-}
-function answer(body: { snapshot: { referencedFacts: string[] } }) {
-  return {
-    status: "suggestion", value: { answer: "本周期可支出为 7500 元。", next_actions: ["先查看日常消费安排。"], referenced_facts: body.snapshot.referencedFacts.filter(fact => fact.startsWith("safe_to_spend:")), confidence: 0.9 },
-    requiresConfirmation: true, confirmationReasons: ["user_review"], modelVersion: "test-only", workflowVersion: "test-only",
-  };
-}
-
-test("AI sends nothing before explicit consent, uploads aggregates only and forgets access on refresh", async ({ page }) => {
-  const requests: unknown[] = [];
-  await page.route(endpoint, async route => {
-    const body = route.request().postDataJSON();
-    requests.push(body);
-    expect(route.request().headers().authorization).toBe(`Bearer ${token}`);
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(answer(body)) });
+test("AI creates editable drafts only, then one confirmation saves a duplicate-safe atomic batch and undo removes it",async({page})=>{
+  const requests:unknown[]=[];
+  await page.route(endpoint,async route=>{
+    requests.push(route.request().postDataJSON());
+    expect(route.request().headers().authorization).toBeUndefined();
+    await route.fulfill({json:result([draft(),draft({type:"income",amount:8000,category:"收入",note:"工资",nature_suggestion:null})])});
   });
-  await setup(page);
-  expect(requests).toHaveLength(0);
-  await page.getByRole("textbox", { name: "问小满", exact: true }).fill("本周期还能花多少？");
-  await page.getByRole("button", { name: "发送给小满" }).click();
-  await expect(page.getByRole("heading", { name: "让小满理解这次提问" })).toBeVisible();
-  await expect(page.locator('[name="aiConsent"]')).not.toBeChecked();
-  expect(requests).toHaveLength(0);
-  await page.getByRole("button", { name: "暂不使用" }).click();
-  expect(requests).toHaveLength(0);
-  await consent(page);
-  await expect(page.getByTestId("ai-answer")).toContainText("本周期可支出为 7500 元。");
-  expect(requests).toHaveLength(1);
-  expect(Object.keys(requests[0] as object).sort()).toEqual(["consent", "context", "question", "snapshot"]);
-  expect(JSON.stringify(requests[0])).not.toMatch(/transactions|accountName|note|apiKey/);
-  await expectBalance(page, "¥7,500.00");
-  expect(await page.evaluate(() => JSON.stringify([localStorage, sessionStorage]))).not.toContain(token);
-  await page.screenshot({ path: "test-results/ai-question-mobile.png", fullPage: true });
-  await page.reload();
-  await expect(page.getByTestId("ai-answer")).toHaveCount(0);
-  await page.getByRole("textbox", { name: "问小满", exact: true }).fill("再问一次");
-  await page.getByRole("button", { name: "发送给小满" }).click();
-  await expect(page.locator('[name="aiConsent"]')).not.toBeChecked();
+  await openLedger(page);expect(requests).toHaveLength(0);
+  await send(page,"今天午饭35元，工资到账8000元");
+  const preview=page.getByRole("region",{name:"待保存账目"});
+  await expect(preview).toContainText("2 笔 · 尚未保存");
+  expect((await exportLedger(page)).state.transactions).toEqual([]);
+  await preview.getByRole("button",{name:"保存这 2 笔",exact:true}).evaluate(button=>{
+    (button as HTMLButtonElement).click();(button as HTMLButtonElement).click();
+  });
+  await expect(preview).toHaveCount(0);await expect(input(page)).toHaveValue("");
+  let state=(await exportLedger(page)).state;
+  expect(state.revision).toBe(1);expect(state.transactions).toHaveLength(2);expect(state.cycles).toEqual([]);
+  expect(state.transactions.every((tx:{cycleId:unknown})=>tx.cycleId===null)).toBe(true);
+  await expectReport(page,"¥8,000.00","¥35.00","¥7,965.00");await returnHome(page);
+  await page.getByRole("button",{name:"撤销这次记账",exact:true}).click();
+  state=(await exportLedger(page)).state;expect(state.transactions).toEqual([]);expect(state.revision).toBe(2);
   expect(requests).toHaveLength(1);
 });
-
-test("rate limiting preserves question and leaves manual bookkeeping usable", async ({ page }) => {
-  await page.route(endpoint, route => route.fulfill({ status: 429, contentType: "application/json", body: '{"error":"rate_limited"}' }));
-  await setup(page);
-  await consent(page);
-  await expect(page.getByRole("alert")).toContainText("一分钟后再试");
-  await expect(page.getByRole("textbox", { name: "问小满", exact: true })).toHaveValue("本周期还能花多少？");
-  await page.getByTestId("home-action-add").click();
-  await page.locator('[name="amount"]').fill("20");
-  await page.getByRole("button", { name: "餐饮", exact: true }).click();
-  await page.getByRole("button", { name: "消费", exact: true }).click();
-  await page.getByRole("button", { name: "记好了", exact: true }).click();
-  await expectBalance(page, "¥7,480.00");
+test("cancel draft writes nothing; field edits including income type save without another AI call",async({page})=>{
+  let calls=0;
+  await page.route(endpoint,route=>{calls++;return route.fulfill({json:result([draft()])});});
+  await openLedger(page);await send(page);
+  await page.getByRole("button",{name:"不保存",exact:true}).click();
+  expect((await exportLedger(page)).state.transactions).toEqual([]);
+  await send(page);
+  const preview=page.getByRole("region",{name:"待保存账目"});
+  await preview.getByRole("button",{name:"修改第1笔",exact:true}).click();
+  await preview.getByRole("combobox",{name:"收支类型",exact:true}).selectOption("income");
+  await preview.getByLabel("金额（必填）",{exact:true}).fill("88.8");
+  await preview.getByLabel("日期",{exact:true}).fill("2026-08-31");
+  await preview.getByLabel("备注（选填）",{exact:true}).fill("退回款项");
+  await preview.getByRole("button",{name:"保存这笔",exact:true}).click();
+  await expect(preview).toHaveCount(0);
+  const state=(await exportLedger(page)).state;
+  expect(state.transactions).toHaveLength(1);
+  expect(state.transactions[0]).toMatchObject({type:"income",amount:88.8,date:"2026-08-31",category:"收入",nature:null,cycleId:null,note:"退回款项"});
+  expect(calls).toBe(2);
 });
-
-test("closing AI cancels an in-flight answer and requires renewed consent", async ({ page }) => {
-  let release: (() => void) | undefined;
-  let started = false;
-  await page.route(endpoint, async route => {
-    started = true;
-    await new Promise<void>(resolve => { release = resolve; });
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(answer(route.request().postDataJSON())) }).catch(() => {});
+test("clarification carries original input and answer together and never writes before confirmation",async({page})=>{
+  const requests:Array<{text:string;clarification?:unknown}>=[];
+  await page.route(endpoint,route=>{
+    requests.push(route.request().postDataJSON());
+    return route.fulfill({json:requests.length===1?{status:"clarification",question:"这次午饭花了多少钱？"}:result([draft({amount:28})])});
   });
-  await setup(page);
-  await consent(page);
-  await expect.poll(() => started).toBe(true);
-  await page.getByRole("button", { name: "关闭 AI", exact: true }).click();
-  release?.();
-  await expect(page.getByTestId("ai-answer")).toHaveCount(0);
-  await page.getByRole("button", { name: "发送给小满" }).click();
-  await expect(page.locator('[name="aiConsent"]')).not.toBeChecked();
+  await openLedger(page);await send(page,"今天吃了午饭");
+  await expect(page.getByText("这次午饭花了多少钱？",{exact:true})).toBeVisible();
+  await expect(input(page)).toHaveValue("");await send(page,"28元");
+  await expect(page.getByRole("region",{name:"待保存账目"})).toContainText("¥28.00");
+  expect(requests[1].clarification).toEqual({originalText:"今天吃了午饭",question:"这次午饭花了多少钱？",answer:"28元"});
+  expect((await exportLedger(page)).state.transactions).toEqual([]);
 });
-
-test("fresh unknown funds can be asked about after consent without sending a fabricated zero balance", async ({ page }) => {
-  const requests: { snapshot: { period: { safeToSpend: number | null }; referencedFacts: string[] } }[] = [];
-  await page.route(endpoint, async route => {
-    const body = route.request().postDataJSON();
-    requests.push(body);
-    const response = answer(body);
-    response.value.answer = "本周期可用资金还未设置，暂时无法判断还能花多少。";
-    response.value.next_actions = ["可以先继续记账，再到我的补充周期资金。"];
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(response) });
+test("question sends date-range aggregates only and clears the answer when the report changes",async({page})=>{
+  const requests:Array<{text:string;report:{range:unknown;expense:number};[key:string]:unknown}>=[];
+  await page.route(endpoint,route=>{
+    requests.push(route.request().postDataJSON());
+    return route.fulfill({json:{status:"answer",answer:"这段时间记录了支出20元。",nextActions:[]}});
   });
-  await openLedger(page);
-  expect(requests).toHaveLength(0);
-  await consent(page);
-  await expect(page.getByTestId("ai-answer")).toContainText("本周期可用资金还未设置");
-  expect(requests).toHaveLength(1);
-  expect(requests[0].snapshot.period.safeToSpend).toBeNull();
-  await expectBalance(page, "未设置");
+  await openLedger(page);await addExpense(page,"20","绝不上传的私人备注");
+  await openBills(page);await page.getByTestId("home-action-review").click();
+  await page.getByRole("button",{name:"发送给小满"}).click();
+  await expect(page.getByTestId("ai-answer")).toContainText("支出20元");
+  expect(Object.keys(requests[0]).sort()).toEqual(["context","report","text"]);
+  expect(requests[0].report.range).toEqual({startDate:"2026-09-01",endDate:"2026-09-30"});
+  expect(requests[0].report.expense).toBe(20);
+  expect(JSON.stringify(requests[0])).not.toMatch(/绝不上传的私人备注|transactions|accountName|apiKey/);
+  await openBills(page);await page.getByLabel("查看月份").fill("2026-08");await returnHome(page);
+  await expect(page.getByTestId("ai-answer")).toHaveCount(0);expect(requests).toHaveLength(1);
 });
-
-test("a calendar rollover clears an answer based on the previous period without another model request", async ({ page }) => {
-  let requests = 0;
-  await page.route(endpoint, async route => {
-    requests++;
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(answer(route.request().postDataJSON())) });
+test("rate limit preserves text and manual bookkeeping remains usable",async({page})=>{
+  await page.route(endpoint,route=>route.fulfill({status:429,json:{error:"rate_limited"}}));
+  await openLedger(page);await send(page,"今天午饭35元");
+  await expect(page.getByRole("alert")).toContainText("文字已保留");
+  await expect(input(page)).toHaveValue("今天午饭35元");
+  await addExpense(page,"20","手动补记");await expectReport(page,"¥0.00","¥20.00","¥-20.00");
+});
+test("cancelled request ignores a late answer and does not retry or clear text",async({page})=>{
+  let release:(()=>void)|undefined,calls=0;
+  await page.route(endpoint,async route=>{
+    calls++;await new Promise<void>(resolve=>{release=resolve;});
+    await route.fulfill({json:{status:"answer",answer:"迟到的回答",nextActions:[]}}).catch(()=>{});
   });
-  await setup(page);
-  await consent(page);
-  await expect(page.getByTestId("ai-answer")).toContainText("7500");
-  await page.clock.setFixedTime(new Date("2026-10-01T04:00:00Z"));
-  await page.clock.fastForward(31000);
-  await expect(page.getByTestId("ai-answer")).toHaveCount(0);
-  await expectBalance(page, "未设置");
-  expect(requests).toBe(1);
+  await openLedger(page);await send(page,"我花了多少？");await expect.poll(()=>calls).toBe(1);
+  await page.locator(".composer-tools").getByRole("button",{name:"取消",exact:true}).click();release?.();
+  await expect(input(page)).toHaveValue("我花了多少？");await expect(page.getByTestId("ai-answer")).toHaveCount(0);
+  await expect(page.getByRole("alert")).toContainText("已取消");expect(calls).toBe(1);
+});
+test("invalid AI response cannot produce a draft or saved record",async({page})=>{
+  await page.route(endpoint,route=>route.fulfill({json:result([draft({amount:0,occurred_at:"2026-02-30"})])}));
+  await openLedger(page);await send(page);
+  await expect(page.getByRole("alert")).toContainText("可靠结果");
+  await expect(page.getByRole("region",{name:"待保存账目"})).toHaveCount(0);
+  expect((await exportLedger(page)).state.transactions).toEqual([]);
+});
+test("manual save after AI batch clears undo so newer edits cannot be accidentally removed",async({page})=>{
+  await page.route(endpoint,route=>route.fulfill({json:result([draft()])}));
+  await openLedger(page);await send(page);await page.getByRole("button",{name:"保存这笔",exact:true}).click();
+  await expect(page.getByRole("button",{name:"撤销这次记账",exact:true})).toBeVisible();
+  await addExpense(page,"10","后来记的一笔");
+  await expect(page.getByRole("button",{name:"撤销这次记账",exact:true})).toHaveCount(0);
+  expect((await exportLedger(page)).state.transactions).toHaveLength(2);
 });
