@@ -160,6 +160,30 @@ test('negated or explicitly overridden preferences never replace the user curren
   assert.equal(applyPreferenceToDraft(draft(),[rule({id:'generic',keyword:'健身',nature:'消费'}),rule()]).preferenceId,'fitness');
 });
 
+test('current explicit nature and category instructions override saved preferences without rewriting the draft',()=>{
+  const original=draft({amount:286.5});
+  for(const text of ['今天健身课286.5，这次按消费','今天健身课286.5，这次按照正常消费记账','今天健身课286.5，这次作为消费','今天健身课286.5，性质归到消费类']) {
+    const result=applyPreferenceToDraft(original,[rule()],text);
+    assert.deepEqual(result.draft,original,text);assert.equal(result.preferenceId,null,text);assert.equal(result.reason,null,text);
+  }
+  const categorized=draft({amount:168,category:'娱乐'}),saved=rule({category:'健康'});
+  for(const text of ['健身课168，这次分类为娱乐','健身课168，这笔归到娱乐类','健身课168，这次分类按娱乐','健身课168，本次作为娱乐记录']) {
+    const result=applyPreferenceToDraft(categorized,[saved],text);
+    assert.deepEqual(result.draft,categorized,text);assert.equal(result.preferenceId,null,text);assert.equal(result.reason,null,text);
+  }
+  const income=draft({type:'income',amount:400,category:'收入',nature_suggestion:null});
+  assert.deepEqual(applyPreferenceToDraft(income,[saved],'健身课退款400，这次按消费').draft,income);
+  assert.equal(applyPreferenceToDraft(draft({note:'地铁',category:'交通'}),[saved],'地铁6元和健身课168，这次按消费').preferenceId,null,'full input never matches a different draft');
+});
+
+test('ordinary descriptions and matching instructions do not suppress a saved preference',()=>{
+  const saved=rule({category:'健康'});
+  for(const text of ['今天健身课200，按消费能力安排课程','今天健身课200，教练讲了交通规则','今天健身课200，作为娱乐活动放松一下','今天健身课200，这次按投资','今天健身课200，这次分类为健康']) {
+    const result=applyPreferenceToDraft(draft(),[saved],text);
+    assert.equal(result.preferenceId,'fitness',text);assert.equal(result.draft.nature_suggestion,'投资',text);assert.equal(result.draft.category,'健康',text);
+  }
+});
+
 test('natural-language preference recognition requires explicit future intent and always asks for confirmation',()=>{
   for(const text of ['记住，健身课算投资','以后把健身课记为投资','以后将奶茶记为消费','记住：健身课=投资']) {
     const proposal=parsePreferenceProposal(text);assert.equal(proposal?.requiresConfirmation,true,text);assert.equal(validatePreferenceRule({id:'confirmed',keyword:proposal.keyword,category:proposal.category,nature:proposal.nature}),true);

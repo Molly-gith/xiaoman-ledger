@@ -6,7 +6,7 @@
 
 - 体验页：https://molly-gith.github.io/xiaoman-ledger/previews/pr-24/#/
 - 功能提交：`43cb960afa26efc6f72f8d963ed29c5de310d44f`；发布提交（含说明更新）：`71161851b17b8704ff293f2d4effdd1444d1e259`。
-- [CI #157](https://github.com/Molly-gith/xiaoman-ledger/actions/runs/40107775828) 与 [Pages #56](https://github.com/Molly-gith/xiaoman-ledger/actions/runs/40107937746) 成功。线上脚本 `index-sL--zZfe.js` 与构建一致。
+- [CI #157](https://github.com/Molly-gith/xiaoman-ledger/actions/runs/40107775828) 与 [Pages #56](https://github.com/Molly-gith/xiaoman-ledger/actions/runs/40107937746) 成功。首轮线上脚本 `index-sL--zZfe.js` 与构建一致。
 - Vercel production：`dpl_CY7oYjSEjRPAr9LNLhmJVhmSReuG`，同一发布提交；公开域名 `xiaoman-ai-beta.vercel.app` 已指向 READY 部署。
 - 原 Dify 应用发布 #6，香港时间 23:35:44；DeepSeek `deepseek-v4-pro`，七个中文节点，互斥新旧分支各只调用一次模型，无自动重试。工作流版本标识 `xiaoman-assistant-v2`。
 
@@ -21,6 +21,8 @@
 | 真实网页 | 1次模型调用：健身课200元按本账本偏好显示投资，保存一次仅新增一笔，刷新后账单与回执保留 | 不代表所有设备的语音支持 |
 
 共15次真实模型调用。另有线上零模型验证：30元餐饮查询、前月10元比较、家庭账本70元只读查询、刷新追问、偏好确认/编辑/删除、320px无横向溢出。主站和PR23仍可访问，只有PR24注入公开AI接口地址。
+
+最终核对追加修复了本次明确分类的优先级：“这次按消费”“这次分类按娱乐”不会被旧偏好覆盖，同时避免把“按消费能力安排”当作分类指令。偏好单测16/16、对话浏览器定向12/12通过，最终生产配置前端构建为 `index-uJ4Skz5_.js`。这次只修改本机偏好逻辑，Dify/后端保持上述已验证版本，没有追加模型调用。
 
 原始后端请求/响应与独立语义复核保存在本工作树 `work/xiaoman-ai-beta-evidence/conversation-live-20261024*.json`。Dify截图与节点运行证据保存在用户工作区 `work/xiaoman-ai-beta-evidence/conversation-20261024/`；网页截图与发布记录保存在用户工作区 `evidence/conversation-20261024/`。这些原始记录与模拟测试结果分开保存。
 

@@ -45,12 +45,16 @@ function literalMatch(text: string, keyword: string): boolean {
   return false;
 }
 
-function hasOverride(text: string, nature: ExpenseNature | null): boolean {
+function hasOverride(text: string, rule: PreferenceRule): boolean {
   const normalized = normalize(text);
+  const boundary = "(?=$|[\\s，,；;。！!？?、]|(?:来)?(?:记(?:账|录)?|处理)(?=$|[\\s，,；;。！!？?、]))";
+  const explicitlyAssigns = (value: string) => new RegExp(`(?:记为|记成|算作|归为|归入|归到|当作|视为|作为|按照|按|算|分类为|分类成|分到|分为|列入|列为)\\s*(?:正常|普通)?${value}(?:类别|类|性质)?${boundary}`).test(normalized);
   // Negations often follow a comma ("健身课200，这次不算投资"). Conservatively
   // leave the draft alone even if a multi-item sentence makes their target unclear.
+  // Value boundaries keep descriptions such as "按消费能力安排" from becoming instructions.
   return /不是|不算|不应|不该|不属于|不要|别按|别记|不能|不再|取消|删除|移除|忘记/.test(normalized)
-    || (nature !== null && natures.some(other => other !== nature && new RegExp(`(?:记为|记成|算作|归为|当作|视为|算)\\s*${other}`).test(normalized)));
+    || (rule.nature !== null && natures.some(other => other !== rule.nature && explicitlyAssigns(other)))
+    || (rule.category !== null && EXPENSE_CATEGORIES.some(other => other !== rule.category && explicitlyAssigns(other)));
 }
 
 /** Applies only saved expense preferences. The original note is the matching scope;
@@ -64,7 +68,7 @@ export function applyPreferenceToDraft<T extends TransactionDraft>(draft: T, pre
   const matches = preferences.filter(rule => literalMatch(normalize(draft.note), normalize(rule.keyword))).sort((a, b) => b.keyword.length - a.keyword.length);
   if (!matches.length) return unchanged();
   const rule = matches[0], keyword = normalize(rule.keyword);
-  if (hasOverride(draft.note, rule.nature) || hasOverride(sourceText, rule.nature)) return unchanged();
+  if (hasOverride(draft.note, rule) || hasOverride(sourceText, rule)) return unchanged();
   // A longer specific keyword wins over a contained generic one. Distinct purposes
   // with conflicting rules are ambiguous, so the user keeps the original draft.
   if (matches.some(other => !keyword.includes(normalize(other.keyword)) && (other.category !== rule.category || other.nature !== rule.nature))) return unchanged();

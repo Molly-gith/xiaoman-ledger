@@ -262,6 +262,39 @@ test.describe("conversation protocol with mocked AI", () => {
     expect((await exportLedger(page)).state.transactions).toEqual([]);
   });
 
+  test("an explicit one-time nature or category instruction wins over the saved keyword preference", async ({ page }) => {
+    let calls = 0;
+    await page.route(endpoint, route => {
+      calls++;
+      return route.fulfill({ json: drafts([mockDraft(calls === 1 ? {} : { category: "娱乐", nature_suggestion: "投资" })]) });
+    });
+    await openLedger(page); await send(page, "以后健身课算投资");
+    const proposal = page.getByRole("region", { name: "待确认分类偏好" });
+    await proposal.getByRole("button", { name: "确认记住", exact: true }).click();
+    await expect(proposal).toHaveCount(0);
+    await send(page, "今天健身课200，这次按消费");
+    await expect(preview(page)).toContainText("支出 · 消费");
+    await expect(preview(page).locator(".preference-reason")).toHaveCount(0);
+    await preview(page).getByRole("button", { name: "保存这笔", exact: true }).click();
+    await expect(preview(page)).toHaveCount(0);
+    const saved = (await exportLedger(page)).state.transactions;
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({ amount: 200, category: "健康", nature: "消费" });
+
+    const panel = await memoryPanel(page);
+    await panel.getByRole("button", { name: "修改偏好：健身课", exact: true }).click();
+    await panel.getByRole("combobox", { name: "分类（选填）", exact: true }).selectOption("健康");
+    await panel.getByRole("button", { name: "保存偏好", exact: true }).click();
+    await expect(panel).toContainText("分类偏好已保存");
+    await page.getByRole("dialog").getByRole("button", { name: "关闭", exact: true }).click();
+    await send(page, "今天健身课200，这次分类按娱乐");
+    await expect(preview(page)).toContainText("娱乐");
+    await expect(preview(page).locator(".preference-reason")).toHaveCount(0);
+    await preview(page).getByRole("button", { name: "不保存", exact: true }).click();
+    expect((await exportLedger(page)).state.transactions).toEqual(saved);
+    expect(calls).toBe(2);
+  });
+
   test("V2 sends at most eight messages from this book and never sends full ledger records", async ({ page }) => {
     const requests: Request[] = [];
     await page.route(endpoint, route => {
