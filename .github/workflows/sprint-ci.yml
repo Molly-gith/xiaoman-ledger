@@ -34,6 +34,8 @@ jobs:
         run: exit 1
       - run: npm run lint
       - run: npm test
+      - name: Validate Dify V2 workflow and authored fixtures offline
+        run: node --experimental-strip-types evals/check-assistant-v2.mjs
       - run: npm run build:github
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
@@ -42,7 +44,7 @@ jobs:
         env:
           VITE_AI_API_URL: https://xiaoman-ai-test.example/api/ai/question
       - name: Verify AI entry, fallback and voice in browser
-        run: npm run test:browser -- tests/browser/ai-question.spec.ts tests/browser/voice-input.spec.ts tests/browser/multi-ledger.spec.ts
+        run: npm run test:browser -- tests/browser/ai-question.spec.ts tests/browser/voice-input.spec.ts tests/browser/multi-ledger.spec.ts tests/browser/conversation.spec.ts
         env:
           AI_BROWSER_TEST: "1"
       - run: npm run eval -- --fixture-provider

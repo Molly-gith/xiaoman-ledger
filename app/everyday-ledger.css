@@ -114,6 +114,36 @@
 .simple-app button:focus-visible,.simple-app summary:focus-visible { outline: 2px solid #537d42; outline-offset: 4px; }
 .simple-app input,.simple-app textarea { caret-color: #3c6440; }
 .simple-app ::selection { color: #263d22; background: #d7e4be; }
+.conversation-history { margin: 24px 0; border-top: 1px solid #dce2ce; padding-top: 16px; }
+.conversation-history summary { cursor: pointer; min-height: 40px; color: #486344; font-size: 14px; }
+.conversation-history summary span { margin-left: 8px; color: #7a846f; font-size: 12px; }
+.conversation-log { max-height: 300px; overflow-y: auto; overscroll-behavior: contain; padding-right: 8px; }
+.conversation-message { margin: 12px 0; padding: 12px 14px; border-radius: 12px; background: #edf1e4; max-width: 94%; }
+.conversation-message.user { margin-left: auto; background: #f8f7ef; border: 1px solid #dce2ce; }
+.conversation-message small { color: #6b795e; font-size: 11px; }
+.conversation-message p { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.75; font-size: 14px; }
+.preference-proposal { margin-top: 20px; padding: 18px; background: #edf1e4; border-radius: 14px; }
+.preference-proposal h3 { font-size: 17px; margin: 0 0 12px; }
+.preference-reason { color: #577047; font-size: 12px; line-height: 1.6; margin: 8px 0 0; }
+.memory-panel h2 { font-size: 23px; margin: 0 0 10px; }
+.memory-section { border-bottom: 1px solid #dce2ce; padding: 22px 0; }
+.memory-section h3 { font-size: 16px; margin: 0 0 12px; }
+.memory-section p,.memory-backup p { font-size: 13px; line-height: 1.75; }
+.memory-section button,.memory-backup button { min-height: 42px; color: #476440; padding: 8px 10px; }
+.preference-list { padding: 0; margin: 16px 0; list-style: none; }
+.preference-list li { display: flex; align-items: center; gap: 6px; border-bottom: 1px dashed #dce2ce; padding: 12px 0; }
+.preference-list li>div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.preference-list b,.preference-list span { display: block; font-size: 14px; }
+.preference-list span { color: #748268; font-size: 12px; margin-top: 4px; }
+.preference-edit { display: grid; gap: 14px; margin-top: 15px; }
+.preference-edit label { display: grid; gap: 7px; color: #536b44; font-size: 13px; }
+.preference-edit input,.preference-edit select { min-width: 0; width: 100%; padding: 11px; border: 1px solid #d5ddc6; border-radius: 8px; background: #fffdf5; color: #263d22; }
+.memory-confirm { padding: 12px; border: 1px solid #d5ddc6; border-radius: 10px; }
+.memory-backup { margin: 20px 0 10px; }
+.memory-backup summary { min-height: 44px; cursor: pointer; font-size: 14px; }
+.memory-file { display: block; padding: 10px; font-size: 13px; }
+.memory-file input { display: block; max-width: 100%; margin-top: 10px; }
+.memory-panel .primary { color: #fffdf5; }
 .simple-app * { scrollbar-color: #acb99a #f2f4e9; scrollbar-width: thin; }
 @media(max-width:720px) {
   .simple-app { padding: 22px 18px 40px; }

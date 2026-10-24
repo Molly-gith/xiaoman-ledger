@@ -59,14 +59,14 @@ test("clarification carries original input and answer together and never writes 
     return route.fulfill({json:requests.length===1?{status:"clarification",question:"这次午饭花了多少钱？"}:result([draft({amount:28})])});
   });
   await openLedger(page);await send(page,"今天吃了午饭");
-  await expect(page.getByText("这次午饭花了多少钱？",{exact:true})).toBeVisible();
+  await expect(page.locator(".clarification")).toContainText("这次午饭花了多少钱？");
   await expect(input(page)).toHaveValue("");await send(page,"28元");
   await expect(page.getByRole("region",{name:"待保存账目"})).toContainText("¥28.00");
   expect(requests[1].clarification).toEqual({originalText:"今天吃了午饭",question:"这次午饭花了多少钱？",answer:"28元"});
   expect((await exportLedger(page)).state.transactions).toEqual([]);
 });
-test("question sends date-range aggregates only and clears the answer when the report changes",async({page})=>{
-  const requests:Array<{text:string;report:{range:unknown;expense:number};[key:string]:unknown}>=[];
+test("common account questions stay local and the current answer clears when the report changes",async({page})=>{
+  const requests:unknown[]=[];
   await page.route(endpoint,route=>{
     requests.push(route.request().postDataJSON());
     return route.fulfill({json:{status:"answer",answer:"这段时间记录了支出20元。",nextActions:[]}});
@@ -75,12 +75,10 @@ test("question sends date-range aggregates only and clears the answer when the r
   await openBills(page);await page.getByTestId("home-action-review").click();
   await page.getByRole("button",{name:"发送给小满"}).click();
   await expect(page.getByTestId("ai-answer")).toContainText("支出20元");
-  expect(Object.keys(requests[0]).sort()).toEqual(["context","report","text"]);
-  expect(requests[0].report.range).toEqual({startDate:"2026-09-01",endDate:"2026-09-30"});
-  expect(requests[0].report.expense).toBe(20);
-  expect(JSON.stringify(requests[0])).not.toMatch(/绝不上传的私人备注|transactions|accountName|apiKey/);
+  expect(requests).toEqual([]);
+  await expect(page.getByTestId("ai-answer")).not.toContainText("绝不上传的私人备注");
   await openBills(page);await page.getByLabel("查看月份").fill("2026-08");await returnHome(page);
-  await expect(page.getByTestId("ai-answer")).toHaveCount(0);expect(requests).toHaveLength(1);
+  await expect(page.getByTestId("ai-answer")).toHaveCount(0);expect(requests).toHaveLength(0);
 });
 test("rate limit preserves text and manual bookkeeping remains usable",async({page})=>{
   await page.route(endpoint,route=>route.fulfill({status:429,json:{error:"rate_limited"}}));
@@ -95,9 +93,9 @@ test("cancelled request ignores a late answer and does not retry or clear text",
     calls++;await new Promise<void>(resolve=>{release=resolve;});
     await route.fulfill({json:{status:"answer",answer:"迟到的回答",nextActions:[]}}).catch(()=>{});
   });
-  await openLedger(page);await send(page,"我花了多少？");await expect.poll(()=>calls).toBe(1);
+  await openLedger(page);await send(page,"请说明小满有哪些功能");await expect.poll(()=>calls).toBe(1);
   await page.locator(".composer-tools").getByRole("button",{name:"取消",exact:true}).click();release?.();
-  await expect(input(page)).toHaveValue("我花了多少？");await expect(page.getByTestId("ai-answer")).toHaveCount(0);
+  await expect(input(page)).toHaveValue("请说明小满有哪些功能");await expect(page.getByTestId("ai-answer")).toHaveCount(0);
   await expect(page.getByRole("alert")).toContainText("已取消");expect(calls).toBe(1);
 });
 test("invalid AI response cannot produce a draft or saved record",async({page})=>{

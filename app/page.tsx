@@ -8,11 +8,13 @@ import { defaultState, encodeBackup, normalizeBackup } from "../lib/data/schema"
 import { CycleForm, EntryForm } from "./ledger-forms";
 import { InvestmentAccounts } from "./investment-accounts";
 import { AssistantLedger } from "./assistant-ledger";
+import { AssistantMemoryPanel } from "./assistant-memory-panel";
+import { createAssistantMemoryRepository } from "../lib/data/assistant-memory";
 import { StoryIcon } from "./story-icons";
 import { ConfirmPanel, DataPanel, EmptyState, GoalForm, LEDGER_KINDS, LoadingScreen, PageHeader, TransactionRow, money } from "./ledger-components";
 
 type Tab = "home" | "bills" | "me" | "assets";
-type Modal = "add" | "edit" | "delete" | "cycle" | "data" | "import" | "clear" | "goal" | "books" | null;
+type Modal = "add" | "edit" | "delete" | "cycle" | "data" | "import" | "clear" | "goal" | "books" | "memory" | null;
 const AI_API_URL = import.meta.env.VITE_AI_API_URL?.trim() ?? "";
 const MAX_BACKUP_BYTES = 50_000_000;
 const FILTERS = [{ key: "all", label: "全部" }, { key: "income", label: "收入" }, { key: "expense", label: "支出" }] as const;
@@ -118,7 +120,19 @@ export default function Home() {
   const expired = !!cycle && today > cycle.endDate;
   const openEntry = (tx?: Transaction) => { setError(""); setEditing(tx ?? null); setModal(tx ? "edit" : "add"); };
   const rowActions = { onEdit: openEntry, onDelete: (tx: Transaction) => { setEditing(tx); setModal("delete"); }, removingId: null };
-  const changeState = (next: LedgerState, message: string, resetAssistant = false) => void commit(() => repository.replace(next, state.revision), message).then(saved => {
+  const changeState = (next: LedgerState, message: string, resetAssistant = false, clearAllMemory = false) => void commit(async () => {
+    // Ledger CAS must succeed before any other store is touched: a stale page
+    // cannot erase memories while its ledger replacement is rejected.
+    const savedLedger = await repository.replace(next, state.revision);
+    if (resetAssistant) {
+      setState(savedLedger); setPrompt(""); setPromptVersion(value => value + 1);
+      try {
+        const memories = createAssistantMemoryRepository(), owner = await memories.getLocalOwnerId();
+        if (clearAllMemory) await memories.clearOwner(owner); else await memories.clearOwnerConversations(owner);
+      } catch { throw Error("账本内容已经更新，但助手记忆清理失败。请到「记忆与偏好」清除旧对话；清空全部数据时也需删除原有偏好。不要重复导入或清空账目。"); }
+    }
+    return savedLedger;
+  }, message).then(saved => {
     if (saved && resetAssistant) { setPrompt(""); setPromptVersion(value => value + 1); }
   });
   const switchLedger = async (kind: LedgerKind) => {
@@ -153,7 +167,7 @@ export default function Home() {
     <header className="topbar"><div className="storybook-brand"><StoryIcon name="leaf" /><div><h1>小满</h1><p>把日子，过成喜欢的样子</p></div></div><button className="avatar" onClick={() => setModal("data")} aria-label="本地数据与备份"><StoryIcon name="lock" /></button></header>
     <div className="navigation-row"><nav className="simple-navigation" aria-label="主导航">{([{ key: "home", label: "记账" }, { key: "bills", label: "账单" }, { key: "me", label: "我的" }] as const).map(item => <button key={item.key} aria-current={tab === item.key ? "page" : undefined} onClick={() => setTab(item.key)}>{item.label}</button>)}</nav><button className="current-ledger" data-testid="current-ledger" aria-label={`切换账本，当前：${ledgerName}`} onClick={() => { setError(""); setModal("books"); }}><span>{ledgerName}</span><span aria-hidden="true">⌄</span></button></div>
     <div hidden={tab !== "home"}>
-      <AssistantLedger key={`${state.ledgerKind}-${promptVersion}`} ledgerName={ledgerName} endpoint={AI_API_URL} today={today} report={report} revision={state.revision} hidden={tab !== "home" || showDialog} busy={busy} suggestedPrompt={prompt} onSave={saveAI} onManual={() => openEntry()} />
+      <AssistantLedger key={`${state.ledgerKind}-${promptVersion}`} ledgerState={state} ledgerName={ledgerName} endpoint={AI_API_URL} today={today} report={report} revision={state.revision} hidden={tab !== "home" || showDialog} busy={busy} suggestedPrompt={prompt} onSave={saveAI} onManual={() => openEntry()} onMemorySettings={() => setModal("memory")} readLedgerSnapshot={() => repository.read()} />
       {undo && <div className="saved-receipt" role="status"><span>已记入{ledgerName} · {undo.ids.length} 笔</span><button onClick={() => void commit(() => repository.deleteTransactions(undo.ids, undo.revision), "已撤销这次记账")}>撤销这次记账</button></div>}
       <section className="transactions section-block"><div className="section-title"><h2>最近账目</h2><button data-testid="home-action-bills" onClick={() => setTab("bills")}>查看全部</button></div>{recent.length ? recent.map(tx => <TransactionRow key={tx.id} item={tx} {...rowActions} />) : <EmptyState compact text="说说今天的第一笔收入或花费吧" />}</section>
     </div>
@@ -168,17 +182,18 @@ export default function Home() {
         <section className="bill-summary" aria-label="所选日期收支"><div><span>收入</span><b>{money(report.income)}</b></div><div><span>支出</span><b>{money(report.expense)}</b></div><div><span>收支差额</span><b>{money(report.balance)}</b></div></section>
         <section className="nature-summary" aria-label="支出性质">{Object.entries(report.natureTotals).map(([nature, amount]) => <div key={nature}><span>{nature}</span><strong>{money(amount)}</strong></div>)}</section>
         {!!report.pendingDateCount && <p className="helper">有 {report.pendingDateCount} 笔旧账暂按本机日期计入，建议打开账目核对日期。</p>}
-        <button className="review-range" data-testid="home-action-review" onClick={() => { setPrompt(`帮我复盘 ${range.startDate} 至 ${range.endDate} 的收入、支出和消费结构，给出简短建议。`); setPromptVersion(value => value + 1); setTab("home"); }}>让小满复盘这段时间 <StoryIcon name="arrow" /></button>
+        <button className="review-range" data-testid="home-action-review" onClick={() => { setPrompt(`查询 ${range.startDate} 至 ${range.endDate} 的收支总额。`); setPromptVersion(value => value + 1); setTab("home"); }}>让小满看看这段收支 <StoryIcon name="arrow" /></button>
         <div className="section-title"><h2>明细 <small>{visible.length} 笔</small></h2><div className="recent-filters" aria-label="筛选账目">{FILTERS.map(item => <button key={item.key} aria-pressed={filter === item.key} className={filter === item.key ? "active" : ""} onClick={() => setFilter(item.key)}>{item.label}</button>)}</div></div>
         <section className="transactions bill-list">{visible.length ? visible.map(tx => <TransactionRow key={tx.id} item={tx} {...rowActions} />) : <EmptyState text="这段时间还没有账目" action={() => openEntry()} />}</section>
       </>}
     </>}
     {tab === "me" && <>
       <PageHeader title="我的" subtitle="账本在这台设备，设置按需使用" />
+      <button className="local-data-card" onClick={() => setModal("memory")}><StoryIcon name="leaf" /><span><b>助手记忆与分类偏好</b><small>查看、修改或清除小满记住的内容</small></span></button>
       <button className="local-data-card" data-testid="home-action-assets" onClick={() => setTab("assets")}><StoryIcon name="jar" /><span><b>我的资产</b><small>投资账户与当前市值</small></span></button>
       <button className="local-data-card" onClick={() => setModal("data")}><StoryIcon name="book" /><span><b>本机数据与备份</b><small>导出、恢复和查看表格</small></span></button>
       <details className="optional-settings"><summary>更多设置（选填）</summary><button onClick={() => setModal("goal")}>存款目标</button><button onClick={() => setModal("cycle")}>预算计划</button><p className="helper">记账不需要设置预算。历史周期和计划仍保留；查看任意日期的收支，请到「账单」。</p>{cycle && <p className="helper">已有计划：{cycle.startDate} — {cycle.endDate}</p>}</details>
-      <p className="privacy-note">AI 只在你发送时处理输入与必要的统计摘要。账目保存在本机，换设备前请备份。</p>
+      <p className="privacy-note">需要 AI 理解时会发送输入、最近八条本账本对话及查询条件。账目与记忆保存在本机，账号同步尚未启用；换设备前请分别备份。</p>
     </>}
     {tab === "assets" && <InvestmentAccounts key={state.ledgerKind} state={state} today={today} onBack={() => setTab("me")} onCreateAccount={account => commit(() => repository.saveInvestmentAccount(account, state.revision), "投资账户已创建")} onFlow={flow => commit(() => repository.saveInvestmentFlow(flow, state.revision), flow.type === "contribution" ? "投资投入已记录" : "投资取出已记录")} onMarketValue={(accountId, value, date) => commit(() => repository.saveMarketValue(accountId, value, date, state.revision), "当前市值已更新")} />}
   </fieldset>
@@ -191,9 +206,10 @@ export default function Home() {
       : modal === "add" || modal === "edit" ? <EntryForm key={editing?.id ?? "new"} today={today} item={editing} cycles={state.cycles} onSave={tx => void commit(() => repository.saveTransaction(tx, state.revision, !!editing), editing ? "账目已修改" : `已记入${ledgerName}`)} />
       : modal === "delete" && editing ? <ConfirmPanel mark="删" title="确定删除这笔账？" hint="删除后无法恢复" summary={<><span>{editing.note || editing.category}</span><b>{money(editing.amount)}</b></>} cancel="保留账目" confirm="确认删除" onCancel={() => setModal(null)} onConfirm={() => void commit(() => repository.deleteTransaction(editing.id, state.revision), "账目已删除")} />
       : modal === "data" ? <DataPanel ledgerKind={state.ledgerKind} count={state.transactions.length} totalCount={allTransactionCount} onKind={kind => void switchLedger(kind)} onBackup={exportBackup} onCsv={exportCsv} onImport={event => void chooseBackup(event)} onClear={() => setModal("clear")} />
+      : modal === "memory" ? <AssistantMemoryPanel ledgerKind={state.ledgerKind} ledgerName={ledgerName} onChanged={() => { setPrompt(""); setPromptVersion(value => value + 1); }} />
       : modal === "import" && pendingImport ? <ConfirmPanel mark="入" title="用备份替换这台设备的全部账本？" hint={`将恢复 ${pendingImport.transactions.length + Object.values(pendingImport.otherLedgers).reduce((count, book) => count + book.transactions.length, 0)} 笔账目，个人、家庭、旅行账本均会被备份内容替换。建议先导出备份。`} cancel="暂不导入" confirm="确认恢复" onCancel={() => setModal("data")} onConfirm={() => changeState(pendingImport, "备份已恢复", true)} />
       : modal === "goal" ? <GoalForm saved={state.settings.savingsCurrent} goal={state.settings.savingsGoal} onSave={(current, target) => changeState({ ...state, settings: { ...state.settings, savingsCurrent: current, savingsGoal: target } }, "存款目标已保存")} />
-      : <ConfirmPanel mark="清" title="清空这台设备的全部账本？" hint="个人、家庭、旅行账本中的账目、资产、周期和预算都会删除，无法撤销。建议先导出备份。" cancel="保留数据" confirm="确认清空" onCancel={() => setModal("data")} onConfirm={() => changeState(defaultState(), "全部账本已清空", true)} />}</>}
+      : <ConfirmPanel mark="清" title="清空这台设备的全部账本？" hint="个人、家庭、旅行账本中的账目、资产、周期、预算、对话和分类偏好都会删除，无法撤销。建议先分别导出账本和助手记忆备份。" cancel="保留数据" confirm="确认清空" onCancel={() => setModal("data")} onConfirm={() => changeState(defaultState(), "全部账本与助手记忆已清空", true, true)} />}</>}
     </fieldset>{busy && <p role="status">正在保存…</p>}{error && <div className="error-message" role="alert">{error}<button disabled={busy} onClick={() => void reload()}>重新载入账本</button></div>}
   </section></div>}
   {error && !modal && <div className="error-message" role="alert">{error}<button onClick={() => void reload()}>重新载入账本</button></div>}

@@ -2,6 +2,7 @@ import { createDifyProvider } from "./dify-provider.ts";
 import { reportFacts, toAssistantResult, validateAssistantRequest, validateWorkflowOutput } from "./assistant-contract.ts";
 import { readLimitedJson } from "./question-request.ts";
 import type { AIEnv, QuestionDependencies } from "./question-handler.ts";
+import { conversationResult, validateConversationOutput, validateConversationRequest } from "./conversation-contract.ts";
 
 /** Anonymous draft/answer endpoint. It never receives a ledger store or writes records. */
 export async function handleAssistantRequest(request: Request, env: AIEnv, dependencies: QuestionDependencies): Promise<Response> {
@@ -24,8 +25,9 @@ export async function handleAssistantRequest(request: Request, env: AIEnv, depen
   if (!env.DIFY_API_KEY?.trim() || !env.DIFY_MODEL_VERSION?.trim() || !env.DIFY_WORKFLOW_VERSION?.trim() || !dependencies.checkLimit) return result(503, "not_configured");
   if (!/^application\/json(?:;|$)/i.test(request.headers.get("Content-Type") ?? "")) return result(415, "invalid_content_type");
   let body: unknown;
-  try { body = await readLimitedJson(request, 16384); } catch { return result(400, "invalid_request"); }
-  if (!validateAssistantRequest(body)) return result(400, "invalid_request");
+  try { body = await readLimitedJson(request, 32768); } catch { return result(400, "invalid_request"); }
+  const v2 = validateConversationRequest(body);
+  if (!v2 && !validateAssistantRequest(body)) return result(400, "invalid_request");
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -34,6 +36,18 @@ export async function handleAssistantRequest(request: Request, env: AIEnv, depen
     if (limit.rateLimited) { headers["Retry-After"] = "60"; return result(429, "rate_limited"); }
     const provider = createDifyProvider({ baseUrl: "https://api.dify.ai", apiKey: env.DIFY_API_KEY,
       modelVersion: env.DIFY_MODEL_VERSION, workflowVersion: env.DIFY_WORKFLOW_VERSION, userId: "xiaoman-assistant", fetchFn: dependencies.fetchFn });
+    if (validateConversationRequest(body)) {
+      // No provider-side conversation is shared. Only this client's selected
+      // ledger conversation window travels with this stateless workflow call.
+      const { protocolVersion: _version, context, ...payload } = body;
+      void _version;
+      const value = await Promise.race([provider.generate("assistLedgerV2", payload, context, controller.signal), new Promise<never>((_, reject) => {
+        timer = setTimeout(() => { controller.abort(); reject(new Error("Deadline")); }, dependencies.timeoutMs ?? 25000);
+      })]);
+      if (!validateConversationOutput(value, context.today)) return result(502, "invalid_output");
+      return new Response(JSON.stringify(conversationResult(value, body, { modelVersion: env.DIFY_MODEL_VERSION, workflowVersion: env.DIFY_WORKFLOW_VERSION })), { status: 200, headers });
+    }
+    if (!validateAssistantRequest(body)) return result(400, "invalid_request");
     const payload = { text: body.text.trim(), ...(body.report ? { report: body.report } : {}),
       ...(body.clarification ? { clarification: body.clarification } : {}), referencedFacts: reportFacts(body.report) };
     const value = await Promise.race([provider.generate("assistLedger", payload, body.context, controller.signal), new Promise<never>((_, reject) => {

@@ -152,8 +152,8 @@ test("a stale tab cannot save its manual entry into a book selected by another t
 test.describe("multi-ledger assistant isolation", () => {
   test.skip(process.env.AI_BROWSER_TEST !== "1", "Run against the AI-enabled mock endpoint build");
 
-  test("AI drafts and aggregate requests use only the current book for all three books", async ({ page }) => {
-    const requests: Array<{ report: { transactionCount: number; income: number; expense: number }; [key: string]: unknown }> = [];
+  test("AI drafts and bounded conversation requests use only the current book for all three books", async ({ page }) => {
+    const requests: Array<{ ledgerKind: Kind; protocolVersion: number; memory: { recentMessages: unknown[] }; [key: string]: unknown }> = [];
     await page.route(endpoint, route => {
       const index = requests.length;
       requests.push(route.request().postDataJSON());
@@ -168,9 +168,9 @@ test.describe("multi-ledger assistant isolation", () => {
       await addEntry(page, { amount: String((index + 1) * 10), note: `${names[kind]}私人备注不上传` });
       await send(page, "记录收入和午饭");
       await expect(preview(page)).toContainText("2 笔 · 尚未保存");
-      expect(requests[index].report).toMatchObject({ transactionCount: 1, income: 0, expense: (index + 1) * 10 });
-      expect(Object.keys(requests[index]).sort()).toEqual(["context", "report", "text"]);
-      expect(JSON.stringify(requests[index])).not.toMatch(/私人备注|transactions|otherLedgers|ledgerKind|个人账本|家庭账本|旅行账本/);
+      expect(requests[index]).toMatchObject({ protocolVersion: 2, ledgerKind: kind, memory: { recentMessages: [] } });
+      expect(Object.keys(requests[index]).sort()).toEqual(["context", "defaultRange", "ledgerKind", "memory", "protocolVersion", "text"]);
+      expect(JSON.stringify(requests[index])).not.toMatch(/私人备注|transactions|otherLedgers|ownerId|apiKey|个人账本|家庭账本|旅行账本/);
       await preview(page).getByRole("button", { name: "保存这 2 笔", exact: true }).click();
       await expect(preview(page)).toHaveCount(0);
       await expect(page.locator(".transactions .tx-row:visible")).toHaveCount(3);
@@ -216,7 +216,7 @@ test.describe("multi-ledger assistant isolation", () => {
         delivered?.();
       });
       await openLedger(page);
-      await send(page, "我刚才记的是什么？");
+      await send(page, "请说明小满有哪些功能");
       await expect.poll(() => calls).toBe(1);
       await switchBook(page, "family");
       release?.();
