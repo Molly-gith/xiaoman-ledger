@@ -44,13 +44,18 @@ export type MarketValueSnapshot = {
   marketValue: number;
   date: DateOnly;
 };
-export type LedgerState = {
-  app: "xiaoman-ledger"; version: 3; revision: number;
-  ledgerKind: "personal" | "family" | "travel";
+export type LedgerKind = "personal" | "family" | "travel";
+export type LedgerData = {
   profile: UserProfile | null; activeCycleId: string | null;
   cycles: FinancialCycle[]; budgets: BudgetPlan[]; transactions: Transaction[];
   investmentAccounts: InvestmentAccount[];
   investmentFlows: InvestmentFlow[];
   marketValueSnapshots: MarketValueSnapshot[];
   settings: { monthlyBudget: number; savingsCurrent: number; savingsGoal: number };
+};
+export type LedgerState = LedgerData & {
+  app: "xiaoman-ledger"; version: 4; revision: number;
+  ledgerKind: LedgerKind;
+  /** Exactly the two inactive ledgers. Each value contains data only, never metadata or nesting. */
+  otherLedgers: Partial<Record<LedgerKind, LedgerData>>;
 };

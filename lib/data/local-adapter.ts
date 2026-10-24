@@ -8,16 +8,22 @@ function isAdoptedFallback(raw: string | null): boolean {
   if (raw === null) return false;
   try {
     const parsed = JSON.parse(raw) as { version?: unknown };
-    return parsed.version === 2 || parsed.version === 3;
+    return parsed.version === 2 || parsed.version === 3 || parsed.version === 4;
   } catch { return false; }
 }
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
+    // Old builds explicitly open version 1. Upgrading the existing database
+    // blocks those writers without deleting or renaming any stored ledger.
+    const request = indexedDB.open(DB_NAME, 2);
+    let abandoned = false;
     request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains(STORE_NAME)) request.result.createObjectStore(STORE_NAME); };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      if (abandoned) { request.result.close(); return; }
+      resolve(request.result);
+    };
     request.onerror = () => reject(request.error);
-    request.onblocked = () => reject(new Error("账本被其他页面占用，请关闭其他页面后重试"));
+    request.onblocked = () => { abandoned = true; reject(new Error("账本被旧页面占用，请关闭其他小满页面后重试，原数据已保留")); };
   });
 }
 function legacyState(): LedgerState {
@@ -29,16 +35,18 @@ function legacyState(): LedgerState {
     settings: { monthlyBudget: old.budget ?? 15000, savingsCurrent: old.saved ?? 0, savingsGoal: old.goal ?? 100000 } });
 }
 export function createLocalStore(): LedgerStore {
-  // v2/v3 fallback denotes an adopted fallback ledger. v1 used IDB-first reads and
+  // v2+ fallback denotes an adopted fallback ledger. v1 used IDB-first reads and
   // could leave a stale fallback behind after IDB recovered; preserve that priority.
   let mode: "idb" | "fallback" | null = null;
   return {
     async read() {
       const fallback = localStorage.getItem(FALLBACK_KEY);
-      if (isAdoptedFallback(fallback)) { mode = "fallback"; return normalizeBackup(JSON.parse(fallback!)); }
       let db: IDBDatabase;
       try { db = await openDatabase(); }
-      catch { throw new Error("本机数据库暂时无法打开，原有账本已保留。请重新载入，勿清理浏览器数据。"); }
+      catch (error) {
+        if (error instanceof Error && error.message.includes("旧页面占用")) throw error;
+        throw new Error("本机数据库暂时无法打开，原有账本已保留。请重新载入，勿清理浏览器数据。");
+      }
       mode = "idb";
       try {
         const stored = await new Promise<unknown>((resolve, reject) => {
@@ -47,6 +55,14 @@ export function createLocalStore(): LedgerStore {
           tx.onabort = () => reject(tx.error ?? new Error("本机账本读取失败"));
           tx.onerror = () => reject(tx.error);
         });
+        if (isAdoptedFallback(fallback)) {
+          const fallbackValue = JSON.parse(fallback!);
+          if (typeof stored === "object" && stored !== null && "version" in stored && stored.version === 4 && fallbackValue.version !== 4) {
+            throw new Error("检测到新版账本与旧备用账本同时存在，请先保留两份数据并联系支持，勿清理浏览器数据");
+          }
+          mode = "fallback";
+          return normalizeBackup(fallbackValue);
+        }
         if (stored !== undefined) return normalizeBackup(stored);
         if (fallback !== null) { mode = "fallback"; return normalizeBackup(JSON.parse(fallback)); }
         return legacyState();

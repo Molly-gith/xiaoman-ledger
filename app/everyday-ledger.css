@@ -4,7 +4,18 @@
 .simple-app .topbar { margin-bottom: 22px; }
 .simple-app .storybook-brand h1 { font-size: 28px; }
 .simple-app .storybook-brand p { font-size: 12px; color: #627055; }
-.simple-app .simple-navigation { display: flex; gap: 24px; border-bottom: 1px solid #dce2ce; margin-bottom: 32px; }
+.navigation-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #dce2ce; margin-bottom: 32px; }
+.simple-app .simple-navigation { display: flex; gap: 24px; margin: 0; }
+.current-ledger { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 5px 0 10px 8px; color: #3c6440; font-size: 13px; white-space: nowrap; }
+.current-ledger span:first-child { font-weight: 600; }
+.book-options { display: grid; gap: 10px; }
+.book-options button { display: flex; justify-content: space-between; align-items: center; gap: 16px; min-height: 58px; padding: 12px 16px; border: 1px solid #d1d9c3; border-radius: 12px; color: #3c6440; text-align: left; }
+.book-options button[aria-pressed="true"] { background: #eaf0df; border-color: #6c865a; }
+.book-options b { font-size: 15px; }
+.book-options span { font-size: 12px; }
+.book-picker .helper { margin: 18px 0 0; line-height: 1.7; font-size: 12px; color: #627055; }
+.sheet-ledger { margin: 0 40px 14px 0; font-size: 12px; color: #3c6440; }
+.draft-destination { margin: -6px 0 10px; font-size: 12px; color: #627055; }
 .simple-navigation button { min-height: 44px; padding: 8px 4px 13px; color: #657256; font-size: 15px; border-bottom: 2px solid transparent; }
 .simple-navigation button[aria-current="page"] { color: #344f31; border-bottom-color: #456c3d; font-weight: 700; }
 .assistant-heading { margin: 8px 0 22px; }
@@ -107,7 +118,8 @@
 @media(max-width:720px) {
   .simple-app { padding: 22px 18px 40px; }
   .simple-app .topbar { margin-bottom: 18px; }
-  .simple-app .simple-navigation { margin-bottom: 25px; }
+  .navigation-row { margin-bottom: 25px; }
+  .simple-app .simple-navigation { gap: 14px; }
   .simple-app .storybook-brand h1 { font-size: 25px; }
   .simple-app .storybook-brand>.story-icon { width: 30px; height: 30px; }
   .natural-composer { padding: 14px; }

@@ -10,11 +10,11 @@ import { money } from "./ledger-components";
 
 type Draft = TransactionDraft & { id: string };
 type Props = {
-  endpoint: string; today: string; report: DateRangeSummary; revision: number;
+  endpoint: string; today: string; report: DateRangeSummary; revision: number; ledgerName: string;
   hidden: boolean; busy: boolean; suggestedPrompt: string;
   onSave: (transactions: Transaction[]) => Promise<boolean>; onManual: () => void;
 };
-export function AssistantLedger({ endpoint, today, report, revision, hidden, busy, suggestedPrompt, onSave, onManual }: Props) {
+export function AssistantLedger({ endpoint, today, report, revision, ledgerName, hidden, busy, suggestedPrompt, onSave, onManual }: Props) {
   const [text, setText] = useState(suggestedPrompt);
   const [source, setSource] = useState<"text" | "voice">("text");
   const [working, setWorking] = useState(false);
@@ -81,7 +81,7 @@ export function AssistantLedger({ endpoint, today, report, revision, hidden, bus
   const reset = () => { setDrafts([]); setAnswer(null); setClarification(null); setMessage(""); setText(""); setLastText(""); input.current?.focus(); };
 
   return <section className="ledger-assistant" aria-label="与小满对话">
-    <div className="assistant-heading"><h2>说一句，小满帮你记。</h2><p>收入、花费，也可以问问你的账。</p></div>
+    <div className="assistant-heading"><h2>说一句，小满帮你记。</h2><p>收入、花费，都记在{ledgerName}。</p></div>
     <form className="natural-composer" onSubmit={event => void submit(event)}>
       <label className="sr-only" htmlFor="assistant-question">记账或问小满</label>
       <textarea ref={input} id="assistant-question" placeholder={clarification ? "补充这条信息就好…" : "比如：今天午饭35元，工资到账8000元"} value={text} onChange={event => { setText(event.target.value); setSource("text"); }} maxLength={1000} rows={3} disabled={working || busy} />
@@ -92,7 +92,7 @@ export function AssistantLedger({ endpoint, today, report, revision, hidden, bus
       {working && <p className="thinking" role="status">小满正在整理…</p>}
       {message && <p className="inline-error" role="alert">{message}</p>}
       {clarification && <div className="clarification"><p>{clarification.question}</p><button onClick={reset}>重新说一笔</button></div>}
-      {drafts.length > 0 && <section className="draft-preview" aria-label="待保存账目"><div className="section-title"><h3>整理好了，看看对不对</h3><span>{drafts.length} 笔 · 尚未保存</span></div>
+      {drafts.length > 0 && <section className="draft-preview" aria-label="待保存账目"><div className="section-title"><h3>整理好了，看看对不对</h3><span>{drafts.length} 笔 · 尚未保存</span></div><p className="draft-destination">将记入{ledgerName}</p>
         {drafts.map((draft, index) => <article key={draft.id} className="draft-row">
           <div className="draft-summary"><div><b>{draft.note || draft.category}</b><small>{draft.type === "income" ? "收入" : `支出 · ${draft.nature_suggestion ?? "消费"}`} · {draft.category} · {draft.occurred_at === today ? "今天" : draft.occurred_at}</small></div><strong className={draft.type}>{draft.type === "income" ? "+" : "−"}{money(draft.amount)}</strong><button aria-label={`修改第${index + 1}笔`} onClick={() => setEditing(current => current === draft.id ? null : draft.id)}>{editing === draft.id ? "收起" : "修改"}</button></div>
           {editing === draft.id && <div className="draft-fields">
@@ -106,7 +106,7 @@ export function AssistantLedger({ endpoint, today, report, revision, hidden, bus
         </article>)}
         <div className="draft-actions"><button onClick={reset}>不保存</button><button className="primary" onClick={() => void save()} disabled={busy}>{busy ? "保存中…" : drafts.length === 1 ? "保存这笔" : `保存这 ${drafts.length} 笔`}</button></div>
       </section>}
-      {answer && answer.revision === revision && answer.reportKey === reportKey && <section className="answer-copy" data-testid="ai-answer"><p className="ai-question">{lastText}</p><p className="ai-answer-text">{answer.answer}</p>{answer.nextActions.length > 0 && <ul>{answer.nextActions.map((action, index) => <li key={index}>{action}</li>)}</ul>}<p className="helper">依据 {report.range.startDate} — {report.range.endDate} 的账本统计。可到「账单」调整范围。</p></section>}
+      {answer && answer.revision === revision && answer.reportKey === reportKey && <section className="answer-copy" data-testid="ai-answer"><p className="ai-question">{lastText}</p><p className="ai-answer-text">{answer.answer}</p>{answer.nextActions.length > 0 && <ul>{answer.nextActions.map((action, index) => <li key={index}>{action}</li>)}</ul>}<p className="helper">依据{ledgerName} {report.range.startDate} — {report.range.endDate} 的统计。可到「账单」调整范围。</p></section>}
     </div>
   </section>;
 }

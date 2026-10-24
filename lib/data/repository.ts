@@ -1,6 +1,6 @@
-import type { BudgetPlan, FinancialCycle, InvestmentAccount, InvestmentFlow, LedgerState, Transaction } from "../domain/types.ts";
-import { calendarMonthCycle, calculateFinance, cents, parseDate, transactionDay } from "../domain/finance.ts";
-import { normalizeBackup, normalizeInvestmentAccount, normalizeInvestmentFlow, normalizeMarketValueSnapshot, normalizeTransaction } from "./schema.ts";
+import type { BudgetPlan, FinancialCycle, InvestmentAccount, InvestmentFlow, LedgerKind, LedgerState, Transaction } from "../domain/types.ts";
+import { calendarMonthCycle, cents, parseDate, transactionDay } from "../domain/finance.ts";
+import { LEDGER_KINDS, ledgerDataOf, normalizeBackup, normalizeInvestmentAccount, normalizeInvestmentFlow, normalizeMarketValueSnapshot, normalizeTransaction } from "./schema.ts";
 
 export interface LedgerStore {
   read(): Promise<LedgerState>;
@@ -9,6 +9,7 @@ export interface LedgerStore {
 }
 export interface LedgerRepository {
   read(): Promise<LedgerState>;
+  switchLedger(kind: LedgerKind, revision: number): Promise<LedgerState>;
   ensureCurrentCycle(today: string): Promise<LedgerState>;
   saveCycle(cycle: FinancialCycle, plan: BudgetPlan, revision: number): Promise<LedgerState>;
   replaceCurrentCycle(cycle: FinancialCycle, plan: BudgetPlan, revision: number): Promise<LedgerState>;
@@ -22,28 +23,7 @@ export interface LedgerRepository {
   replace(state: LedgerState, revision: number): Promise<LedgerState>;
 }
 export function validateLedger(state: LedgerState): LedgerState {
-  const normalized = normalizeBackup(state);
-  for (const tx of normalized.transactions) {
-    if (tx.cycleId) {
-      const cycle = normalized.cycles.find(c => c.id === tx.cycleId)!;
-      const day = transactionDay(tx);
-      if (tx.dateNeedsConfirmation) {
-        // Preserve the previously confirmed cycle and original instant. Missing
-        // source timezone cannot be reconstructed safely; ask for a calendar date.
-        const instant = Date.parse(tx.date);
-        const first = Date.parse(`${cycle.startDate}T00:00:00Z`) - 14 * 3600000;
-        const last = Date.parse(`${cycle.nextSalaryDate}T00:00:00Z`) + 12 * 3600000;
-        if (instant < first || instant >= last) throw new Error("旧账时间与原财务周期不一致，请核对备份");
-      } else if (day < cycle.startDate || day > cycle.endDate) throw new Error("账目日期不属于所选周期");
-    }
-  }
-  for (const cycle of normalized.cycles) {
-    const metrics = calculateFinance(cycle, normalized.budgets.find(b => b.cycleId === cycle.id)!, normalized.transactions, normalized.investmentFlows);
-    // Legacy periods keep their original reserve invariant. Nature-based periods no
-    // longer have a reserve bucket at all.
-    if (metrics.model === "legacy" && metrics.reserveRemaining < 0) throw new Error("必要预留额度不足，请先调整预算，或将超出部分另记为可变支出");
-  }
-  return normalized;
+  return normalizeBackup(state);
 }
 export function createRepository(store: LedgerStore): LedgerRepository {
   function prepareTransaction(value: Transaction): Transaction {
@@ -58,9 +38,9 @@ export function createRepository(store: LedgerStore): LedgerRepository {
     return tx;
   }
   async function mutate(revision: number, change: (state: LedgerState) => LedgerState) {
-    const state = await store.read();
+    const state = validateLedger(await store.read());
     if (state.revision !== revision) throw new Error("账本已在其他页面更新，请重新载入后重试");
-    const next = validateLedger({ ...change(structuredClone(state)), version: 3, revision: revision + 1 });
+    const next = validateLedger({ ...change(structuredClone(state)), version: 4, revision: revision + 1 });
     await store.commit(next, revision); return next;
   }
   async function ensureCurrentCycle(today: string): Promise<LedgerState> {
@@ -90,6 +70,15 @@ export function createRepository(store: LedgerStore): LedgerRepository {
   }
   return {
     read: () => store.read().then(validateLedger),
+    switchLedger: (kind, revision) => mutate(revision, state => {
+      if (!LEDGER_KINDS.includes(kind)) throw new Error("账本用途无效");
+      if (kind === state.ledgerKind) return state;
+      const destination = state.otherLedgers[kind];
+      if (!destination) throw new Error("目标账本不存在，请重新载入");
+      const otherLedgers = { ...state.otherLedgers, [state.ledgerKind]: ledgerDataOf(state) };
+      delete otherLedgers[kind];
+      return { ...state, ...destination, ledgerKind: kind, otherLedgers };
+    }),
     ensureCurrentCycle,
     saveCycle: (cycle, plan, revision) => mutate(revision, state => ({ ...state,
       profile: (cycle.cycleType ?? "salary_based") === "salary_based" ? { salaryDay: cycle.salaryDay } : null,
