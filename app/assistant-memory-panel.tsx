@@ -2,10 +2,11 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import type { LedgerKind } from "../lib/domain/types";
 import { EXPENSE_CATEGORIES, type PreferenceRule } from "../lib/domain/assistant-preferences";
-import { createAssistantMemoryRepository, validateOwnerMemoryBackup, MAX_MEMORY_BACKUP_BYTES, type MemoryState, type OwnerMemoryBackup, type MemoryRevisions } from "../lib/data/assistant-memory";
+import { createAssistantMemoryRepository, validateOwnerMemoryBackup, MAX_MEMORY_BACKUP_BYTES, type AssistantMemoryRepository, type MemoryState, type OwnerMemoryBackup, type MemoryRevisions } from "../lib/data/assistant-memory";
 
-export function AssistantMemoryPanel({ ledgerKind, ledgerName, onChanged }: { ledgerKind: LedgerKind; ledgerName: string; onChanged: () => void }) {
-  const [repository] = useState(createAssistantMemoryRepository);
+export function AssistantMemoryPanel({ ledgerKind, ledgerName, onChanged, memoryRepository, memoryOwnerId, cloud = false }: { ledgerKind: LedgerKind; ledgerName: string; onChanged: () => void; memoryRepository?: AssistantMemoryRepository; memoryOwnerId?: string; cloud?: boolean }) {
+  const [defaultRepository] = useState(createAssistantMemoryRepository);
+  const repository = memoryRepository ?? defaultRepository;
   const [state, setState] = useState<MemoryState | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -15,14 +16,23 @@ export function AssistantMemoryPanel({ ledgerKind, ledgerName, onChanged }: { le
   const [pending, setPending] = useState<{ backup: OwnerMemoryBackup; revisions: MemoryRevisions } | null>(null);
   useEffect(() => {
     let active = true;
-    void repository.getLocalOwnerId().then(owner => repository.read(owner, ledgerKind)).then(value => { if (active) setState(value); }).catch(e => { if (active) setError(e instanceof Error ? e.message : "记忆读取失败"); });
+    void (memoryOwnerId ? Promise.resolve(memoryOwnerId) : repository.getLocalOwnerId()).then(owner => repository.read(owner, ledgerKind)).then(value => { if (active) setState(value); }).catch(e => { if (active) setError(e instanceof Error ? e.message : "记忆读取失败"); });
     return () => { active = false; };
-  }, [repository, ledgerKind]);
+  }, [repository, memoryOwnerId, ledgerKind]);
   async function mutate(action: () => Promise<MemoryState>, message: string) {
     if (busy) return;
     setBusy(true); setError(""); setNotice("");
     try { setState(await action()); setEditing(null); setClear(false); setNotice(message); onChanged(); }
     catch (e) { setError(e instanceof Error ? e.message : "尚未保存，请重试"); }
+    finally { setBusy(false); }
+  }
+  async function reloadMemory() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const owner = memoryOwnerId ?? await repository.getLocalOwnerId();
+      setState(await repository.read(owner, ledgerKind)); setError("");
+    } catch (failure) { setError(failure instanceof Error ? failure.message : "记忆暂时无法读取，请关闭面板后重试。"); }
     finally { setBusy(false); }
   }
   async function exportMemory() {
@@ -39,7 +49,7 @@ export function AssistantMemoryPanel({ ledgerKind, ledgerName, onChanged }: { le
     try {
       if (file.size > MAX_MEMORY_BACKUP_BYTES) throw Error("请选择不超过 2 MB 的助手记忆备份");
       const backup: unknown = JSON.parse(await file.text());
-      if (!validateOwnerMemoryBackup(backup)) throw Error("这不是有效的助手记忆备份；账本备份请到本机数据中导入。");
+      if (!validateOwnerMemoryBackup(backup)) throw Error("这不是有效的助手记忆备份；账本备份请到数据与备份中导入。");
       const all = await repository.readOwner(state.ownerId);
       setPending({ backup, revisions: { personal: all.personal.revision, family: all.family.revision, travel: all.travel.revision } }); setError("");
     } catch (e) { setError(e instanceof Error ? e.message : "备份无法读取"); }
@@ -55,9 +65,9 @@ export function AssistantMemoryPanel({ ledgerKind, ledgerName, onChanged }: { le
     event.preventDefault(); if (!state || !editing) return;
     void mutate(() => repository.upsertPreference(state.ownerId, ledgerKind, { ...editing, keyword: editing.keyword.trim() }, state.revision), "分类偏好已保存，仅影响以后生成的新草稿。");
   }
-  return <section className="memory-panel" aria-label="助手记忆与偏好"><h2>记忆与偏好</h2><p className="helper">{ledgerName} · 本机记忆，尚未启用账号同步</p>
+  return <section className="memory-panel" aria-label="助手记忆与偏好"><h2>记忆与偏好</h2><p className="helper">{ledgerName} · {cloud ? "当前账号的云端记忆" : "本机记忆，不自动上传"}</p>
     {!state && !error && <p role="status">正在读取记忆…</p>}
-    {error && <p className="inline-error" role="alert">{error}<button onClick={() => { if (state) void repository.read(state.ownerId, ledgerKind).then(value => { setState(value); setError(""); }).catch(() => setError("记忆暂时无法读取，请关闭面板后重试。")); }}>重新读取</button></p>}
+    {error && <p className="inline-error" role="alert">{error}<button disabled={busy} onClick={() => void reloadMemory()}>重新读取</button></p>}
     {notice && <p role="status">{notice}</p>}
     {state && <fieldset className="app-content" disabled={busy}>
       <div className="memory-section"><h3>我记住的分类偏好</h3><p className="helper">只用于这个账本的新支出草稿。你本次说的要求优先，收入不受影响。</p>

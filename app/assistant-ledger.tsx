@@ -8,7 +8,7 @@ import { converse } from "../lib/ai/conversation-client";
 import type { ConversationResult, PreferenceProposal } from "../lib/ai/conversation-contract";
 import { executeLedgerQuery, resolveLedgerQuery, type QueryPlan } from "../lib/domain/ledger-query";
 import { applyPreferenceToDraft, parsePreferenceProposal } from "../lib/domain/assistant-preferences";
-import { createAssistantMemoryRepository, type ConversationMessage, type MemoryState } from "../lib/data/assistant-memory";
+import { createAssistantMemoryRepository, type AssistantMemoryRepository, type ConversationMessage, type MemoryState } from "../lib/data/assistant-memory";
 import { validateAssistantDraft } from "../lib/ai/assistant-contract";
 import { VoiceInput } from "./voice-note";
 import { money } from "./ledger-components";
@@ -17,10 +17,12 @@ type Draft = TransactionDraft & { id: string; preferenceReason?: string | null }
 type Props = {
   endpoint: string; today: string; report: DateRangeSummary; revision: number; ledgerName: string; ledgerState: LedgerState;
   hidden: boolean; busy: boolean; suggestedPrompt: string;
+  memoryRepository?: AssistantMemoryRepository; memoryOwnerId?: string; cloud?: boolean;
   onSave: (transactions: Transaction[]) => Promise<boolean>; onManual: () => void; onMemorySettings: () => void; readLedgerSnapshot: () => Promise<LedgerState>;
 };
-export function AssistantLedger({ endpoint, today, report, revision, ledgerName, ledgerState, hidden, busy, suggestedPrompt, onSave, onManual, onMemorySettings, readLedgerSnapshot }: Props) {
-  const [memoryRepository] = useState(createAssistantMemoryRepository);
+export function AssistantLedger({ endpoint, today, report, revision, ledgerName, ledgerState, hidden, busy, suggestedPrompt, onSave, onManual, onMemorySettings, readLedgerSnapshot, memoryRepository: providedMemory, memoryOwnerId, cloud = false }: Props) {
+  const [defaultMemory] = useState(createAssistantMemoryRepository);
+  const memoryRepository = providedMemory ?? defaultMemory;
   const [memory, setMemory] = useState<MemoryState | null>(null);
   const [memoryError, setMemoryError] = useState("");
   const [preference, setPreference] = useState<PreferenceProposal | null>(null);
@@ -44,11 +46,11 @@ export function AssistantLedger({ endpoint, today, report, revision, ledgerName,
 
   useEffect(() => {
     let active = true;
-    void memoryRepository.getLocalOwnerId().then(owner => memoryRepository.read(owner, ledgerState.ledgerKind)).then(value => {
+    void (memoryOwnerId ? Promise.resolve(memoryOwnerId) : memoryRepository.getLocalOwnerId()).then(owner => memoryRepository.read(owner, ledgerState.ledgerKind)).then(value => {
       if (active) { memoryLatest.current = value; setMemory(value); setClarification(value.clarification); }
     }).catch(e => { if (active) setMemoryError(e instanceof Error ? e.message : "对话记忆读取失败，请重新载入。"); });
     return () => { active = false; };
-  }, [memoryRepository, ledgerState.ledgerKind]);
+  }, [memoryRepository, memoryOwnerId, ledgerState.ledgerKind]);
   useEffect(() => {
     const end = conversationEnd.current;
     if (end?.parentElement) end.parentElement.scrollTop = end.parentElement.scrollHeight;
@@ -162,7 +164,7 @@ export function AssistantLedger({ endpoint, today, report, revision, ledgerName,
       <textarea ref={input} id="assistant-question" placeholder={clarification ? "补充这条信息就好…" : "比如：今天午饭35元，工资到账8000元"} value={text} onChange={event => { setText(event.target.value); setSource("text"); }} maxLength={1000} rows={3} disabled={working || busy} />
       <div className="composer-tools"><VoiceInput disabled={hidden || working || busy} onResult={value => { setText(current => current ? `${current} ${value}` : value); setSource("voice"); input.current?.focus(); }} /><div>{working ? <button key="cancel-request" type="button" onClick={event => { event.preventDefault(); request.current?.abort(); request.current = null; setWorking(false); setMessage("已取消，文字保留。 "); }}>取消</button> : <button key="send-request" className="primary" type="submit" aria-label="发送给小满" disabled={!text.trim() || busy || !memory || !!memoryError}>发送</button>}</div></div>
     </form>
-    <div className="composer-foot"><button data-testid="home-action-add" onClick={onManual}>手动记一笔</button><button onClick={onMemorySettings}>记忆与偏好</button><details><summary>数据怎么使用</summary><p>常用查账在本机完成。需要模型理解时，本次文字、当前账本最近八条对话和查询条件会交给 Dify 与模型；不自动发送全部逐笔账目。语音由浏览器识别成文字。账目、最近四十条对话和偏好保存在本机，尚未启用账号同步。</p></details></div>
+    <div className="composer-foot"><button data-testid="home-action-add" onClick={onManual}>手动记一笔</button><button onClick={onMemorySettings}>记忆与偏好</button><details><summary>数据怎么使用</summary><p>常用查账由程序计算。需要模型理解时，本次文字、当前账本最近八条对话和查询条件会交给 Dify 与模型；不自动发送全部逐笔账目。语音由浏览器识别成文字。{cloud ? "当前账目、最近四十条对话和偏好保存在这个账号的云端，需要联网读取和保存。" : "当前账目、最近四十条对话和偏好保存在本机，登录不会自动上传旧账。"}</p></details></div>
     <div className="assistant-result" aria-live="polite" aria-busy={working}>
       {working && <p className="thinking" role="status">小满正在整理…</p>}
       {message && <p className="inline-error" role="alert">{message}</p>}
@@ -183,8 +185,8 @@ export function AssistantLedger({ endpoint, today, report, revision, ledgerName,
         </article>)}
         <div className="draft-actions"><button onClick={reset}>不保存</button><button className="primary" onClick={() => void save()} disabled={busy}>{busy ? "保存中…" : drafts.length === 1 ? "保存这笔" : `保存这 ${drafts.length} 笔`}</button></div>
       </section>}
-      {answer && answer.revision === revision && answer.reportKey === reportKey && <section className="answer-copy" data-testid="ai-answer"><p className="ai-question">{lastText}</p><p className="ai-answer-text">{answer.answer}</p><p className="helper">{answer.query ? "金额由本机账目计算。可以接着问，也可以到「账单」核对。" : "小满的使用说明；没有修改账目。"}</p></section>}
+      {answer && answer.revision === revision && answer.reportKey === reportKey && <section className="answer-copy" data-testid="ai-answer"><p className="ai-question">{lastText}</p><p className="ai-answer-text">{answer.answer}</p><p className="helper">{answer.query ? `金额由${cloud ? "当前账目" : "本机账目"}计算。可以接着问，也可以到「账单」核对。` : "小满的使用说明；没有修改账目。"}</p></section>}
     </div>
-    {!!memory?.conversation.length && <details className="conversation-history" open={!answer && !drafts.length && !preference && !clarification}><summary>对话记录 · {ledgerName} <span>{memory.conversation.length} 条</span></summary><p className="helper">以下为当时的回答；账目变动后可重新询问。最近四十条保存在本机。</p><div className="conversation-log" role="log" aria-label={`${ledgerName}对话记录`}>{memory.conversation.map(m => <article key={m.id} className={`conversation-message ${m.role}`}><small>{m.role === "user" ? "我" : "小满"} · {new Date(m.createdAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</small><p>{m.content}</p></article>)}<div ref={conversationEnd} /></div></details>}
+    {!!memory?.conversation.length && <details className="conversation-history" open={!answer && !drafts.length && !preference && !clarification}><summary>对话记录 · {ledgerName} <span>{memory.conversation.length} 条</span></summary><p className="helper">以下为当时的回答；账目变动后可重新询问。最近四十条保存在{cloud ? "当前账号的云端" : "本机"}。</p><div className="conversation-log" role="log" aria-label={`${ledgerName}对话记录`}>{memory.conversation.map(m => <article key={m.id} className={`conversation-message ${m.role}`}><small>{m.role === "user" ? "我" : "小满"} · {new Date(m.createdAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</small><p>{m.content}</p></article>)}<div ref={conversationEnd} /></div></details>}
   </section>;
 }

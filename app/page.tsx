@@ -3,13 +3,13 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import type { LedgerKind, LedgerState, Transaction } from "../lib/domain/types";
 import { localDate } from "../lib/domain/finance";
 import { calendarMonthRange, createDateRange, summarizeDateRange, transactionsInDateRange } from "../lib/domain/date-range";
-import { createLocalRepository } from "../lib/data/local-adapter";
 import { defaultState, encodeBackup, normalizeBackup } from "../lib/data/schema";
 import { CycleForm, EntryForm } from "./ledger-forms";
 import { InvestmentAccounts } from "./investment-accounts";
 import { AssistantLedger } from "./assistant-ledger";
 import { AssistantMemoryPanel } from "./assistant-memory-panel";
-import { createAssistantMemoryRepository } from "../lib/data/assistant-memory";
+import { AccountShell, type WorkspaceScope } from "./account-shell";
+import { AccountPanel } from "./account-panel";
 import { StoryIcon } from "./story-icons";
 import { ConfirmPanel, DataPanel, EmptyState, GoalForm, LEDGER_KINDS, LoadingScreen, PageHeader, TransactionRow, money } from "./ledger-components";
 
@@ -25,7 +25,12 @@ function download(content: string, type: string, filename: string) {
 }
 
 export default function Home() {
-  const [repository] = useState(createLocalRepository);
+  return <AccountShell>{scope => <LedgerHome scope={scope} />}</AccountShell>;
+}
+
+function LedgerHome({ scope }: { scope: WorkspaceScope }) {
+  const { repository, memoryRepository, memoryOwnerId, isCurrent } = scope;
+  const cloud = scope.mode === "account";
   const [state, setState] = useState<LedgerState | null>(null);
   const [today, setToday] = useState(() => localDate());
   const [tab, setTab] = useState<Tab>("home");
@@ -49,10 +54,10 @@ export default function Home() {
 
   useEffect(() => {
     let active = true;
-    void repository.read().then(value => { if (active) setState(value); }).catch(e => { if (active) setError(e instanceof Error ? e.message : "账本读取失败"); });
+    void repository.read().then(value => { if (active && isCurrent()) setState(value); }).catch(e => { if (active && isCurrent()) setError(e instanceof Error ? e.message : "账本读取失败"); });
     const timer = setInterval(() => setToday(localDate()), 30000);
     return () => { active = false; clearInterval(timer); };
-  }, [repository]);
+  }, [repository, isCurrent]);
   useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [tab]);
   useEffect(() => {
     if (!toast) return;
@@ -89,20 +94,25 @@ export default function Home() {
   }, [showDialog, modal]);
 
   async function commit(action: () => Promise<LedgerState>, message: string): Promise<boolean> {
-    if (saving.current) return false;
+    if (saving.current || !isCurrent()) return false;
     saving.current = true; setBusy(true); setError("");
     try {
       const next = await action();
+      if (!isCurrent()) return false;
       setState(next); setModal(null); setEditing(null); setPendingImport(null); setUndo(null); setToast(message);
       return true;
-    } catch (e) { setError(e instanceof Error ? e.message : "保存失败，输入内容已保留"); return false; }
+    } catch (e) { if (isCurrent()) setError(e instanceof Error ? e.message : "保存失败，输入内容已保留"); return false; }
     finally { saving.current = false; setBusy(false); }
   }
   async function reload() {
-    try { setState(await repository.read()); setError(""); setModal(null); setUndo(null); setPrompt(""); setPromptVersion(value => value + 1); }
-    catch (e) { setError(e instanceof Error ? e.message : "读取失败"); }
+    if (!isCurrent() || saving.current) return false;
+    // A delayed read must not replace a save that completed while it was in flight.
+    saving.current = true; setBusy(true);
+    try { const next = await repository.read(); if (!isCurrent()) return false; setState(next); setError(""); setModal(null); setUndo(null); setPrompt(""); setPromptVersion(value => value + 1); return true; }
+    catch (e) { if (isCurrent()) setError(e instanceof Error ? e.message : "读取失败"); return false; }
+    finally { saving.current = false; setBusy(false); }
   }
-  if (!state) return error ? <main className="app-shell"><PageHeader title="账本暂时无法读取" subtitle="原有数据已保留" /><p role="alert">{error}</p><button className="primary" onClick={() => void reload()}>重新载入</button></main> : <LoadingScreen text="正在打开本地账本" />;
+  if (!state) return error ? <main className="app-shell simple-app"><PageHeader title="账本暂时无法读取" subtitle={cloud ? "仍是当前账号，未切换到本机账本" : "原有数据已保留"} /><p role="alert">{error}</p><button className="primary" onClick={() => void reload()}>重新载入</button>{cloud && <AccountPanel email={scope.email} cloud accountId={scope.accountId} isCurrent={isCurrent} onRefresh={reload} />}</main> : <LoadingScreen text={cloud ? "正在读取云端账本" : "正在打开本地账本"} />;
 
   let range = calendarMonthRange(month);
   let rangeError = "";
@@ -124,11 +134,13 @@ export default function Home() {
     // Ledger CAS must succeed before any other store is touched: a stale page
     // cannot erase memories while its ledger replacement is rejected.
     const savedLedger = await repository.replace(next, state.revision);
+    if (!isCurrent()) throw Error("账号已切换，请在当前账号重新载入。");
     if (resetAssistant) {
       setState(savedLedger); setPrompt(""); setPromptVersion(value => value + 1);
       try {
-        const memories = createAssistantMemoryRepository(), owner = await memories.getLocalOwnerId();
-        if (clearAllMemory) await memories.clearOwner(owner); else await memories.clearOwnerConversations(owner);
+        const owner = memoryOwnerId ?? await memoryRepository.getLocalOwnerId();
+        if (!isCurrent()) throw Error("账号已切换");
+        if (clearAllMemory) await memoryRepository.clearOwner(owner); else await memoryRepository.clearOwnerConversations(owner);
       } catch { throw Error("账本内容已经更新，但助手记忆清理失败。请到「记忆与偏好」清除旧对话；清空全部数据时也需删除原有偏好。不要重复导入或清空账目。"); }
     }
     return savedLedger;
@@ -144,7 +156,7 @@ export default function Home() {
   };
   const exportBackup = () => {
     const content = JSON.stringify({ ...encodeBackup(state), exportedAt: new Date().toISOString() }, null, 2);
-    if (new Blob([content]).size > MAX_BACKUP_BYTES) { setError("完整备份超过 50 MB，暂时无法导出。账目仍保留在本机，请勿清理浏览器数据。"); return; }
+    if (new Blob([content]).size > MAX_BACKUP_BYTES) { setError(`完整备份超过 50 MB，暂时无法导出。账目仍保留在${cloud ? "当前账号的云端" : "本机"}，请勿清空。`); return; }
     download(content, "application/json", `xiaoman-ledger-backup-${today}.json`);
   };
   const exportCsv = () => {
@@ -154,7 +166,7 @@ export default function Home() {
   };
   const chooseBackup = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]; event.target.value = ""; if (!file) return;
-    try { if (file.size > MAX_BACKUP_BYTES) throw new Error("请选择不超过 50 MB 的备份"); setPendingImport(normalizeBackup(JSON.parse(await file.text()))); setModal("import"); }
+    try { if (file.size > MAX_BACKUP_BYTES) throw new Error("请选择不超过 50 MB 的备份"); const imported = normalizeBackup(JSON.parse(await file.text())); if (!isCurrent()) return; setPendingImport(imported); setModal("import"); }
     catch (e) { setError(e instanceof Error ? e.message : "备份无效"); }
   };
   const saveAI = async (transactions: Transaction[]) => {
@@ -164,10 +176,12 @@ export default function Home() {
   };
 
   return <main ref={shell} className="app-shell simple-app"><fieldset className="app-content" disabled={busy} inert={showDialog}>
-    <header className="topbar"><div className="storybook-brand"><StoryIcon name="leaf" /><div><h1>小满</h1><p>把日子，过成喜欢的样子</p></div></div><button className="avatar" onClick={() => setModal("data")} aria-label="本地数据与备份"><StoryIcon name="lock" /></button></header>
+    <header className="topbar"><div className="storybook-brand"><StoryIcon name="leaf" /><div><h1>小满</h1><p>把日子，过成喜欢的样子</p></div></div><button className="avatar" onClick={() => setModal("data")} aria-label={cloud ? "云端数据与备份" : "本地数据与备份"}><StoryIcon name="lock" /></button></header>
+    {cloud && <p className="workspace-label" data-testid="account-workspace">云端账本 · {scope.email ?? "当前账号"}</p>}
     <div className="navigation-row"><nav className="simple-navigation" aria-label="主导航">{([{ key: "home", label: "记账" }, { key: "bills", label: "账单" }, { key: "me", label: "我的" }] as const).map(item => <button key={item.key} aria-current={tab === item.key ? "page" : undefined} onClick={() => setTab(item.key)}>{item.label}</button>)}</nav><button className="current-ledger" data-testid="current-ledger" aria-label={`切换账本，当前：${ledgerName}`} onClick={() => { setError(""); setModal("books"); }}><span>{ledgerName}</span><span aria-hidden="true">⌄</span></button></div>
     <div hidden={tab !== "home"}>
-      <AssistantLedger key={`${state.ledgerKind}-${promptVersion}`} ledgerState={state} ledgerName={ledgerName} endpoint={AI_API_URL} today={today} report={report} revision={state.revision} hidden={tab !== "home" || showDialog} busy={busy} suggestedPrompt={prompt} onSave={saveAI} onManual={() => openEntry()} onMemorySettings={() => setModal("memory")} readLedgerSnapshot={() => repository.read()} />
+      <AssistantLedger key={`${state.ledgerKind}-${promptVersion}`} memoryRepository={memoryRepository} memoryOwnerId={memoryOwnerId} cloud={cloud} ledgerState={state} ledgerName={ledgerName} endpoint={AI_API_URL} today={today} report={report} revision={state.revision} hidden={tab !== "home" || showDialog} busy={busy} suggestedPrompt={prompt} onSave={saveAI} onManual={() => openEntry()} onMemorySettings={() => setModal("memory")} readLedgerSnapshot={() => repository.read()} />
+      {cloud && allTransactionCount === 0 && <p className="account-empty">这个账号还没有账目。本机旧账没有自动上传；可在「我的」查看迁移方法。</p>}
       {undo && <div className="saved-receipt" role="status"><span>已记入{ledgerName} · {undo.ids.length} 笔</span><button onClick={() => void commit(() => repository.deleteTransactions(undo.ids, undo.revision), "已撤销这次记账")}>撤销这次记账</button></div>}
       <section className="transactions section-block"><div className="section-title"><h2>最近账目</h2><button data-testid="home-action-bills" onClick={() => setTab("bills")}>查看全部</button></div>{recent.length ? recent.map(tx => <TransactionRow key={tx.id} item={tx} {...rowActions} />) : <EmptyState compact text="说说今天的第一笔收入或花费吧" />}</section>
     </div>
@@ -188,12 +202,13 @@ export default function Home() {
       </>}
     </>}
     {tab === "me" && <>
-      <PageHeader title="我的" subtitle="账本在这台设备，设置按需使用" />
+      <PageHeader title="我的" subtitle={cloud ? "正在使用当前账号的云端账本" : "账本在这台设备，设置按需使用"} />
+      <AccountPanel email={scope.email} cloud={cloud} accountId={scope.accountId} isCurrent={isCurrent} onRefresh={reload} />
       <button className="local-data-card" onClick={() => setModal("memory")}><StoryIcon name="leaf" /><span><b>助手记忆与分类偏好</b><small>查看、修改或清除小满记住的内容</small></span></button>
       <button className="local-data-card" data-testid="home-action-assets" onClick={() => setTab("assets")}><StoryIcon name="jar" /><span><b>我的资产</b><small>投资账户与当前市值</small></span></button>
-      <button className="local-data-card" onClick={() => setModal("data")}><StoryIcon name="book" /><span><b>本机数据与备份</b><small>导出、恢复和查看表格</small></span></button>
+      <button className="local-data-card" onClick={() => setModal("data")}><StoryIcon name="book" /><span><b>{cloud ? "云端数据与备份" : "本机数据与备份"}</b><small>导出、恢复和查看表格</small></span></button>
       <details className="optional-settings"><summary>更多设置（选填）</summary><button onClick={() => setModal("goal")}>存款目标</button><button onClick={() => setModal("cycle")}>预算计划</button><p className="helper">记账不需要设置预算。历史周期和计划仍保留；查看任意日期的收支，请到「账单」。</p>{cycle && <p className="helper">已有计划：{cycle.startDate} — {cycle.endDate}</p>}</details>
-      <p className="privacy-note">需要 AI 理解时会发送输入、最近八条本账本对话及查询条件。账目与记忆保存在本机，账号同步尚未启用；换设备前请分别备份。</p>
+      <p className="privacy-note">需要 AI 理解时会发送输入、最近八条本账本对话及查询条件。{cloud ? "当前账目与助手记忆保存在这个账号的云端；退出后可继续使用原有本机账本。" : "当前账目与助手记忆保存在本机；登录不会自动上传旧账，换设备前请分别备份。"}</p>
     </>}
     {tab === "assets" && <InvestmentAccounts key={state.ledgerKind} state={state} today={today} onBack={() => setTab("me")} onCreateAccount={account => commit(() => repository.saveInvestmentAccount(account, state.revision), "投资账户已创建")} onFlow={flow => commit(() => repository.saveInvestmentFlow(flow, state.revision), flow.type === "contribution" ? "投资投入已记录" : "投资取出已记录")} onMarketValue={(accountId, value, date) => commit(() => repository.saveMarketValue(accountId, value, date, state.revision), "当前市值已更新")} />}
   </fieldset>
@@ -205,11 +220,11 @@ export default function Home() {
       {modal === "cycle" ? <CycleForm key={cycle?.id ?? "first"} today={today} cycle={!expired ? cycle : undefined} plan={!expired ? plan : undefined} allowCycleChange initialCycleType={cycle?.cycleType ?? "calendar_month"} salaryDay={state.profile?.salaryDay} onSave={(c, p) => void commit(() => cycle && !expired ? repository.replaceCurrentCycle(c, p, state.revision) : repository.saveCycle(c, p, state.revision), "预算计划已保存")} />
       : modal === "add" || modal === "edit" ? <EntryForm key={editing?.id ?? "new"} today={today} item={editing} cycles={state.cycles} onSave={tx => void commit(() => repository.saveTransaction(tx, state.revision, !!editing), editing ? "账目已修改" : `已记入${ledgerName}`)} />
       : modal === "delete" && editing ? <ConfirmPanel mark="删" title="确定删除这笔账？" hint="删除后无法恢复" summary={<><span>{editing.note || editing.category}</span><b>{money(editing.amount)}</b></>} cancel="保留账目" confirm="确认删除" onCancel={() => setModal(null)} onConfirm={() => void commit(() => repository.deleteTransaction(editing.id, state.revision), "账目已删除")} />
-      : modal === "data" ? <DataPanel ledgerKind={state.ledgerKind} count={state.transactions.length} totalCount={allTransactionCount} onKind={kind => void switchLedger(kind)} onBackup={exportBackup} onCsv={exportCsv} onImport={event => void chooseBackup(event)} onClear={() => setModal("clear")} />
-      : modal === "memory" ? <AssistantMemoryPanel ledgerKind={state.ledgerKind} ledgerName={ledgerName} onChanged={() => { setPrompt(""); setPromptVersion(value => value + 1); }} />
-      : modal === "import" && pendingImport ? <ConfirmPanel mark="入" title="用备份替换这台设备的全部账本？" hint={`将恢复 ${pendingImport.transactions.length + Object.values(pendingImport.otherLedgers).reduce((count, book) => count + book.transactions.length, 0)} 笔账目，个人、家庭、旅行账本均会被备份内容替换。建议先导出备份。`} cancel="暂不导入" confirm="确认恢复" onCancel={() => setModal("data")} onConfirm={() => changeState(pendingImport, "备份已恢复", true)} />
+      : modal === "data" ? <DataPanel cloud={cloud} ledgerKind={state.ledgerKind} count={state.transactions.length} totalCount={allTransactionCount} onKind={kind => void switchLedger(kind)} onBackup={exportBackup} onCsv={exportCsv} onImport={event => void chooseBackup(event)} onClear={() => setModal("clear")} />
+      : modal === "memory" ? <AssistantMemoryPanel memoryRepository={memoryRepository} memoryOwnerId={memoryOwnerId} cloud={cloud} ledgerKind={state.ledgerKind} ledgerName={ledgerName} onChanged={() => { setPrompt(""); setPromptVersion(value => value + 1); }} />
+      : modal === "import" && pendingImport ? <ConfirmPanel mark="入" title={cloud ? "用备份替换当前账号的全部云端账本？" : "用备份替换这台设备的全部账本？"} hint={`将恢复 ${pendingImport.transactions.length + Object.values(pendingImport.otherLedgers).reduce((count, book) => count + book.transactions.length, 0)} 笔账目，个人、家庭、旅行账本均会被备份内容替换。建议先导出备份。`} cancel="暂不导入" confirm="确认恢复" onCancel={() => setModal("data")} onConfirm={() => changeState(pendingImport, "备份已恢复", true)} />
       : modal === "goal" ? <GoalForm saved={state.settings.savingsCurrent} goal={state.settings.savingsGoal} onSave={(current, target) => changeState({ ...state, settings: { ...state.settings, savingsCurrent: current, savingsGoal: target } }, "存款目标已保存")} />
-      : <ConfirmPanel mark="清" title="清空这台设备的全部账本？" hint="个人、家庭、旅行账本中的账目、资产、周期、预算、对话和分类偏好都会删除，无法撤销。建议先分别导出账本和助手记忆备份。" cancel="保留数据" confirm="确认清空" onCancel={() => setModal("data")} onConfirm={() => changeState(defaultState(), "全部账本与助手记忆已清空", true, true)} />}</>}
+      : <ConfirmPanel mark="清" title={cloud ? "清空当前账号的全部云端账本？" : "清空这台设备的全部账本？"} hint="个人、家庭、旅行账本中的账目、资产、周期、预算、对话和分类偏好都会删除，无法撤销。建议先分别导出账本和助手记忆备份。" cancel="保留数据" confirm="确认清空" onCancel={() => setModal("data")} onConfirm={() => changeState(defaultState(), "全部账本与助手记忆已清空", true, true)} />}</>}
     </fieldset>{busy && <p role="status">正在保存…</p>}{error && <div className="error-message" role="alert">{error}<button disabled={busy} onClick={() => void reload()}>重新载入账本</button></div>}
   </section></div>}
   {error && !modal && <div className="error-message" role="alert">{error}<button onClick={() => void reload()}>重新载入账本</button></div>}

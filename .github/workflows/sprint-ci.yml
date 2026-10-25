@@ -44,7 +44,7 @@ jobs:
         env:
           VITE_AI_API_URL: https://xiaoman-ai-test.example/api/ai/question
       - name: Verify AI entry, fallback and voice in browser
-        run: npm run test:browser -- tests/browser/ai-question.spec.ts tests/browser/voice-input.spec.ts tests/browser/multi-ledger.spec.ts tests/browser/conversation.spec.ts
+        run: npm run test:browser -- tests/browser/ai-question.spec.ts tests/browser/voice-input.spec.ts tests/browser/multi-ledger.spec.ts tests/browser/conversation.spec.ts tests/browser/account.spec.ts
         env:
           AI_BROWSER_TEST: "1"
       - run: npm run eval -- --fixture-provider

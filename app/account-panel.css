@@ -1,0 +1,26 @@
+.account-panel { padding: 20px 0; border-bottom: 1px solid var(--line); color: var(--ink); min-width: 0; }
+.account-panel h2 { margin: 0 0 10px; font-size: 17px; font-weight: 700; }
+.account-panel p { max-width: 70ch; overflow-wrap: anywhere; }
+.account-panel summary { cursor: pointer; min-height: 44px; padding: 12px 0; color: var(--green); font-size: 14px; }
+.account-panel .account-email { margin: 0; padding: 0; background: transparent; font-weight: 700; }
+.account-mode,.account-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 16px; }
+.account-mode button,.account-actions button { min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 13px; background: var(--paper); color: var(--green); font-size: 14px; }
+.account-mode button[aria-pressed="true"] { background: #e8edda; border-color: #81985c; font-weight: 700; }
+.account-fields { display: grid; gap: 16px; max-width: 420px; }
+.account-fields label { display: grid; gap: 8px; color: var(--ink); font-size: 14px; }
+.account-fields input { width: 100%; min-width: 0; min-height: 48px; border: 1px solid #d9dfc7; border-radius: 13px; padding: 10px 12px; color: var(--ink); background: #fffffa; font: inherit; font-size: 16px; }
+.account-fields .primary { margin: 0; }
+.account-fields .helper { margin: 0; }
+.workspace-label { margin: -8px 0 16px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.account-empty { color: var(--muted); font-size: 13px; line-height: 1.7; }
+.account-migration { margin-top: 22px; }
+.account-migration h3 { margin: 0; font-size: 15px; font-weight: 700; }
+.account-migration>button { min-height: 44px; padding: 10px 0; color: var(--green); text-decoration: underline; text-underline-offset: 4px; }
+.migration-preview { margin-top: 16px; }
+.migration-preview table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.migration-preview caption { text-align: left; margin-bottom: 8px; font-weight: 700; }
+.migration-preview th,.migration-preview td { text-align: right; border-bottom: 1px solid var(--line); padding: 10px 4px; }
+.migration-preview th:first-child { text-align: left; }
+.migration-preview .primary { margin: 0; width: auto; }
+.account-actions .primary { background: var(--green); color: #fffdf1; border-color: var(--green); }
+.account-actions .primary:hover:not(:disabled) { background: #496837; }

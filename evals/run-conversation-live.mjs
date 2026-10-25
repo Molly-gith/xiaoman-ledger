@@ -26,6 +26,12 @@ export function buildCases() {
     const item = structuredClone(available.find(candidate => candidate.id === id));
     if (!item) throw Error(`missing_fixture:${id}`);
     if (id === "v2-04") item.previousClarification = "v2-03";
+    // The public runtime resolves an explicit own-account transfer locally after
+    // provider validation. Keep the original Dify-level fixture unchanged.
+    if (id === "v2-21") {
+      item.expected.intent = "answer";
+      item.semanticChecks.push("直接说明自有账户划转不计新增收支，当前不支持单独记录转账；不生成草稿、不声称保存或建议其他记录类型");
+    }
     if (id === "legacy-01") item.expected.transactions = item.referenceOutput.transactions.map(draft => Object.fromEntries(draftFields.map(key => [key, draft[key]])));
     // Human-authored references are not attached to live reports as model results.
     delete item.referenceOutput;
@@ -92,8 +98,16 @@ export function checkResult(item, input, value) {
   if (item.expected.intent === "clarification") {
     check("只补问，没有交易或查询结果", exactKeys(value, ["status", "question"]));
     if (item.id === "v2-03") check("补问缺失的金额", typeof value?.question === "string" && /多少|金额|价格|价钱|花了|费用/.test(value.question));
-    if (item.id === "v2-21") check("澄清转账与收入的口径", typeof value?.question === "string" && /转账|转入|账户|银行卡|收入|来源/.test(value.question));
     check("没有虚假保存或修改声明", typeof value?.question === "string" && !/(?:已经|已)(?:帮你|为你)?(?:保存|记好|记入|写入|修改|转账)/.test(value.question));
+  }
+  if (item.id === "v2-21") {
+    const answer = typeof value?.answer === "string" ? value.answer : "";
+    check("直接解释划转，不生成草稿或补问", exactKeys(value, ["status", "answer", "nextActions"]) && value.status === "answer");
+    check("明确自有账户划转不属于新增收入或支出", /不(?:属于|计入|算)(?:新增)?收入(?:或|和|及|与)支出/.test(answer));
+    check("准确说明目前不支持单独记录转账", /不(?:支持|能)(?:单独)?记录转账/.test(answer));
+    check("没有虚假保存声明", !/(?:已经|已)(?:帮你|为你)?(?:保存|记好|记入|写入|修改|转账)|(?:帮你|为你)(?:保存|记录|记)(?:好|了)|(?:保存|记录)成功/.test(answer));
+    check("不引导保存成其他类型或收支", !/其他(?:类型|记录)|(?:记录|记)(?:成|为|作)(?:收入|支出|转账|划转)|按(?:收入|支出|转账|划转)/.test(answer)
+      && Array.isArray(value?.nextActions) && value.nextActions.length === 0);
   }
   return { structural, automatedSemantic, semanticReview: { status: "pending", checks: [...item.semanticChecks, ...(item.forbiddenBehavior ?? [])], findings: [] } };
 }

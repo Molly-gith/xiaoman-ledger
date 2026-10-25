@@ -54,6 +54,8 @@ function contents(value: unknown): MemoryContents {
     || !validateClarification(value.clarification)) throw invalid();
   return structuredClone(value) as MemoryContents;
 }
+/** Shared validation for cloud payloads; identity and revisions are not portable content. */
+export function normalizeMemoryContents(value: unknown): MemoryContents { return contents(value); }
 function decode(value: unknown, owner: string, kind: LedgerKind): MemoryState {
   if (value === undefined) return empty(owner, kind);
   if (!record(value) || !keys(value, ["version", "ownerId", "ledgerKind", "revision", "conversation", "preferences", "clarification"])

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { handleAssistantRequest } from '../lib/ai/assistant-handler.ts';
 import { converse } from '../lib/ai/conversation-client.ts';
 import { validateConversationRequest, validateConversationOutput, conversationResult } from '../lib/ai/conversation-contract.ts';
+import { buildCases, bodyFor, checkResult } from '../evals/run-conversation-live.mjs';
+import { V2_ASSISTANT_CASES } from '../evals/v2-assistant-cases.mjs';
 
 const endpoint='https://xiaoman-test.example/api/ai/assistant',origin='https://molly-gith.github.io';
 const env={AI_ALLOWED_ORIGINS:origin,DIFY_API_KEY:'fake-provider-secret-for-test',DIFY_MODEL_VERSION:'test-model',DIFY_WORKFLOW_VERSION:'test-v2'};
@@ -57,6 +59,62 @@ test('structured clarification retains original transaction details without prom
   assert.equal(sent.messages,undefined);assert.equal(sent.system,undefined);assert.equal(payload.transactions,undefined);
 });
 
+test('explicit own-account transfers cannot become income, expense or an unsupported transfer type',async()=>{
+  const cases=[
+    ['从我另一张卡转来2000元',output({intent:'clarification',query:null,clarification:'请确认是否需要记录为其他类型。'})],
+    ['2026-10-24从我另一张卡转来2000元',output({intent:'clarification',query:null,clarification:'需要如何记录？'})],
+    ['今天从我自己的银行卡转了500元到我自己的微信钱包',output({intent:'transactions',query:null,transactions:[draft(500,{type:'income',category:'收入',nature_suggestion:null,note:'转账'})]})],
+    ['自己两个账户之间转账75.5元',output({intent:'transactions',query:null,transactions:[draft(75.5,{category:'其他',note:'转账'})]})],
+  ];
+  for(const [text,value] of cases){
+    const body={...input(),text,memory:{recentMessages:[]}},d=dependencies(value);
+    const response=await handleAssistantRequest(request(body),env,d);assert.equal(response.status,200);
+    const result=await response.json();assert.equal(result.status,'answer');assert.match(result.answer,/不属于新增收入或支出/);assert.match(result.answer,/不支持单独记录转账/);
+    assert.doesNotMatch(result.answer,/其他类型|确认是否|已保存|已记入/);assert.deepEqual(result.nextActions,[]);assert.equal(result.drafts,undefined);assert.equal(d.calls.length,2);
+  }
+});
+
+test('current transfer clarification is bounded and an explicit external-income correction remains usable',()=>{
+  const originalText='从我另一张卡转来2000元',question='这是你自己账户之间的转账吗？';
+  const incorrectIncome=output({intent:'transactions',query:null,transactions:[draft(2000,{type:'income',category:'收入',nature_suggestion:null})]});
+  for(const text of ['是的','2000元']){
+    const result=conversationResult(incorrectIncome,{...input(),text,clarification:{originalText,question,answer:text}},versions);
+    assert.equal(result.status,'answer');assert.equal(result.drafts,undefined);
+  }
+  for(const text of ['不是自己账户之间的转账，是公司发的工资2000元','公司发的工资2000元']){
+    const result=conversationResult(incorrectIncome,{...input(),text,clarification:{originalText,question,answer:text}},versions);
+    assert.equal(result.status,'transactions');assert.equal(result.drafts[0].amount,2000);assert.equal(result.drafts[0].type,'income');
+  }
+  const mixed=conversationResult(incorrectIncome,{...input(),text:'从我另一张卡转来2000元，午饭35元'},versions);
+  assert.equal(mixed.status,'clarification');assert.match(mixed.question,/实际收入或支出/);assert.equal(mixed.drafts,undefined);
+});
+
+test('public transfer evaluation accepts the runtime guard and rejects old wording without changing the Dify fixture',()=>{
+  const fixture=V2_ASSISTANT_CASES.find(item=>item.id==='v2-21'),before=structuredClone(fixture);
+  const item=buildCases().find(item=>item.id==='v2-21'),body=bodyFor(item);
+  assert.equal(item.expected.intent,'answer');assert.equal(fixture.expected.intent,'clarification');assert.deepEqual(fixture,before);
+  const guarded=conversationResult(fixture.referenceOutput,body,versions);
+  const passes=value=>{const checked=checkResult(item,body,value);return [...checked.structural,...checked.automatedSemantic].every(check=>check.pass);};
+  assert.equal(passes(guarded),true);
+  for(const bad of [
+    {status:'clarification',question:'请确认是否需要记录为其他类型。'},
+    {...guarded,answer:guarded.answer+'请确认是否需要记录为其他类型。'},
+    {...guarded,answer:guarded.answer+'已经为你保存了。'},
+    {...guarded,nextActions:['选择转账类型并保存']},
+    {status:'transactions',drafts:[draft(2000,{type:'income',category:'收入',nature_suggestion:null})],...versions},
+  ]) assert.equal(passes(bad),false,JSON.stringify(bad));
+});
+
+test('ordinary transfers, uncertainty, own-card payments and unrelated history do not establish an internal transfer',()=>{
+  const value=output({intent:'clarification',query:null,clarification:'请说明款项的来源或用途。'});
+  for(const text of ['有人转来2000元','客户从另一张卡给我转来2000元','我从银行卡转给朋友2000元','从我的银行卡转给餐厅35元','从我的银行卡转入朋友的账户2000元','从我另一张卡转来2000元给朋友','如果从我另一张卡转来2000元，应该怎么记？','这是自己账户之间转账吗？']){
+    assert.deepEqual(conversationResult(value,{...input(),text},versions),{status:'clarification',question:value.clarification},text);
+  }
+  const meal=output({intent:'transactions',query:null,transactions:[draft(28)]});
+  const body={...input(),text:'午饭28元',memory:{recentMessages:[{role:'user',content:'从我另一张卡转来2000元'}]}};
+  assert.deepEqual(conversationResult(meal,body,versions).drafts,[draft(28)]);
+});
+
 test('bad request plans, extra ledger data, illegal roles and oversized history fail before limiter or model access',async()=>{
   const changes=[
     b=>{b.protocolVersion=3;},b=>{b.ledgerKind='all';},b=>{b.report={income:9000};},b=>{b.transactions=[draft()];},b=>{b.otherLedgers={personal:[]};},b=>{b.ownerId='someone-else';},
@@ -103,6 +161,8 @@ test('a general helper without ledger access cannot assert numeric facts or clai
   const answer='可以输入收支描述，我会先整理成草稿供你确认。';
   const response=await handleAssistantRequest(request(),env,dependencies(output({intent:'question',query:null,answer})));
   const result=await response.json();assert.equal(result.status,'answer');assert.match(result.answer,/草稿.*确认/);assert.deepEqual(result.nextActions,[]);
+  const memoryHelp=conversationResult(output({intent:'question',query:null,answer:'都保存在云端'}),{...input(),text:'记忆和偏好保存在哪里？'},versions);
+  assert.match(memoryHelp.answer,/保存位置以“我的”中的当前模式为准/);assert.doesNotMatch(memoryHelp.answer,/保存在本机|都保存在云端|账号同步尚未启用/);
 });
 
 test('V2 model failures and deadlines stop without retries, secret echoes or silently downgrading to V1',async()=>{

@@ -56,7 +56,37 @@ export function validateConversationOutput(v: unknown, today: string): v is Conv
   if (v.intent === "clarification") return !v.transactions.length && v.query === null && v.preference === null && v.answer === "" && !!v.clarification.trim();
   return v.intent === "question" && !v.transactions.length && v.query === null && v.preference === null && v.clarification === "" && !!v.answer.trim();
 }
+
+function explicitOwnTransfer(text: string): boolean {
+  const normalized = text.normalize("NFKC").replace(/\s+/g, "");
+  if (/(?:不是|并非|不属于)[^，,。；;]{0,12}(?:自己|自有|本人)[^，,。；;]{0,16}(?:转账|划转)/.test(normalized)
+    || /是否|是不是|假如|如果|假设|吗[?？。]?$/.test(normalized)) return false;
+  const account = "(?:我自己的|自己的|本人的|我的|本人|我|自己)(?:(?:另一|另外一|两)张)?(?:银行账户|银行卡|储蓄卡|工资卡|卡|账户|账号|微信钱包|微信|支付宝|钱包)";
+  return new RegExp(`从${account}(?:里|中)?转来(?:了)?(?:人民币)?[¥￥]?\\d+(?:\\.\\d{1,2})?(?:元|块)?(?=$|[，,。；;！!])`).test(normalized)
+    || new RegExp(`${account}[^，,。；;]{0,30}(?:转|划)[^，,。；;]{0,30}${account}`).test(normalized)
+    || /(?:我|本人|自己|自有)(?:的)?(?:两(?:个|张)|不同)?(?:银行账户|账户|账号|银行卡|卡)(?:之)?间[^，,。；;]{0,8}(?:转账|划转|转钱)/.test(normalized);
+}
+
+function ownTransferResult(request: ConversationRequest): ConversationResult | null {
+  // Only the current statement (or a short reply to its active clarification)
+  // may establish this scope. Unrelated conversation history is never evidence.
+  const shortReply = /^(?:是的?|对的?|没错|嗯|确认|(?:人民币|[¥￥])?\d+(?:\.\d{1,2})?(?:元|块)?)[。.!！]?$/;
+  const current = request.text.trim();
+  const source = explicitOwnTransfer(current) ? current
+    : request.clarification && shortReply.test(current) && explicitOwnTransfer(request.clarification.originalText) ? request.clarification.originalText : null;
+  if (!source) return null;
+  // Do not silently drop other events in a mixed request or save a partial batch.
+  const withoutDates = source.replace(/\d{4}-\d{2}-\d{2}|(?:\d{4}年)?\d{1,2}月\d{1,2}(?:日|号)/g, "");
+  if ((withoutDates.match(/\d+(?:\.\d+)?(?:元|块)?/g)?.length ?? 0) > 1) return {
+    status: "clarification",
+    question: "自己账户之间的转账不属于新增收入或支出，当前小满不支持单独记录转账。如果这段话还包含实际收入或支出，请把要记的部分单独说明。",
+  };
+  return { status: "answer", answer: "自己账户之间的资金移动不属于新增收入或支出。当前小满不支持单独记录转账，这笔不会生成记账草稿。", nextActions: [] };
+}
+
 export function conversationResult(v: ConversationOutput, request: ConversationRequest, versions: { modelVersion: string; workflowVersion: string }): ConversationResult {
+  const transfer = ownTransferResult(request);
+  if (transfer) return transfer;
   if (v.intent === "query") return { status: "query", plan: v.query! };
   if (v.intent === "preference") return { status: "preference", preference: v.preference! };
   if (v.intent === "clarification") return { status: "clarification", question: v.clarification };
@@ -68,7 +98,7 @@ export function conversationResult(v: ConversationOutput, request: ConversationR
   // Product help comes from the product contract. Model prose is never proof
   // that a record was saved or a balance was checked.
   const help = /记忆|记住|偏好|分类/.test(request.text)
-    ? "你可以告诉我“以后健身课算投资”，确认后用于这个账本的新草稿。对话和偏好保存在本机，可在“记忆与偏好”查看、修改或清除；账号同步尚未启用。"
+    ? "你可以告诉我“以后健身课算投资”，确认后用于这个账本的新草稿。可在“记忆与偏好”查看、修改或清除；保存位置以“我的”中的当前模式为准。"
     : "我可以帮你按日期、分类和账本查询真实记录，也可以整理待保存的账目。比如问“上个月餐饮花了多少”，再问“跟前一个月比呢”；记账草稿需要你确认保存后才会写入账本。";
   return { status: "answer", answer: help, nextActions: [] };
 }
