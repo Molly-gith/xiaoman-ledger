@@ -35,9 +35,12 @@ const record = (value: unknown): value is Record<string, unknown> => typeof valu
 const iso = (date: Date) => date.toISOString().slice(0, 10);
 const shift = (day: string, days: number) => iso(new Date(+parseDate(day) + days * DAY));
 const daysIn = (range: DateRange) => (+parseDate(range.endDate) - +parseDate(range.startDate)) / DAY + 1;
-function validRange(value: unknown): value is DateRange {
+function validDateRange(value: unknown): value is DateRange {
   if (!record(value) || Object.keys(value).length !== 2 || typeof value.startDate !== "string" || typeof value.endDate !== "string") return false;
-  try { createDateRange(value.startDate, value.endDate); return daysIn(value as DateRange) <= MAX_QUERY_DAYS; } catch { return false; }
+  try { createDateRange(value.startDate, value.endDate); return true; } catch { return false; }
+}
+function validRange(value: unknown): value is DateRange {
+  return validDateRange(value) && daysIn(value) <= MAX_QUERY_DAYS;
 }
 function comparisonRange(plan: QueryPlan): DateRange {
   if (plan.comparison === "previous_month") {
@@ -120,18 +123,29 @@ const categoryAliases: Record<QueryCategory, readonly string[]> = {
 };
 const clarify = (question: string): QueryResolution => ({ kind: "clarification", question });
 
+/** A purchased review course/book is an entry subject, not a request to review.
+ * Explicitly cancelled reviews must not be reclaimed by the query fallback. */
+export function hasPeriodReviewIntent(text: string): boolean {
+  const remaining = text.normalize("NFKC").replace(/\s+/g, "")
+    .replace(/(?:不需要|不用|不要|无需|别|不)(?:再|帮我)?复盘/g, "")
+    .replace(/复盘(?:的)?(?:课程|课|书籍|书|教材|培训|讲座|训练营|工作坊|资料)/g, "");
+  return remaining.includes("复盘");
+}
+
 export function resolveLedgerQuery(text: string, context: QueryContext): QueryResolution {
   if (typeof text !== "string" || !text.trim()) return { kind: "none" };
   const original = text.normalize("NFKC").replace(/\s+/g, "");
   const followCue = /^(?:那|那么|再|只看|改看|改成|换成|换到|跟|和|与)|呢[?？]?$/.test(original);
-  const queryCue = /多少|几笔|笔数|查账|查询|查看|查一下|看看|统计|汇总|复盘|收支情况|支出情况|分类明细|比呢|相比|比较|只看|改看/.test(original);
-  if (!queryCue && !followCue) return { kind: "none" };
+  const queryCue = /多少|几笔|笔数|查账|查询|查看|查一下|看看|统计|汇总|收支情况|支出情况|分类明细|比呢|相比|比较|只看|改看/.test(original);
+  const reviewCue = hasPeriodReviewIntent(original);
+  if (!queryCue && original.includes("复盘") && !reviewCue) return { kind: "none" };
+  if (!queryCue && !reviewCue && !followCue) return { kind: "none" };
   if (/帮我记|记一笔|记下|新增|保存|删除|撤销|修改(?:这|那|一)?笔/.test(original)) return { kind: "none" };
   if (original.length > 500) return clarify("查询条件较长，请分别说明日期、账本和要统计的分类。");
   try { parseDate(context.today); } catch { return clarify("本机日期无效，请先核对日期。"); }
-  if (!validRange(context.defaultRange) || !kinds.includes(context.ledgerKind)) return clarify("当前日期范围或账本无效，请重新选择。");
+  if (!validDateRange(context.defaultRange) || !kinds.includes(context.ledgerKind)) return clarify("当前日期范围或账本无效，请重新选择。");
   if (context.previousQuery && !validateQueryPlan(context.previousQuery)) return clarify("上次查询条件已失效，请重新说明日期和统计内容。");
-  if (followCue && !context.previousQuery && !queryCue) return clarify("还没有可沿用的查询，请先说明日期和想查的内容。");
+  if (followCue && !context.previousQuery && !queryCue && !reviewCue) return clarify("还没有可沿用的查询，请先说明日期和想查的内容。");
   if (/所有账本|全部账本|各个账本|三[个本]账本|合并账本/.test(original)) return clarify("目前一次查询一个账本，请选择个人、家庭或旅行账本。");
   if (/收益|利润|回报|市值|净值|超支|预算|还能花|余额|资产/.test(original)) return clarify("这里能查询已记录的收入和支出，不能用它判断预算、账户余额或投资收益。你想查哪一项收支？");
   let rest = original;
@@ -174,6 +188,7 @@ export function resolveLedgerQuery(text: string, context: QueryContext): QueryRe
   const filler = /请帮我|帮我|请|我们|我的|我|一下|看看|查一下|查询|查看|查账|统计|汇总|复盘|分析|收入|进账|支出|收支|开销|花费|花了|花|总共|一共|合计|总额|金额|多少笔|多少|几笔|笔数|全部记录|所有记录|当前日期范围|所选日期范围|日期范围|当前|所选|这期|本期|这一期|分类明细|分类|性质|明细|各类|各|分别|记录|账目|情况|只看|改看|改成|换成|换到|那么|那|再|跟|和|与|比较|对比|比|呢|吗|是|有|在|按|的|了|及|以及|元|钱|笔|[?？,，。！!、:：]/g;
   const unknown = rest.replace(filler, "");
   if (unknown) return clarify("这项查询还不能准确识别。请用明确日期、一个账本，以及餐饮等分类或消费/浪费/投资性质来查询；暂不按备注、商家或更细的用途猜测。");
+  if (daysIn(plan.range) > MAX_QUERY_DAYS) return clarify(`一次查询最多支持${MAX_QUERY_DAYS}天，请缩小日期范围`);
   const comparingMonths = plan.comparison === "previous_month";
   if (!validateQueryPlan(plan)) return clarify(comparingMonths ? "按前一个月比较需要一个完整自然月；请说明月份，或改为上一段等长日期。" : "查询条件有冲突或日期超出支持范围，请核对后重试。");
   return { kind: "query", plan };

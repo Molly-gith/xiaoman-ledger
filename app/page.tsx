@@ -11,6 +11,7 @@ import { AssistantMemoryPanel } from "./assistant-memory-panel";
 import { AccountShell, type WorkspaceScope } from "./account-shell";
 import { AccountPanel } from "./account-panel";
 import { StoryIcon } from "./story-icons";
+import { PeriodReviewPanel } from "./period-review";
 import { ConfirmPanel, DataPanel, EmptyState, GoalForm, LEDGER_KINDS, LoadingScreen, PageHeader, TransactionRow, money } from "./ledger-components";
 
 type Tab = "home" | "bills" | "me" | "assets";
@@ -196,7 +197,7 @@ function LedgerHome({ scope }: { scope: WorkspaceScope }) {
         <section className="bill-summary" aria-label="所选日期收支"><div><span>收入</span><b>{money(report.income)}</b></div><div><span>支出</span><b>{money(report.expense)}</b></div><div><span>收支差额</span><b>{money(report.balance)}</b></div></section>
         <section className="nature-summary" aria-label="支出性质">{Object.entries(report.natureTotals).map(([nature, amount]) => <div key={nature}><span>{nature}</span><strong>{money(amount)}</strong></div>)}</section>
         {!!report.pendingDateCount && <p className="helper">有 {report.pendingDateCount} 笔旧账暂按本机日期计入，建议打开账目核对日期。</p>}
-        <button className="review-range" data-testid="home-action-review" onClick={() => { setPrompt(`查询 ${range.startDate} 至 ${range.endDate} 的收支总额。`); setPromptVersion(value => value + 1); setTab("home"); }}>让小满看看这段收支 <StoryIcon name="arrow" /></button>
+        <PeriodReviewPanel key={`review-${state.ledgerKind}-${range.startDate}-${range.endDate}-${state.revision}`} transactions={state.transactions} range={range} ledgerName={ledgerName} today={today} />
         <div className="section-title"><h2>明细 <small>{visible.length} 笔</small></h2><div className="recent-filters" aria-label="筛选账目">{FILTERS.map(item => <button key={item.key} aria-pressed={filter === item.key} className={filter === item.key ? "active" : ""} onClick={() => setFilter(item.key)}>{item.label}</button>)}</div></div>
         <section className="transactions bill-list">{visible.length ? visible.map(tx => <TransactionRow key={tx.id} item={tx} {...rowActions} />) : <EmptyState text="这段时间还没有账目" action={() => openEntry()} />}</section>
       </>}

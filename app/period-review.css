@@ -1,0 +1,41 @@
+.period-review { margin: 6px 0 28px; color: var(--ink); min-width: 0; }
+.period-review-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 50px; padding: 14px 16px; border-radius: 12px; background: #eaf0df; color: #3c6440; font-size: 14px; text-align: left; }
+.period-review-toggle .story-icon { width: 18px; height: 18px; transition: transform .18s ease-out; }
+.period-review-toggle[aria-expanded="true"] .story-icon { transform: rotate(90deg); }
+.period-review-scope { margin: 9px 2px 0; font-size: 12px; line-height: 1.7; color: #637254; overflow-wrap: anywhere; }
+.period-review-content { padding-top: 4px; }
+.period-review-insights { list-style: none; padding: 0; margin: 14px 0 24px; }
+.period-review-insights li { padding: 12px 0; border-bottom: 1px solid #dce2ce; }
+.period-review-insights p { margin: 0; font-size: 14px; line-height: 1.85; max-width: 70ch; overflow-wrap: anywhere; }
+.period-review-insights button { min-height: 40px; padding: 7px 0 0; color: #3c6440; font-size: 12px; text-decoration: underline; text-underline-offset: 4px; }
+.period-review h3 { margin: 0 0 8px; font-size: 15px; font-weight: 700; line-height: 1.6; }
+.period-review-comparison { margin-bottom: 18px; }
+.period-review-comparison table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; font-variant-numeric: tabular-nums; }
+.period-review-comparison th,.period-review-comparison td { padding: 10px 3px; border-bottom: 1px solid #dce2ce; text-align: right; overflow-wrap: anywhere; }
+.period-review-comparison th:first-child { text-align: left; width: 20%; }
+.period-review-comparison thead th { color: #637254; font-weight: 400; }
+.period-review-comparison td button { min-height: 36px; width: 100%; text-align: right; color: #3c6440; text-decoration: underline; text-underline-offset: 3px; font: inherit; overflow-wrap: anywhere; }
+.review-no-comparison,.review-incomplete { font-size: 13px; color: #637254; margin: 10px 0; line-height: 1.7; }
+.period-review-distribution { border-bottom: 1px solid #dce2ce; }
+.period-review-distribution summary { cursor: pointer; min-height: 44px; padding: 12px 0; color: #3c6440; font-size: 14px; }
+.review-breakdown-list { max-height: 300px; overflow-y: auto; overscroll-behavior: contain; }
+.review-breakdown-list>button { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 9px 4px; border-top: 1px solid #e2e6d5; text-align: left; font-size: 13px; color: var(--ink); }
+.review-breakdown-list>button>span { min-width: 0; overflow-wrap: anywhere; }
+.review-breakdown-list>button>span:last-child { text-align: right; }
+.review-breakdown-list b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.review-breakdown-list small { display: block; margin-top: 4px; color: #637254; font-size: 11px; }
+.review-breakdown-list p { font-size: 13px; color: #637254; }
+.period-review-evidence { margin-top: 24px; padding-top: 18px; border-top: 1px solid #a4b38f; }
+.review-evidence-heading { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+.review-evidence-heading>button { flex-shrink: 0; min-height: 40px; color: #3c6440; font-size: 12px; }
+.review-evidence-list { list-style: none; padding: 0 8px 0 0; margin: 12px 0; max-height: 330px; overflow-y: auto; overscroll-behavior: contain; }
+.review-evidence-list li { border-bottom: 1px solid #dce2ce; padding: 12px 0; }
+.review-evidence-list li>div { display: flex; justify-content: space-between; align-items: start; gap: 10px; font-size: 12px; }
+.review-evidence-list strong { text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; min-width: 0; }
+.review-evidence-list time { color: #637254; flex-shrink: 0; }
+.review-evidence-list p { margin: 7px 0 3px; font-size: 13px; overflow-wrap: anywhere; }
+.review-evidence-list small { font-size: 11px; color: #637254; overflow-wrap: anywhere; }
+.review-evidence-pages { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; }
+.review-evidence-pages button { min-height: 44px; padding: 8px 3px; color: #3c6440; }
+.period-review-limit { margin: 20px 0 0; color: #637254; font-size: 12px; line-height: 1.8; max-width: 70ch; }
+@media (prefers-reduced-motion: reduce) { .period-review-toggle .story-icon { transition: none; } }

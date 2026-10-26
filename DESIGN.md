@@ -181,6 +181,24 @@ The main scene is `public/art/xiaoman-forest.png`, with provenance in its adjace
 余额图采用 cover：手机右侧居中，桌面中心（59%）；工资设置页插图裁切到中心（70%），初始设置与桌面外背景复用场景。外背景有浅色覆盖层；图片不包含 UI 文字。场景更新须同时检查左侧金额可读性、右侧伙伴和来源记录。
 The balance uses cover, right-center on mobile and center (59%) on desktop. The cycle-form crop is center (70%); setup and desktop outer backgrounds reuse the scene. The outer background has a pale overlay. Artwork contains no UI text. Replacements require checking left-side amount legibility, the right-side companion and provenance.
 
+### PeriodReview / 当前期间复盘（局部扩展，2026-10-26）
+
+此节只描述当前日常记账界面的已实现扩展，以 `app/everyday-ledger.css`、`app/period-review.tsx` 和 `app/period-review.css` 为准。沿用奶油纸面与森林绿；当前容器最大（820px），页内顶部导航，手机在（720px）及以下收紧留白。上文旧版浮动底栏与工资周期布局不作为此组件的布局要求。
+This scoped extension follows the current everyday-ledger shell: cream paper, forest green, an (820px) maximum width, inline top navigation and tighter gutters at or below (720px). Earlier floating-navigation and salary-cycle layouts do not govern this component.
+
+账单页先选日期、查看已有汇总，再按需展开「复盘这段时间」；账本与起止日期始终可见。展开后依次呈现三条已记录事实、前一等长时段比较、可选的分类/性质分布与所选账目依据。助手识别自然语言复盘时复用同一组件，默认展开。无需先设置工资周期或预算，复盘只读。
+Bills keeps the review collapsed after the date filter and existing totals. Ledger and dates remain visible. Expansion reveals three recorded facts, an equal-length previous-period comparison, optional category/nature distributions and selected transaction evidence. Natural-language review in the assistant opens the same component expanded; it is read-only and needs no cycle or budget setup.
+
+入口使用浅绿横条、（12px）圆角、至少（50px）高度与（14px）文字；正文（14px）、小标题（15px），金额使用等宽数字。内容以细线和留白组织，不增设浮层或独立导航。分类列表局部滚动，依据每页（5笔）且列表最高（330px）；长文字和金额允许换行。
+A pale green disclosure strip uses (12px) corners, a minimum (50px) height and (14px) type; facts use (14px), section headings (15px), and amounts use tabular numerals. Fine separators and spacing organize the inline content. Distributions scroll locally; evidence shows (5 records) per page in a list capped at (330px). Long labels and amounts wrap.
+
+点击事实、比较金额或分布行，在本组件内打开对应依据，滚动并聚焦到依据区；收起后焦点回到触发控件。切换依据或翻页时列表回到顶部。比较金额的无障碍标签包含时段、项目与金额，分布行还包含笔数；展开状态、页码与空态均有文字表达。箭头过渡（180ms ease-out）遵守减少动态效果偏好。
+Evidence opens locally, scrolls into view and receives focus; closing returns focus to its trigger. Changing evidence or page resets the list scroll. Comparison labels include period, metric and amount; distribution labels also include count. Disclosure, pagination and empty states remain explicit. The arrow transition (180ms ease-out) respects reduced motion.
+
+缺少本段/前段记录、日期待核对或前段越界时说明原因，不把缺失记录当成实际零收支；尚未结束的时段标明仅比较已记录账目。始终区分收支差额、账户余额与可用预算，投资性质支出不表述为投资收益。
+Explain absent records, unconfirmed dates and unsupported comparison ranges without treating missing records as real zero cash flow. Mark unfinished periods as comparisons of recorded transactions only. Keep income-minus-expense distinct from account balance or spendable budget, and investment-nature spending distinct from investment return.
+
+
 ## Do's and Don'ts
 
 ### Do:

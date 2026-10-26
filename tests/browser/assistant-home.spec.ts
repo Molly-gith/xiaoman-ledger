@@ -15,14 +15,15 @@ test("fresh home offers natural input and manual entry without creating a budget
   await openAssets(page); await expect(page.getByRole("heading", { name: "新建投资账户" })).toBeVisible();
   await returnHome(page); await expect(page.getByRole("dialog")).toHaveCount(0);
 });
-test("date-range review transfers the visible range into the same composer without auto-sending", async ({ page }) => {
+test("date-range review opens inline for the visible dates without auto-sending", async ({ page }) => {
   await openLedger(page); await openBills(page);
   await page.getByRole("button", { name: "自定义日期", exact: true }).click();
   await page.getByLabel("开始日期", { exact: true }).fill("2026-08-20");
   await page.getByLabel("结束日期", { exact: true }).fill("2026-09-10");
   await page.getByTestId("home-action-review").click();
-  const input = page.getByRole("textbox", { name: "记账或问小满", exact: true });
-  await expect(input).toHaveValue(/2026-08-20 至 2026-09-10/); await expect(input).toBeFocused();
+  await expect(page.getByTestId("period-review")).toContainText("2026-08-20 至 2026-09-10");
+  await expect(page.getByTestId("period-review")).toContainText("这段时间还没有记账");
+  await expect(page.getByRole("heading", { name: "账单与统计", exact: true })).toBeVisible();
   await expect(page.getByTestId("ai-answer")).toHaveCount(0);
   await expect(page.getByRole("region", { name: "待保存账目" })).toHaveCount(0);
 });

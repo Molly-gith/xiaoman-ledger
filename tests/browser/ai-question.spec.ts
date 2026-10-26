@@ -72,7 +72,7 @@ test("common account questions stay local and the current answer clears when the
     return route.fulfill({json:{status:"answer",answer:"这段时间记录了支出20元。",nextActions:[]}});
   });
   await openLedger(page);await addExpense(page,"20","绝不上传的私人备注");
-  await openBills(page);await page.getByTestId("home-action-review").click();
+  await page.getByRole("textbox",{name:"记账或问小满",exact:true}).fill("查询这个月的收支总额");
   await page.getByRole("button",{name:"发送给小满"}).click();
   await expect(page.getByTestId("ai-answer")).toContainText("支出20元");
   expect(requests).toEqual([]);

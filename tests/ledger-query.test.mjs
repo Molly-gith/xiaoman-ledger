@@ -195,3 +195,18 @@ test('invalid plans and monetary overflows fail before returning fabricated resu
   assert.equal(resolveLedgerQuery('上个月花多少',{...context,today:'bad'}).kind,'clarification');
   assert.equal(resolveLedgerQuery('那交通呢',{...context,previousQuery:{...plan(),sql:'x'}}).kind,'clarification');
 });
+
+test('review subjects and cancellation do not intercept entries in the ordinary query fallback',()=>{
+ for(const text of ['复盘课程200元','昨天买复盘书49元','周末复盘培训1200元','再买一本复盘书35元','不复盘，记午饭35元','不用再复盘，今天工资8000元']){
+   assert.equal(resolveLedgerQuery(text,context).kind,'none',text);
+ }
+ assert.equal(resolveLedgerQuery('这个月复盘课程花多少',context).kind,'clarification');
+ assert.equal(resolveLedgerQuery('复盘这个月',context).kind,'query');
+});
+test('valid long selections get a query limit and explicit shorter queries still work',()=>{
+ const longRange=range('2000-01-01','2026-10-24');
+ const longContext={...context,defaultRange:longRange};
+ assert.deepEqual(resolveLedgerQuery('当前日期范围支出多少',longContext),{kind:'clarification',question:'一次查询最多支持3660天，请缩小日期范围'});
+ assert.deepEqual(resolved('这个月支出多少',longContext).range,context.defaultRange);
+ assert.equal(validateQueryPlan(plan({range:longRange})),false);
+});

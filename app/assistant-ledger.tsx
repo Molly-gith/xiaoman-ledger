@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { LedgerState, Transaction } from "../lib/domain/types";
-import type { DateRangeSummary } from "../lib/domain/date-range";
+import type { DateRange, DateRangeSummary } from "../lib/domain/date-range";
 import type { TransactionDraft } from "../lib/ai/adapter";
 import type { AssistantResult, ClarificationContext } from "../lib/ai/assistant-client";
 import { converse } from "../lib/ai/conversation-client";
@@ -11,8 +11,12 @@ import { applyPreferenceToDraft, parsePreferenceProposal } from "../lib/domain/a
 import { createAssistantMemoryRepository, type AssistantMemoryRepository, type ConversationMessage, type MemoryState } from "../lib/data/assistant-memory";
 import { validateAssistantDraft } from "../lib/ai/assistant-contract";
 import { VoiceInput } from "./voice-note";
-import { money } from "./ledger-components";
+import { LEDGER_KINDS, money } from "./ledger-components";
+import { PeriodReviewPanel } from "./period-review";
+import { buildPeriodReview, describePeriodReview } from "../lib/domain/period-review";
+import { resolvePeriodReview } from "../lib/domain/period-review-intent";
 
+type ReviewAnswer = { transactions: Transaction[]; range: DateRange; ledgerName: string };
 type Draft = TransactionDraft & { id: string; preferenceReason?: string | null };
 type Props = {
   endpoint: string; today: string; report: DateRangeSummary; revision: number; ledgerName: string; ledgerState: LedgerState;
@@ -30,7 +34,7 @@ export function AssistantLedger({ endpoint, today, report, revision, ledgerName,
   const [source, setSource] = useState<"text" | "voice">("text");
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState("");
-  const [answer, setAnswer] = useState<(Extract<AssistantResult, { status: "answer" }> & { revision: number; reportKey: string; query?: QueryPlan }) | null>(null);
+  const [answer, setAnswer] = useState<(Extract<AssistantResult, { status: "answer" }> & { revision: number; reportKey: string; query?: QueryPlan; review?: ReviewAnswer }) | null>(null);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [clarification, setClarification] = useState<Omit<ClarificationContext, "answer"> | null>(null);
   const [lastText, setLastText] = useState("");
@@ -81,10 +85,12 @@ export function AssistantLedger({ endpoint, today, report, revision, ledgerName,
       const currentMemory = memoryLatest.current!;
       const previousQuery = [...currentMemory.conversation].reverse().find(m => m.query)?.query;
       const proposal = parsePreferenceProposal(original);
-      const local = clarification ? { kind: "none" as const } : resolveLedgerQuery(original, { today, defaultRange: report.range, ledgerKind: ledgerState.ledgerKind, previousQuery });
+      const queryContext = { today, defaultRange: report.range, ledgerKind: ledgerState.ledgerKind, previousQuery };
+      const reviewIntent = clarification ? { kind: "none" as const } : resolvePeriodReview(original, queryContext);
+      const local = clarification ? { kind: "none" as const } : reviewIntent.kind === "none" ? resolveLedgerQuery(original, queryContext) : reviewIntent;
       let result: ConversationResult;
       if (proposal) result = { status: "preference", preference: { keyword: proposal.keyword, category: proposal.category, nature: proposal.nature } };
-      else if (local.kind === "query") result = { status: "query", plan: local.plan };
+      else if (local.kind === "query" || local.kind === "review") result = { status: "query", plan: local.plan };
       else if (local.kind === "clarification") result = { status: "clarification", question: local.question };
       else if (!endpoint) result = { status: "unavailable", reason: "AI 暂时无法连接，文字已保留。常用日期查账和手动记账仍可使用。", originalText: original };
       else result = await converse({ endpoint, protocolVersion: 2, text: original, context: { today, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }, ledgerKind: ledgerState.ledgerKind, defaultRange: report.range,
@@ -92,12 +98,19 @@ export function AssistantLedger({ endpoint, today, report, revision, ledgerName,
         ...(clarification ? { clarification: { ...clarification, answer: original } } : {}), signal: controller.signal });
       if (request.current !== controller || controller.signal.aborted || latestRevision.current !== requestedRevision) return;
       if (result.status === "unavailable") { setMessage(result.reason); return; }
-      let responseText: string, query: QueryPlan | undefined;
+      let responseText: string, query: QueryPlan | undefined, review: ReviewAnswer | undefined;
       let nextClarification: Omit<ClarificationContext, "answer"> | null = null;
       if (result.status === "query") {
         const snapshot = await readLedgerSnapshot();
         if (snapshot.ledgerKind !== ledgerState.ledgerKind) throw Error("账本已在另一个页面切换，请重新载入后再查询。文字已保留。");
         const computed = executeLedgerQuery(result.plan, snapshot); query = computed.plan; responseText = computed.answer;
+        if (local.kind === "review") {
+          const selectedBook = computed.ledgerKind === snapshot.ledgerKind ? snapshot : snapshot.otherLedgers[computed.ledgerKind];
+          if (!selectedBook) throw Error("所选账本不存在，请重新选择。");
+          const selectedName = LEDGER_KINDS.find(book => book.key === computed.ledgerKind)!.label;
+          review = { transactions: selectedBook.transactions, range: computed.plan.range, ledgerName: selectedName };
+          responseText = describePeriodReview(buildPeriodReview(review.transactions, review.range, today), selectedName);
+        }
       }
       else if (result.status === "transactions") responseText = `整理了 ${result.drafts.length} 笔待确认账目，尚未保存。`;
       else if (result.status === "preference") responseText = `建议记住：“${result.preference.keyword}”${result.preference.category ? `分类为${result.preference.category}` : ""}${result.preference.nature ? `算${result.preference.nature}` : ""}。等你确认后生效。`;
@@ -115,7 +128,7 @@ export function AssistantLedger({ endpoint, today, report, revision, ledgerName,
       remember(nextMemory); setLastText(original); setText(""); setClarification(nextClarification);
       if (result.status === "transactions") setDrafts(result.drafts.map(draft => { const applied = applyPreferenceToDraft(draft, nextMemory.preferences, `${clarification?.originalText ?? ""}\n${original}`); return { ...applied.draft, id: crypto.randomUUID(), preferenceReason: applied.reason }; }));
       else if (result.status === "preference") setPreference(result.preference);
-      else if (result.status === "answer" || result.status === "query") setAnswer({ status: "answer", answer: responseText, nextActions: [], revision: requestedRevision, reportKey, query });
+      else if (result.status === "answer" || result.status === "query") setAnswer({ status: "answer", answer: responseText, nextActions: [], revision: requestedRevision, reportKey, query, review });
       input.current?.focus();
     } catch (e) { setMessage(e instanceof Error ? e.message : "这次没有处理成功，输入已保留。"); }
     finally { if (request.current === controller) { request.current = null; setWorking(false); } }
@@ -185,7 +198,7 @@ export function AssistantLedger({ endpoint, today, report, revision, ledgerName,
         </article>)}
         <div className="draft-actions"><button onClick={reset}>不保存</button><button className="primary" onClick={() => void save()} disabled={busy}>{busy ? "保存中…" : drafts.length === 1 ? "保存这笔" : `保存这 ${drafts.length} 笔`}</button></div>
       </section>}
-      {answer && answer.revision === revision && answer.reportKey === reportKey && <section className="answer-copy" data-testid="ai-answer"><p className="ai-question">{lastText}</p><p className="ai-answer-text">{answer.answer}</p><p className="helper">{answer.query ? `金额由${cloud ? "当前账目" : "本机账目"}计算。可以接着问，也可以到「账单」核对。` : "小满的使用说明；没有修改账目。"}</p></section>}
+      {answer && answer.revision === revision && answer.reportKey === reportKey && <section className="answer-copy" data-testid="ai-answer"><p className="ai-question">{lastText}</p><p className="ai-answer-text">{answer.review ? "已根据账目整理好这段时间的复盘，可以展开每项依据核对。" : answer.answer}</p>{answer.review && <PeriodReviewPanel key={`${answer.revision}:${answer.review.ledgerName}:${answer.review.range.startDate}:${answer.review.range.endDate}`} {...answer.review} today={today} defaultOpen />}<p className="helper">{answer.query ? `金额由${cloud ? "当前账目" : "本机账目"}计算。可以接着问，也可以到「账单」核对。` : "小满的使用说明；没有修改账目。"}</p></section>}
     </div>
     {!!memory?.conversation.length && <details className="conversation-history" open={!answer && !drafts.length && !preference && !clarification}><summary>对话记录 · {ledgerName} <span>{memory.conversation.length} 条</span></summary><p className="helper">以下为当时的回答；账目变动后可重新询问。最近四十条保存在{cloud ? "当前账号的云端" : "本机"}。</p><div className="conversation-log" role="log" aria-label={`${ledgerName}对话记录`}>{memory.conversation.map(m => <article key={m.id} className={`conversation-message ${m.role}`}><small>{m.role === "user" ? "我" : "小满"} · {new Date(m.createdAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</small><p>{m.content}</p></article>)}<div ref={conversationEnd} /></div></details>}
   </section>;
