@@ -3,29 +3,43 @@
 .period-review-toggle .story-icon { width: 18px; height: 18px; transition: transform .18s ease-out; }
 .period-review-toggle[aria-expanded="true"] .story-icon { transform: rotate(90deg); }
 .period-review-scope { margin: 9px 2px 0; font-size: 12px; line-height: 1.7; color: #637254; overflow-wrap: anywhere; }
-.period-review-content { padding-top: 4px; }
-.period-review-insights { list-style: none; padding: 0; margin: 14px 0 24px; }
-.period-review-insights li { padding: 12px 0; border-bottom: 1px solid #dce2ce; }
-.period-review-insights p { margin: 0; font-size: 14px; line-height: 1.85; max-width: 70ch; overflow-wrap: anywhere; }
-.period-review-insights button { min-height: 40px; padding: 7px 0 0; color: #3c6440; font-size: 12px; text-decoration: underline; text-underline-offset: 4px; }
+.period-review-content { padding: 2px 2px 0; }
+.period-review .review-conclusion { margin: 18px 0 10px; font-size: 16px; line-height: 1.9; max-width: 46ch; overflow-wrap: anywhere; }
+.review-key-amount { display: inline-block; max-width: 100%; min-height: 44px; padding: 6px 0; color: #3c6440; font-weight: 650; font-variant-numeric: tabular-nums; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 5px; overflow-wrap: anywhere; }
+.period-review .review-status { margin: 0 0 18px; color: #637254; font-size: 12px; line-height: 1.8; }
+.period-review .review-empty { margin: 0; padding: 26px 0; color: #637254; font-size: 14px; line-height: 1.9; max-width: 42ch; }
+.review-sections { margin-top: 16px; }
+.review-section { border-bottom: 1px solid #dce2ce; }
+.review-section[open] { padding-bottom: 16px; }
+.review-section>summary { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 13px 0; cursor: pointer; list-style: none; color: #3c6440; font-size: 14px; }
+.review-section>summary::-webkit-details-marker { display: none; }
+.review-section>summary>span { flex: 1; }
+.review-section>summary>small { font-size: 12px; color: #637254; }
+.review-section>summary>.story-icon { width: 16px; height: 16px; flex-shrink: 0; }
+.review-section[open]>summary>.story-icon { transform: rotate(90deg); }
+.review-totals { display: grid; gap: 2px; }
+.review-totals>button { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 44px; width: 100%; padding: 8px 0; color: var(--ink); text-align: left; font-size: 14px; }
+.review-totals>button>span { flex-shrink: 0; }
+.review-totals b { min-width: 0; color: #3c6440; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
+.review-text-action { min-height: 44px; padding: 10px 0 0; color: #3c6440; font-size: 12px; text-decoration: underline; text-underline-offset: 4px; }
 .period-review h3 { margin: 0 0 8px; font-size: 15px; font-weight: 700; line-height: 1.6; }
-.period-review-comparison { margin-bottom: 18px; }
 .period-review-comparison table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; font-variant-numeric: tabular-nums; }
 .period-review-comparison th,.period-review-comparison td { padding: 10px 3px; border-bottom: 1px solid #dce2ce; text-align: right; overflow-wrap: anywhere; }
 .period-review-comparison th:first-child { text-align: left; width: 20%; }
 .period-review-comparison thead th { color: #637254; font-weight: 400; }
-.period-review-comparison td button { min-height: 36px; width: 100%; text-align: right; color: #3c6440; text-decoration: underline; text-underline-offset: 3px; font: inherit; overflow-wrap: anywhere; }
-.review-no-comparison,.review-incomplete { font-size: 13px; color: #637254; margin: 10px 0; line-height: 1.7; }
-.period-review-distribution { border-bottom: 1px solid #dce2ce; }
-.period-review-distribution summary { cursor: pointer; min-height: 44px; padding: 12px 0; color: #3c6440; font-size: 14px; }
+.period-review-comparison td button { min-height: 44px; width: 100%; text-align: right; color: #3c6440; text-decoration: underline; text-underline-offset: 3px; font: inherit; overflow-wrap: anywhere; }
+.period-review .review-context { font-size: 12px; color: #637254; margin: 0 0 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.period-review .review-comparison-note { margin: 0 0 12px; font-size: 14px; line-height: 1.8; overflow-wrap: anywhere; }
+.review-breakdown-switch { display: flex; gap: 16px; margin-bottom: 6px; }
+.review-breakdown-switch button { min-height: 44px; padding: 6px 0; color: #637254; font-size: 12px; border-bottom: 2px solid transparent; }
+.review-breakdown-switch button[aria-pressed="true"] { color: #3c6440; font-weight: 600; border-bottom-color: #3c6440; }
 .review-breakdown-list { max-height: 300px; overflow-y: auto; overscroll-behavior: contain; }
-.review-breakdown-list>button { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 9px 4px; border-top: 1px solid #e2e6d5; text-align: left; font-size: 13px; color: var(--ink); }
+.review-breakdown-list>button { display: flex; justify-content: space-between; align-items: center; gap: 20px; width: 100%; min-height: 60px; padding: 12px 4px 12px 0; text-align: left; font-size: 14px; color: var(--ink); }
 .review-breakdown-list>button>span { min-width: 0; overflow-wrap: anywhere; }
-.review-breakdown-list>button>span:last-child { text-align: right; }
-.review-breakdown-list b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.review-breakdown-list b { min-width: 0; font-weight: 600; font-variant-numeric: tabular-nums; color: #3c6440; text-align: right; overflow-wrap: anywhere; }
 .review-breakdown-list small { display: block; margin-top: 4px; color: #637254; font-size: 11px; }
-.review-breakdown-list p { font-size: 13px; color: #637254; }
 .period-review-evidence { margin-top: 24px; padding-top: 18px; border-top: 1px solid #a4b38f; }
+.period-review-evidence:focus-visible { outline: 2px solid #537d42; outline-offset: 6px; }
 .review-evidence-heading { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
 .review-evidence-heading>button { flex-shrink: 0; min-height: 40px; color: #3c6440; font-size: 12px; }
 .review-evidence-list { list-style: none; padding: 0 8px 0 0; margin: 12px 0; max-height: 330px; overflow-y: auto; overscroll-behavior: contain; }
@@ -37,5 +51,7 @@
 .review-evidence-list small { font-size: 11px; color: #637254; overflow-wrap: anywhere; }
 .review-evidence-pages { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; }
 .review-evidence-pages button { min-height: 44px; padding: 8px 3px; color: #3c6440; }
-.period-review-limit { margin: 20px 0 0; color: #637254; font-size: 12px; line-height: 1.8; max-width: 70ch; }
+.review-method { margin-top: 12px; color: #637254; font-size: 12px; }
+.review-method summary { width: fit-content; min-height: 44px; padding: 12px 0; cursor: pointer; }
+.period-review .review-method p { margin: 0 0 12px; max-width: 65ch; font-size: 12px; line-height: 1.8; }
 @media (prefers-reduced-motion: reduce) { .period-review-toggle .story-icon { transition: none; } }

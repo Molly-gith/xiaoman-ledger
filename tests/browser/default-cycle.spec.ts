@@ -44,7 +44,8 @@ test("invalid range hides stale totals and month selection returns to this month
   await expect(page.locator(".bill-summary")).toHaveCount(0);
   await expect(page.getByTestId("home-action-review")).toHaveCount(0);
   await page.getByLabel("结束日期", { exact: true }).fill("2026-09-20");
-  await expect(page.locator(".bill-summary b")).toHaveText(["¥0.00", "¥0.00", "¥0.00"]);
+  await expect(page.locator(".bill-summary")).toHaveCount(0);
+  await expect(page.getByText("这段时间还没有账目", { exact: true })).toBeVisible();
 });
 test("time rollover preserves historical plans and permits new records without setup", async ({ page }) => {
   const prior = { ...emptyLedger(), revision: 7, activeCycleId: "cycle-2026-09-01-calendar",

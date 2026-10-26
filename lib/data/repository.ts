@@ -1,4 +1,5 @@
-import type { BudgetPlan, FinancialCycle, InvestmentAccount, InvestmentFlow, LedgerKind, LedgerState, Transaction } from "../domain/types.ts";
+import type { BudgetPlan, FinancialCycle, InvestmentAccount, InvestmentFlow, LedgerKind, LedgerState, SalaryBudgetSettings, Transaction } from "../domain/types.ts";
+import { normalizeSalaryBudgetSettings } from "../domain/salary-budget.ts";
 import { calendarMonthCycle, cents, parseDate, transactionDay } from "../domain/finance.ts";
 import { LEDGER_KINDS, ledgerDataOf, normalizeBackup, normalizeInvestmentAccount, normalizeInvestmentFlow, normalizeMarketValueSnapshot, normalizeTransaction } from "./schema.ts";
 
@@ -10,6 +11,7 @@ export interface LedgerStore {
 export interface LedgerRepository {
   read(): Promise<LedgerState>;
   switchLedger(kind: LedgerKind, revision: number): Promise<LedgerState>;
+  saveSalaryBudget(settings: SalaryBudgetSettings | null, revision: number): Promise<LedgerState>;
   ensureCurrentCycle(today: string): Promise<LedgerState>;
   saveCycle(cycle: FinancialCycle, plan: BudgetPlan, revision: number): Promise<LedgerState>;
   replaceCurrentCycle(cycle: FinancialCycle, plan: BudgetPlan, revision: number): Promise<LedgerState>;
@@ -80,6 +82,7 @@ export function createRepository(store: LedgerStore): LedgerRepository {
       return { ...state, ...destination, ledgerKind: kind, otherLedgers };
     }),
     ensureCurrentCycle,
+    saveSalaryBudget: (settings, revision) => mutate(revision, state => ({ ...state, salaryBudget: normalizeSalaryBudgetSettings(settings) })),
     saveCycle: (cycle, plan, revision) => mutate(revision, state => ({ ...state,
       profile: (cycle.cycleType ?? "salary_based") === "salary_based" ? { salaryDay: cycle.salaryDay } : null,
       activeCycleId: cycle.id,

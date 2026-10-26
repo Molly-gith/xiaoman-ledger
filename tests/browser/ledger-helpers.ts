@@ -49,7 +49,11 @@ export async function setFunds(page: Page, available = "10000", investment = "25
   await expandInvestmentTarget(page); await page.locator('[name="plannedSavings"]').fill(investment); await saveCycle(page);
 }
 export async function expectReport(page: Page, income: string, expense: string, balance: string) {
-  await openBills(page); await expect(page.locator(".bill-summary > div > b")).toHaveText([income, expense, balance]);
+  await openBills(page);
+  if ([income, expense, balance].every(value => value === "¥0.00")) {
+    await expect(page.locator(".bill-summary")).toHaveCount(0);
+    await expect(page.locator(".bill-list")).toContainText("这段时间还没有账目");
+  } else await expect(page.locator(".bill-summary > div > b")).toHaveText([income, expense, balance]);
 }
 export async function expandEntryOptions(page: Page) {
   const details = page.getByRole("dialog").locator(".entry-more");

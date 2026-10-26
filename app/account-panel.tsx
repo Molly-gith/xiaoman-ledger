@@ -6,6 +6,7 @@ import { createAssistantMemoryRepository } from "../lib/data/assistant-memory";
 import { prepareLocalToCloudMigration } from "../lib/data/cloud-migration";
 import { LEDGER_KINDS } from "./ledger-components";
 import "./account-panel.css";
+import { StoryIcon } from "./story-icons";
 
 // The fixed preview return URL is verified; the email service still limits pilot signups.
 export const ACCOUNT_REGISTRATION_READY = true;
@@ -21,7 +22,7 @@ function authErrorMessage(error: unknown, signup: boolean): string {
   return signup ? "注册暂时没有完成，请检查网络后重试。本机账目仍保留。" : "账号暂时无法连接，请检查网络后重试。本机账目仍保留。";
 }
 
-export function AccountPanel({ email, cloud = false, accountId, isCurrent, onRefresh }: { email: string | null; cloud?: boolean; accountId?: string; isCurrent?: () => boolean; onRefresh?: () => Promise<boolean> }) {
+export function AccountPanel({ email, cloud = false, accountId, isCurrent, onRefresh, initiallyExpanded = false }: { email: string | null; cloud?: boolean; initiallyExpanded?: boolean; accountId?: string; isCurrent?: () => boolean; onRefresh?: () => Promise<boolean> }) {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [address, setAddress] = useState("");
   const [password, setPassword] = useState("");
@@ -89,18 +90,15 @@ export function AccountPanel({ email, cloud = false, accountId, isCurrent, onRef
     finally { running.current = false; setBusy(false); }
   }
   return <section className="account-panel" aria-label="账号与同步">
-    <h2>{cloud ? "账号与同步" : "登录与同步"}</h2>
-    {cloud ? <><p className="account-email">{email ?? "已登录账号"}</p><p className="helper">正在使用这个账号的云端账本，每次保存都需要联网。其他设备使用同一账号即可读取；页面已打开时，可点重新同步。</p>
+    {cloud ? <details className="account-entry" open={initiallyExpanded || undefined}><summary><StoryIcon name="user" /><span><b>账号与同步</b><small>{email ?? "已登录"}</small></span><StoryIcon name="arrow" /></summary><div className="account-content"><p className="account-email">{email ?? "已登录账号"}</p><p className="helper">正在使用这个账号的云端账本，每次保存都需要联网。其他设备使用同一账号即可读取；页面已打开时，可点重新同步。</p>
       <div className="account-actions"><button disabled={busy} onClick={() => void refresh()}>重新同步</button><button disabled={busy} onClick={() => void signOut()}>退出到本机账本</button></div>
       <div className="account-migration"><h3>带上本机旧账</h3><p className="helper">把这台设备的三个账本、对话和分类偏好复制到空白账号。本机内容会保留，确认前不会上传。</p>
         {!migration ? <button disabled={busy} onClick={() => void prepareMigration()}>复制本机数据到这个账号</button> : <div className="migration-preview"><p>将复制到 <b>{email ?? "当前账号"}</b></p><table><caption>准备复制的本机内容</caption><thead><tr><th scope="col">账本</th><th scope="col">账目</th><th scope="col">对话</th><th scope="col">偏好</th></tr></thead><tbody>{LEDGER_KINDS.map(book => <tr key={book.key}><th scope="row">{book.label}</th><td>{migration.perLedger[book.key].transactions}</td><td>{migration.perLedger[book.key].conversations}</td><td>{migration.perLedger[book.key].preferences}</td></tr>)}</tbody></table><p className="helper">共 {migration.counts.transactions} 笔账目、{migration.counts.conversations} 条对话、{migration.counts.preferences} 条偏好。本机原内容保留，已有云端内容不会被覆盖。</p><div className="account-actions"><button disabled={busy} onClick={() => { setMigration(null); setError(""); }}>暂不复制</button><button disabled={busy} className="primary" onClick={() => void copyLocal()}>确认复制到当前账号</button></div></div>}
       </div>
       <details><summary>账号已有内容，或使用其他备份</summary><p className="helper">已有内容的账号不能直接复制覆盖。若需要替换，先备份当前云端内容，再分别到「云端数据与备份」和「记忆与偏好」中导入。可退出到本机账本导出本机备份。</p></details>
-    </> : <><p className="helper">现在使用本机账本，无需登录也能记账。登录后可在不同设备使用自己的云端账本，本机旧账不会自动上传。</p>
-      <details><summary>使用账号</summary><div className="account-mode"><button aria-pressed={mode === "login"} disabled={busy} onClick={() => { setMode("login"); setError(""); setNotice(""); }}>登录已有账号</button>{ACCOUNT_REGISTRATION_READY && <button aria-pressed={mode === "signup"} disabled={busy} onClick={() => { setMode("signup"); setError(""); setNotice(""); }}>注册新账号</button>}</div>{!ACCOUNT_REGISTRATION_READY && <p className="helper">新账号注册尚未开放。已有账号可在这里登录。</p>}
+    </div></details> : <details className="account-entry"><summary><StoryIcon name="user" /><span><b>使用账号</b><small>同步到其他设备 · 选填</small></span><StoryIcon name="arrow" /></summary><div className="account-content"><p className="helper">登录后可跨设备同步。本机旧账由你决定是否上传。</p><div className="account-mode"><button aria-pressed={mode === "login"} disabled={busy} onClick={() => { setMode("login"); setError(""); setNotice(""); }}>登录已有账号</button>{ACCOUNT_REGISTRATION_READY && <button aria-pressed={mode === "signup"} disabled={busy} onClick={() => { setMode("signup"); setError(""); setNotice(""); }}>注册新账号</button>}</div>{!ACCOUNT_REGISTRATION_READY && <p className="helper">新账号注册尚未开放。已有账号可在这里登录。</p>}
         <form onSubmit={authenticate}><fieldset disabled={busy} className="app-content account-fields">{mode === "signup" && <p className="helper">当前仅支持已获授权的体验邮箱注册。</p>}<label>邮箱（必填）<input type="email" name="email" autoComplete="email" value={address} onChange={e => setAddress(e.target.value)} maxLength={254} required /></label><label>密码（必填）<input type="password" name="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} value={password} onChange={e => setPassword(e.target.value)} minLength={mode === "signup" ? 8 : undefined} maxLength={128} required /></label>{mode === "signup" && <p className="helper">至少八位。注册后若收到确认邮件，请按邮件提示完成验证。</p>}<button className="primary" type="submit">{mode === "signup" ? "注册" : "登录"}</button></fieldset></form>
-      </details>
-    </>}
+      </div></details>}
     {busy && <p role="status">正在处理，请稍候…</p>}{error && <p className="inline-error" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
   </section>;
 }

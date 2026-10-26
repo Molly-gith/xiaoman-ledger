@@ -67,14 +67,16 @@
 .simple-app .section-title h2 { font-size: 17px; }
 .simple-app .section-title h2 small { font-size: 12px; color: #657256; font-weight: 400; }
 .simple-app .section-title>button { min-height: 44px; font-size: 12px; }
-.simple-app .tx-row { padding: 12px 0; }
+.simple-app .tx-row { padding: 8px 0; }
+.simple-app .tx-main { padding: 8px 0 4px; grid-template-columns: 34px minmax(0,1fr) auto; }
+.simple-app .tx-actions { padding-bottom: 0; }
 .simple-app .tx-copy b { font-size: 14px; overflow-wrap: anywhere; }
 .simple-app .tx-copy small { color: #627055; line-height: 1.6; }
 .simple-app .tx-main strong { font-size: 16px; font-variant-numeric: tabular-nums; }
 .simple-app .tx-actions button { min-height: 36px; font-size: 11px; }
 .simple-app .report-title { margin: 0 0 16px; }
 .date-filter { margin-bottom: 24px; }
-.range-modes { display: flex; gap: 8px; margin-bottom: 15px; }
+.range-modes { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
 .range-modes button { border-radius: 10px; min-height: 40px; padding: 8px 14px; font-size: 13px; color: #637254; background: #eff1e5; }
 .range-modes button[aria-pressed="true"] { background: #3c6440; color: #fffdf5; }
 .month-selector { display: flex; align-items: center; gap: 10px; }
@@ -86,7 +88,7 @@
 .custom-dates label { font-size: 12px; color: #657256; margin: 0; min-width: 0; }
 .custom-dates input { display: block; width: 100%; min-width: 0; margin-top: 6px; }
 .custom-dates>span { padding-bottom: 12px; text-align: center; color: #657256; }
-.simple-app .bill-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; padding: 22px 0; margin: 0; border-block: 1px solid #dce2ce; background: transparent; }
+.simple-app .bill-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; padding: 22px 0; margin: 0; border: 0; border-bottom: 1px solid #dce2ce; border-radius: 0; box-shadow: none; background: transparent; }
 .simple-app .bill-summary>div { padding: 0; background: none; border: 0; border-radius: 0; }
 .simple-app .bill-summary span { font-size: 12px; color: #657256; }
 .simple-app .bill-summary b { display: block; font-size: clamp(16px,3.5vw,23px); font-variant-numeric: tabular-nums; margin-top: 8px; overflow-wrap: anywhere; }
@@ -100,17 +102,19 @@
 .simple-app .recent-filters button { min-height: 36px; padding: 7px 11px; font-size: 12px; }
 .simple-app .page-header { margin: 0 0 24px; }
 .simple-app .page-header h1 { font-size: 23px; }
-.simple-app .local-data-card { background: transparent; border: 0; border-bottom: 1px solid #dce2ce; border-radius: 0; min-height: 80px; padding: 16px 0; }
-.local-data-card>.story-icon { width: 32px; height: 32px; color: #587647; }
+.simple-app .local-data-card b { font-size: 15px; font-weight: 600; }
+.simple-app .local-data-card small { font-size: 12px; margin-top: 5px; color: #627055; }
+.simple-app .local-data-card { background: transparent; border: 0; border-bottom: 1px solid #dce2ce; border-radius: 0; min-height: 76px; padding: 16px 0; gap: 16px; }
+.local-data-card>.story-icon { width: 24px; height: 24px; color: #587647; }
 .optional-settings { margin-top: 28px; }
 .optional-settings summary { min-height: 44px; cursor: pointer; font-size: 14px; color: #536b44; }
 .optional-settings>button { display: block; min-height: 44px; font-size: 14px; }
-.privacy-note { color: #657256; font-size: 12px; line-height: 1.8; margin-top: 32px; max-width: 60ch; }
+.privacy-note { color: #657256; font-size: 12px; line-height: 1.8; margin-top: 8px; max-width: 60ch; }
 .simple-app .modal-wrap { z-index: 100; top: var(--modal-viewport-top,0px); bottom: auto; height: var(--modal-viewport-height,100dvh); min-height: 0; padding: 16px; align-items: center; overscroll-behavior: contain; }
 .simple-app .sheet { max-height: calc(var(--modal-viewport-height,100dvh) - 32px); min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .simple-app .sheet>.close { z-index: 2; background: #fffdf5; }
 .simple-app .sheet>fieldset { min-width: 0; min-height: 0; }
-.simple-app .toast { z-index: 120; max-width: calc(100vw - 32px); }
+.simple-app .toast { z-index: 120; max-width: calc(100vw - 32px); width: max-content; white-space: normal; line-height: 1.6; }
 .simple-app button:focus-visible,.simple-app summary:focus-visible { outline: 2px solid #537d42; outline-offset: 4px; }
 .simple-app input,.simple-app textarea { caret-color: #3c6440; }
 .simple-app ::selection { color: #263d22; background: #d7e4be; }
@@ -170,3 +174,19 @@
   .simple-app .tx-main strong { font-size: 14px; }
   .simple-app .tx-actions { gap: 5px; }
 }
+
+/* Quiet secondary choices: keep reports, account tools and budgets one tap away. */
+.nature-breakdown { margin: 8px 0 12px; }
+.nature-breakdown>summary,.privacy-details>summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-size: 13px; color: #536b44; gap: 8px; }
+.nature-breakdown>summary::after,.privacy-details>summary::after { content: "+"; margin-left: auto; font-size: 17px; }
+.nature-breakdown[open]>summary::after,.privacy-details[open]>summary::after { content: "−"; }
+.nature-breakdown .nature-summary { padding: 8px 0 12px; }
+.privacy-details { margin-top: 24px; }
+.privacy-details .privacy-note { text-align: left; }
+.salary-period-selector { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.salary-period-selector button { min-height: 44px; min-width: 36px; color: #3c6440; font-size: 13px; }
+.salary-period-selector span { font-size: 13px; font-variant-numeric: tabular-nums; }
+.salary-period-selector .story-icon { width: 18px; height: 18px; }
+.salary-period-selector button:first-child .story-icon { transform: rotate(180deg); }
+.simple-app .optional-settings { margin-top: 22px; }
+.simple-app .optional-settings .helper { font-size: 12px; line-height: 1.7; }

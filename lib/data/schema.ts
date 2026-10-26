@@ -1,10 +1,12 @@
+import { normalizeSalaryBudgetSettings } from "../domain/salary-budget.ts";
 import { calendarMonthCycle, calculateFinance, cents, customCycle, parseDate, salaryCycle, transactionDay } from "../domain/finance.ts";
 import type { FundingSource, FundingSourceType, InvestmentAccount, InvestmentFlow, LedgerData, LedgerKind, LedgerState, MarketValueSnapshot, Transaction } from "../domain/types.ts";
 
 export const LEDGER_KINDS: readonly LedgerKind[] = ["personal", "family", "travel"];
-const DATA_FIELDS = ["profile", "activeCycleId", "cycles", "budgets", "transactions", "investmentAccounts", "investmentFlows", "marketValueSnapshots", "settings"] as const;
+const REQUIRED_DATA_FIELDS = ["profile", "activeCycleId", "cycles", "budgets", "transactions", "investmentAccounts", "investmentFlows", "marketValueSnapshots", "settings"] as const;
+const DATA_FIELDS = ["salaryBudget", "profile", "activeCycleId", "cycles", "budgets", "transactions", "investmentAccounts", "investmentFlows", "marketValueSnapshots", "settings"] as const;
 export function defaultLedgerData(): LedgerData {
-  return { profile: null, activeCycleId: null, cycles: [], budgets: [], transactions: [], investmentAccounts: [], investmentFlows: [], marketValueSnapshots: [],
+  return { salaryBudget: null, profile: null, activeCycleId: null, cycles: [], budgets: [], transactions: [], investmentAccounts: [], investmentFlows: [], marketValueSnapshots: [],
     settings: { monthlyBudget: 15000, savingsCurrent: 0, savingsGoal: 100000 } };
 }
 export function defaultState(): LedgerState {
@@ -101,6 +103,7 @@ export function normalizeMarketValueSnapshot(value: unknown): MarketValueSnapsho
 function normalizeLedgerData(v: Record<string, unknown>, version: number): LedgerData {
   if (!Array.isArray(v.transactions) || v.transactions.length > 5000) throw new Error("请选择有效的小满 JSON 备份（每本最多 5000 笔）");
   const state = defaultLedgerData(), settings = record(v.settings);
+  if (version === 4) state.salaryBudget = normalizeSalaryBudgetSettings(v.salaryBudget);
   state.settings = { monthlyBudget: amount(settings.monthlyBudget), savingsCurrent: amount(settings.savingsCurrent), savingsGoal: amount(settings.savingsGoal) };
   state.transactions = v.transactions.map(tx => normalizeTransaction(tx, version === 1));
   if (new Set(state.transactions.map(tx => tx.id)).size !== state.transactions.length) throw new Error("账目编号重复");
@@ -184,7 +187,7 @@ export function normalizeBackup(value: unknown): LedgerState {
     if (Object.keys(others).length !== 2 || Object.keys(others).some(kind => !inactiveKinds.includes(kind as LedgerKind))) throw new Error("其他账本必须恰好包含另两个用途，不能重复当前账本");
     for (const kind of inactiveKinds) {
       const data = record(others[kind]);
-      if (Object.keys(data).length !== DATA_FIELDS.length || Object.keys(data).some(field => !DATA_FIELDS.includes(field as typeof DATA_FIELDS[number]))) throw new Error("其他账本只能包含独立数据，不能嵌套账本或版本信息");
+      if (REQUIRED_DATA_FIELDS.some(field => !Object.hasOwn(data, field)) || Object.keys(data).some(field => !DATA_FIELDS.includes(field as typeof DATA_FIELDS[number]))) throw new Error("其他账本只能包含独立数据，不能嵌套账本或版本信息");
       otherLedgers[kind] = normalizeLedgerData(data, 4);
     }
   } else {

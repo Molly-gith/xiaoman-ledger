@@ -11,7 +11,8 @@ test("fresh home offers natural input and manual entry without creating a budget
   expect(state.cycles).toEqual([]); expect(state.budgets).toEqual([]); expect(state.activeCycleId).toBeNull();
   await openBills(page);
   await expect(page.getByLabel("查看月份", { exact: true })).toHaveValue("2026-09");
-  await expect(page.locator(".bill-summary b")).toHaveText(["¥0.00", "¥0.00", "¥0.00"]);
+  await expect(page.locator(".bill-summary")).toHaveCount(0);
+  await expect(page.getByText("这段时间还没有账目", { exact: true })).toBeVisible();
   await openAssets(page); await expect(page.getByRole("heading", { name: "新建投资账户" })).toBeVisible();
   await returnHome(page); await expect(page.getByRole("dialog")).toHaveCount(0);
 });
@@ -21,7 +22,7 @@ test("date-range review opens inline for the visible dates without auto-sending"
   await page.getByLabel("开始日期", { exact: true }).fill("2026-08-20");
   await page.getByLabel("结束日期", { exact: true }).fill("2026-09-10");
   await page.getByTestId("home-action-review").click();
-  await expect(page.getByTestId("period-review")).toContainText("2026-08-20 至 2026-09-10");
+  await expect(page.getByRole("region", { name: "统计日期筛选" })).toContainText("2026-08-20 — 2026-09-10");
   await expect(page.getByTestId("period-review")).toContainText("这段时间还没有记账");
   await expect(page.getByRole("heading", { name: "账单与统计", exact: true })).toBeVisible();
   await expect(page.getByTestId("ai-answer")).toHaveCount(0);

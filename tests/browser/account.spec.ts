@@ -56,7 +56,11 @@ async function fakeCloud(context: BrowserContext) {
   });
   return { accounts, writes, authRequests, setFailReads: (value: boolean) => { failReads = value; }, setFailLogin: (value: boolean) => { failLogin = value; }, denySignupEmail: (value: boolean) => { denySignupEmail = value; }, holdWrite: (value: typeof holdWrite) => { holdWrite = value; }, holdRead: (value: typeof holdRead) => { holdRead = value; } };
 }
-async function my(page: Page) { await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: "我的", exact: true }).click(); }
+async function my(page: Page) {
+  await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: "我的", exact: true }).click();
+  const panel = page.locator(".account-entry").filter({ has: page.locator(".account-email") });
+  if (await panel.count() && !await panel.getAttribute("open").then(value => value !== null)) await panel.locator(":scope > summary").click();
+}
 async function login(page: Page, email: string) {
   await my(page);
   const panel = page.getByRole("region", { name: "账号与同步" });

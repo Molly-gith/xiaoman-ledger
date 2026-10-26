@@ -170,7 +170,7 @@ export function AssistantLedger({ endpoint, today, report, revision, ledgerName,
   };
 
   return <section className="ledger-assistant" aria-label="与小满对话">
-    <div className="assistant-heading"><h2>说一句，记账、查账都可以。</h2><p>正在使用{ledgerName} · 可以接着上次的话聊</p></div>
+    <div className="assistant-heading"><h2>今天，也慢慢来。</h2><p>说一句，记账、查账都可以。</p></div>
     {memoryError && <p role="alert" className="inline-error">{memoryError}<button onClick={() => window.location.reload()}>重新载入</button></p>}
     <form className="natural-composer" onSubmit={event => void submit(event)}>
       <label className="sr-only" htmlFor="assistant-question">记账或问小满</label>
@@ -198,7 +198,7 @@ export function AssistantLedger({ endpoint, today, report, revision, ledgerName,
         </article>)}
         <div className="draft-actions"><button onClick={reset}>不保存</button><button className="primary" onClick={() => void save()} disabled={busy}>{busy ? "保存中…" : drafts.length === 1 ? "保存这笔" : `保存这 ${drafts.length} 笔`}</button></div>
       </section>}
-      {answer && answer.revision === revision && answer.reportKey === reportKey && <section className="answer-copy" data-testid="ai-answer"><p className="ai-question">{lastText}</p><p className="ai-answer-text">{answer.review ? "已根据账目整理好这段时间的复盘，可以展开每项依据核对。" : answer.answer}</p>{answer.review && <PeriodReviewPanel key={`${answer.revision}:${answer.review.ledgerName}:${answer.review.range.startDate}:${answer.review.range.endDate}`} {...answer.review} today={today} defaultOpen />}<p className="helper">{answer.query ? `金额由${cloud ? "当前账目" : "本机账目"}计算。可以接着问，也可以到「账单」核对。` : "小满的使用说明；没有修改账目。"}</p></section>}
+      {answer && answer.revision === revision && answer.reportKey === reportKey && <section className="answer-copy" data-testid="ai-answer"><p className="ai-question">{lastText}</p><p className="ai-answer-text">{answer.review ? "一起看看这段时间。" : answer.answer}</p>{answer.review && <PeriodReviewPanel key={`${answer.revision}:${answer.review.ledgerName}:${answer.review.range.startDate}:${answer.review.range.endDate}`} {...answer.review} today={today} defaultOpen />}<p className="helper">{answer.query ? `金额由${cloud ? "当前账目" : "本机账目"}计算。可以接着问，也可以到「账单」核对。` : "小满的使用说明；没有修改账目。"}</p></section>}
     </div>
     {!!memory?.conversation.length && <details className="conversation-history" open={!answer && !drafts.length && !preference && !clarification}><summary>对话记录 · {ledgerName} <span>{memory.conversation.length} 条</span></summary><p className="helper">以下为当时的回答；账目变动后可重新询问。最近四十条保存在{cloud ? "当前账号的云端" : "本机"}。</p><div className="conversation-log" role="log" aria-label={`${ledgerName}对话记录`}>{memory.conversation.map(m => <article key={m.id} className={`conversation-message ${m.role}`}><small>{m.role === "user" ? "我" : "小满"} · {new Date(m.createdAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</small><p>{m.content}</p></article>)}<div ref={conversationEnd} /></div></details>}
   </section>;

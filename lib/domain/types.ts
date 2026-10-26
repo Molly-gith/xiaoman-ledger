@@ -5,6 +5,15 @@ export type CycleType = "calendar_month" | "salary_based" | "custom";
 export type FundingSourceType = "salary" | "bonus" | "freelance" | "business" | "family_transfer" | "savings_draw" | "other";
 export type FundingSource = { id: string; type: FundingSourceType; amount: number; note?: string };
 export type DateOnly = string;
+export type SalaryBudgetPercentages = Record<ExpenseNature, number>;
+export type SalaryBudgetSettings = {
+  enabled: boolean; periodMode: "calendar_month" | "salary_based"; salaryDay: number | null;
+  /** Planned take-home salary, not a recorded income or account balance. */
+  expectedSalary: number;
+  /** Percent units, at most two decimals, total no more than 100. */
+  percentages: SalaryBudgetPercentages;
+  periodOverride: { startDate: DateOnly; endDate: DateOnly; salary: number } | null;
+};
 export type UserProfile = { salaryDay: number };
 export type FinancialCycle = { id: string; salaryDay: number; startDate: DateOnly; endDate: DateOnly; nextSalaryDate: DateOnly; cycleType?: CycleType };
 // All persisted amounts are yuan with at most two decimals. Arithmetic uses integer fen.
@@ -46,6 +55,7 @@ export type MarketValueSnapshot = {
 };
 export type LedgerKind = "personal" | "family" | "travel";
 export type LedgerData = {
+  salaryBudget: SalaryBudgetSettings | null;
   profile: UserProfile | null; activeCycleId: string | null;
   cycles: FinancialCycle[]; budgets: BudgetPlan[]; transactions: Transaction[];
   investmentAccounts: InvestmentAccount[];

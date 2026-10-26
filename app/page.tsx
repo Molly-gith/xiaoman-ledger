@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import type { LedgerKind, LedgerState, Transaction } from "../lib/domain/types";
+import { SalaryBudgetPanel } from "./salary-budget";
+import { calculateSalaryBudget, salaryPaydayRange } from "../lib/domain/salary-budget";
 import { localDate } from "../lib/domain/finance";
 import { calendarMonthRange, createDateRange, summarizeDateRange, transactionsInDateRange } from "../lib/domain/date-range";
 import { defaultState, encodeBackup, normalizeBackup } from "../lib/data/schema";
@@ -43,7 +45,8 @@ function LedgerHome({ scope }: { scope: WorkspaceScope }) {
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [month, setMonth] = useState(() => localDate().slice(0, 7));
-  const [rangeMode, setRangeMode] = useState<"month" | "custom">("month");
+  const [rangeMode, setRangeMode] = useState<"month" | "salary" | "custom">("month");
+  const [salaryAnchor, setSalaryAnchor] = useState(() => localDate());
   const [startDate, setStartDate] = useState(() => calendarMonthRange(localDate().slice(0, 7)).startDate);
   const [endDate, setEndDate] = useState(() => localDate());
   const [filter, setFilter] = useState<"all" | "income" | "expense">("all");
@@ -100,7 +103,18 @@ function LedgerHome({ scope }: { scope: WorkspaceScope }) {
     try {
       const next = await action();
       if (!isCurrent()) return false;
-      setState(next); setModal(null); setEditing(null); setPendingImport(null); setUndo(null); setToast(message);
+      let notice = message;
+      try { if (state && state.ledgerKind === next.ledgerKind) {
+        const before = calculateSalaryBudget(state.salaryBudget, state.transactions, today);
+        const after = calculateSalaryBudget(next.salaryBudget, next.transactions, today);
+        if (before && after) {
+          const level = (status: string) => status === "over" ? 2 : status === "near" ? 1 : 0;
+          const warnings = after.rows.filter(row => (row.status === "near" || row.status === "over") && level(row.status) > level(before.rows.find(old => old.nature === row.nature)?.status ?? "ok"));
+          if (warnings.length) notice += " · " + warnings.map(row => row.status === "over" ? row.nature + "超出预算 " + money(-row.remainingFen / 100) : row.nature + "已用到预算的 80%，留意一下就好").join("；");
+        }
+      }
+      } catch { /* The optional panel reports calculation errors; the ledger save still succeeded. */ }
+      setState(next); setModal(null); setEditing(null); setPendingImport(null); setUndo(null); setToast(notice);
       return true;
     } catch (e) { if (isCurrent()) setError(e instanceof Error ? e.message : "保存失败，输入内容已保留"); return false; }
     finally { saving.current = false; setBusy(false); }
@@ -113,11 +127,13 @@ function LedgerHome({ scope }: { scope: WorkspaceScope }) {
     catch (e) { if (isCurrent()) setError(e instanceof Error ? e.message : "读取失败"); return false; }
     finally { saving.current = false; setBusy(false); }
   }
-  if (!state) return error ? <main className="app-shell simple-app"><PageHeader title="账本暂时无法读取" subtitle={cloud ? "仍是当前账号，未切换到本机账本" : "原有数据已保留"} /><p role="alert">{error}</p><button className="primary" onClick={() => void reload()}>重新载入</button>{cloud && <AccountPanel email={scope.email} cloud accountId={scope.accountId} isCurrent={isCurrent} onRefresh={reload} />}</main> : <LoadingScreen text={cloud ? "正在读取云端账本" : "正在打开本地账本"} />;
+  if (!state) return error ? <main className="app-shell simple-app"><PageHeader title="账本暂时无法读取" subtitle={cloud ? "仍是当前账号，未切换到本机账本" : "原有数据已保留"} /><p role="alert">{error}</p><button className="primary" onClick={() => void reload()}>重新载入</button>{cloud && <AccountPanel email={scope.email} cloud initiallyExpanded accountId={scope.accountId} isCurrent={isCurrent} onRefresh={reload} />}</main> : <LoadingScreen text={cloud ? "正在读取云端账本" : "正在打开本地账本"} />;
 
-  let range = calendarMonthRange(month);
+  const salaryDay = state.salaryBudget?.enabled ? state.salaryBudget.salaryDay : null;
+  const effectiveRangeMode = rangeMode === "salary" && !salaryDay ? "month" : rangeMode;
+  let range = effectiveRangeMode === "salary" && salaryDay ? salaryPaydayRange(salaryAnchor, salaryDay) : calendarMonthRange(month);
   let rangeError = "";
-  if (rangeMode === "custom") {
+  if (effectiveRangeMode === "custom") {
     try { range = createDateRange(startDate, endDate); }
     catch { rangeError = "请选择有效日期，结束日期不能早于开始日期。"; }
   }
@@ -152,7 +168,7 @@ function LedgerHome({ scope }: { scope: WorkspaceScope }) {
     if (kind === state.ledgerKind) { setModal(null); return; }
     const name = LEDGER_KINDS.find(item => item.key === kind)!.label;
     if (await commit(() => repository.switchLedger(kind, state.revision), `已切换到${name}`)) {
-      setPrompt(""); setPromptVersion(value => value + 1); setFilter("all");
+      setPrompt(""); setPromptVersion(value => value + 1); setFilter("all"); setSalaryAnchor(today);
     }
   };
   const exportBackup = () => {
@@ -184,18 +200,19 @@ function LedgerHome({ scope }: { scope: WorkspaceScope }) {
       <AssistantLedger key={`${state.ledgerKind}-${promptVersion}`} memoryRepository={memoryRepository} memoryOwnerId={memoryOwnerId} cloud={cloud} ledgerState={state} ledgerName={ledgerName} endpoint={AI_API_URL} today={today} report={report} revision={state.revision} hidden={tab !== "home" || showDialog} busy={busy} suggestedPrompt={prompt} onSave={saveAI} onManual={() => openEntry()} onMemorySettings={() => setModal("memory")} readLedgerSnapshot={() => repository.read()} />
       {cloud && allTransactionCount === 0 && <p className="account-empty">这个账号还没有账目。本机旧账没有自动上传；可在「我的」查看迁移方法。</p>}
       {undo && <div className="saved-receipt" role="status"><span>已记入{ledgerName} · {undo.ids.length} 笔</span><button onClick={() => void commit(() => repository.deleteTransactions(undo.ids, undo.revision), "已撤销这次记账")}>撤销这次记账</button></div>}
+      <SalaryBudgetPanel key={state.ledgerKind} settings={state.salaryBudget} transactions={state.transactions} today={today} ledgerName={ledgerName} onViewRecords={budgetRange => { setStartDate(budgetRange.startDate); setEndDate(budgetRange.endDate); setRangeMode("custom"); setFilter("expense"); setTab("bills"); }} onSave={settings => commit(() => repository.saveSalaryBudget(settings, state.revision), settings?.enabled ? "薪资预算已保存" : "薪资预算已关闭，账目保留")} />
       <section className="transactions section-block"><div className="section-title"><h2>最近账目</h2><button data-testid="home-action-bills" onClick={() => setTab("bills")}>查看全部</button></div>{recent.length ? recent.map(tx => <TransactionRow key={tx.id} item={tx} {...rowActions} />) : <EmptyState compact text="说说今天的第一笔收入或花费吧" />}</section>
     </div>
     {tab === "bills" && <>
       <div className="section-title report-title"><h2>账单与统计</h2><button data-testid="home-action-add" onClick={() => openEntry()}>手动记一笔</button></div>
       <section className="date-filter" aria-label="统计日期筛选">
-        <div className="range-modes"><button aria-pressed={rangeMode === "month"} onClick={() => setRangeMode("month")}>按月查看</button><button aria-pressed={rangeMode === "custom"} onClick={() => setRangeMode("custom")}>自定义日期</button></div>
-        {rangeMode === "month" ? <div className="month-selector"><button aria-label="上个月" disabled={month <= "1900-01"} onClick={() => { const d = new Date(`${month}-01T12:00:00Z`); d.setUTCMonth(d.getUTCMonth() - 1); setMonth(d.toISOString().slice(0, 7)); }}>←</button><label>月份<input type="month" aria-label="查看月份" value={month} onChange={e => { if (/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value) && e.target.value >= "1900-01" && e.target.value <= "9998-12") setMonth(e.target.value); }} min="1900-01" max="9998-12" /></label><button aria-label="下个月" disabled={month >= "9998-12"} onClick={() => { const d = new Date(`${month}-01T12:00:00Z`); d.setUTCMonth(d.getUTCMonth() + 1); setMonth(d.toISOString().slice(0, 7)); }}>→</button><button onClick={() => setMonth(today.slice(0, 7))}>本月</button></div> : <div className="custom-dates"><label>开始日期<input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} required /></label><span>至</span><label>结束日期<input type="date" value={endDate} min={startDate} onChange={e => setEndDate(e.target.value)} required /></label></div>}
-        {rangeError ? <p role="alert">{rangeError}</p> : <p className="helper">{range.startDate} — {range.endDate}（含首尾两天）</p>}
+        <div className="range-modes"><button aria-pressed={effectiveRangeMode === "month"} onClick={() => setRangeMode("month")}>按月查看</button>{salaryDay && <button aria-pressed={effectiveRangeMode === "salary"} onClick={() => { setRangeMode("salary"); setSalaryAnchor(today); }}>工资日周期</button>}<button aria-pressed={effectiveRangeMode === "custom"} onClick={() => setRangeMode("custom")}>自定义日期</button></div>
+        {effectiveRangeMode === "month" ? <div className="month-selector"><button aria-label="上个月" disabled={month <= "1900-01"} onClick={() => { const d = new Date(`${month}-01T12:00:00Z`); d.setUTCMonth(d.getUTCMonth() - 1); setMonth(d.toISOString().slice(0, 7)); }}>←</button><label>月份<input type="month" aria-label="查看月份" value={month} onChange={e => { if (/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value) && e.target.value >= "1900-01" && e.target.value <= "9998-12") setMonth(e.target.value); }} min="1900-01" max="9998-12" /></label><button aria-label="下个月" disabled={month >= "9998-12"} onClick={() => { const d = new Date(`${month}-01T12:00:00Z`); d.setUTCMonth(d.getUTCMonth() + 1); setMonth(d.toISOString().slice(0, 7)); }}>→</button><button onClick={() => setMonth(today.slice(0, 7))}>本月</button></div> : effectiveRangeMode === "salary" ? <div className="salary-period-selector"><button aria-label="上个工资周期" disabled={range.startDate <= "1900-02-01"} onClick={() => setSalaryAnchor(new Date(Date.parse(range.startDate + "T12:00:00Z") - 86400000).toISOString().slice(0, 10))}><StoryIcon name="arrow" /></button><span>{range.startDate} — {range.endDate}</span><button aria-label="下个工资周期" disabled={range.endDate >= "9998-11-30"} onClick={() => setSalaryAnchor(new Date(Date.parse(range.endDate + "T12:00:00Z") + 86400000).toISOString().slice(0, 10))}><StoryIcon name="arrow" /></button><button onClick={() => setSalaryAnchor(today)}>本期</button></div> : <div className="custom-dates"><label>开始日期<input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} required /></label><span>至</span><label>结束日期<input type="date" value={endDate} min={startDate} onChange={e => setEndDate(e.target.value)} required /></label></div>}
+        {rangeError ? <p role="alert">{rangeError}</p> : effectiveRangeMode !== "salary" && <p className="helper">{range.startDate} — {range.endDate}</p>}
       </section>
       {!rangeError && <>
-        <section className="bill-summary" aria-label="所选日期收支"><div><span>收入</span><b>{money(report.income)}</b></div><div><span>支出</span><b>{money(report.expense)}</b></div><div><span>收支差额</span><b>{money(report.balance)}</b></div></section>
-        <section className="nature-summary" aria-label="支出性质">{Object.entries(report.natureTotals).map(([nature, amount]) => <div key={nature}><span>{nature}</span><strong>{money(amount)}</strong></div>)}</section>
+        {report.transactionCount > 0 && <section className="bill-summary" aria-label="所选日期收支"><div><span>收入</span><b>{money(report.income)}</b></div><div><span>支出</span><b>{money(report.expense)}</b></div><div><span>收支差额</span><b>{money(report.balance)}</b></div></section>}
+        {report.expenseCount > 0 && <details className="nature-breakdown"><summary>支出性质</summary><section className="nature-summary" aria-label="支出性质">{Object.entries(report.natureTotals).map(([nature, amount]) => <div key={nature}><span>{nature}</span><strong>{money(amount)}</strong></div>)}</section></details>}
         {!!report.pendingDateCount && <p className="helper">有 {report.pendingDateCount} 笔旧账暂按本机日期计入，建议打开账目核对日期。</p>}
         <PeriodReviewPanel key={`review-${state.ledgerKind}-${range.startDate}-${range.endDate}-${state.revision}`} transactions={state.transactions} range={range} ledgerName={ledgerName} today={today} />
         <div className="section-title"><h2>明细 <small>{visible.length} 笔</small></h2><div className="recent-filters" aria-label="筛选账目">{FILTERS.map(item => <button key={item.key} aria-pressed={filter === item.key} className={filter === item.key ? "active" : ""} onClick={() => setFilter(item.key)}>{item.label}</button>)}</div></div>
@@ -203,13 +220,13 @@ function LedgerHome({ scope }: { scope: WorkspaceScope }) {
       </>}
     </>}
     {tab === "me" && <>
-      <PageHeader title="我的" subtitle={cloud ? "正在使用当前账号的云端账本" : "账本在这台设备，设置按需使用"} />
+      <PageHeader title="我的" subtitle="照自己的节奏，慢慢打理。" />
       <AccountPanel email={scope.email} cloud={cloud} accountId={scope.accountId} isCurrent={isCurrent} onRefresh={reload} />
-      <button className="local-data-card" onClick={() => setModal("memory")}><StoryIcon name="leaf" /><span><b>助手记忆与分类偏好</b><small>查看、修改或清除小满记住的内容</small></span></button>
+      <button className="local-data-card" onClick={() => setModal("memory")}><StoryIcon name="leaf" /><span><b>记忆与分类偏好</b><small>让小满更懂你的习惯</small></span></button>
       <button className="local-data-card" data-testid="home-action-assets" onClick={() => setTab("assets")}><StoryIcon name="jar" /><span><b>我的资产</b><small>投资账户与当前市值</small></span></button>
-      <button className="local-data-card" onClick={() => setModal("data")}><StoryIcon name="book" /><span><b>{cloud ? "云端数据与备份" : "本机数据与备份"}</b><small>导出、恢复和查看表格</small></span></button>
-      <details className="optional-settings"><summary>更多设置（选填）</summary><button onClick={() => setModal("goal")}>存款目标</button><button onClick={() => setModal("cycle")}>预算计划</button><p className="helper">记账不需要设置预算。历史周期和计划仍保留；查看任意日期的收支，请到「账单」。</p>{cycle && <p className="helper">已有计划：{cycle.startDate} — {cycle.endDate}</p>}</details>
-      <p className="privacy-note">需要 AI 理解时会发送输入、最近八条本账本对话及查询条件。{cloud ? "当前账目与助手记忆保存在这个账号的云端；退出后可继续使用原有本机账本。" : "当前账目与助手记忆保存在本机；登录不会自动上传旧账，换设备前请分别备份。"}</p>
+      <button className="local-data-card" onClick={() => setModal("data")}><StoryIcon name="book" /><span><b>{cloud ? "云端数据与备份" : "本机数据与备份"}</b><small>导出或恢复你的账本</small></span></button>
+      <details className="optional-settings"><summary>更多设置（选填）</summary><button onClick={() => setModal("goal")}>存款目标</button><button onClick={() => setModal("cycle")}>预算计划</button><p className="helper">原有计划仍保留。薪资预算在「记账」中设置。</p>{cycle && <p className="helper">已有计划：{cycle.startDate} — {cycle.endDate}</p>}</details>
+      <details className="privacy-details"><summary>隐私与数据说明</summary><p className="privacy-note">需要 AI 理解时会发送输入、最近八条本账本对话及查询条件。{cloud ? "当前账目与助手记忆保存在这个账号的云端；退出后可继续使用原有本机账本。" : "当前账目与助手记忆保存在本机；登录不会自动上传旧账，换设备前请分别备份。"}</p></details>
     </>}
     {tab === "assets" && <InvestmentAccounts key={state.ledgerKind} state={state} today={today} onBack={() => setTab("me")} onCreateAccount={account => commit(() => repository.saveInvestmentAccount(account, state.revision), "投资账户已创建")} onFlow={flow => commit(() => repository.saveInvestmentFlow(flow, state.revision), flow.type === "contribution" ? "投资投入已记录" : "投资取出已记录")} onMarketValue={(accountId, value, date) => commit(() => repository.saveMarketValue(accountId, value, date, state.revision), "当前市值已更新")} />}
   </fieldset>

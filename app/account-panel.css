@@ -1,4 +1,4 @@
-.account-panel { padding: 20px 0; border-bottom: 1px solid var(--line); color: var(--ink); min-width: 0; }
+.account-panel { padding: 0; border-bottom: 1px solid var(--line); color: var(--ink); min-width: 0; }
 .account-panel h2 { margin: 0 0 10px; font-size: 17px; font-weight: 700; }
 .account-panel p { max-width: 70ch; overflow-wrap: anywhere; }
 .account-panel summary { cursor: pointer; min-height: 44px; padding: 12px 0; color: var(--green); font-size: 14px; }
@@ -24,3 +24,14 @@
 .migration-preview .primary { margin: 0; width: auto; }
 .account-actions .primary { background: var(--green); color: #fffdf1; border-color: var(--green); }
 .account-actions .primary:hover:not(:disabled) { background: #496837; }
+
+.account-entry>summary { display: flex; align-items: center; list-style: none; gap: 16px; min-height: 76px; padding: 16px 0; }
+.account-entry>summary::-webkit-details-marker { display: none; }
+.account-entry>summary>.story-icon { flex: 0 0 24px; width: 24px; height: 24px; color: #587647; }
+.account-entry>summary>span { flex: 1; min-width: 0; }
+.account-entry>summary b { display: block; font-size: 15px; font-weight: 600; color: #303e2c; }
+.account-entry>summary small { display: block; margin-top: 5px; font-size: 12px; color: #627055; overflow-wrap: anywhere; }
+.account-entry>summary>.story-icon:last-child { flex-basis: 16px; width: 16px; height: 16px; }
+.account-entry[open]>summary>.story-icon:last-child { transform: rotate(90deg); }
+.account-content { padding: 0 0 20px; }
+.account-content>.helper:first-child { margin-top: 0; }
