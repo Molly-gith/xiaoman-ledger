@@ -181,23 +181,22 @@ The main scene is `public/art/xiaoman-forest.png`, with provenance in its adjace
 余额图采用 cover：手机右侧居中，桌面中心（59%）；工资设置页插图裁切到中心（70%），初始设置与桌面外背景复用场景。外背景有浅色覆盖层；图片不包含 UI 文字。场景更新须同时检查左侧金额可读性、右侧伙伴和来源记录。
 The balance uses cover, right-center on mobile and center (59%) on desktop. The cycle-form crop is center (70%); setup and desktop outer backgrounds reuse the scene. The outer background has a pale overlay. Artwork contains no UI text. Replacements require checking left-side amount legibility, the right-side companion and provenance.
 
-### PeriodReview / 当前期间复盘（局部扩展，2026-10-26）
+### Everyday interface / 当前日常界面（局部更新，2026-10-26）
 
-此节只描述当前日常记账界面的已实现扩展，以 `app/everyday-ledger.css`、`app/period-review.tsx` 和 `app/period-review.css` 为准。沿用奶油纸面与森林绿；当前容器最大（820px），页内顶部导航，手机在（720px）及以下收紧留白。上文旧版浮动底栏与工资周期布局不作为此组件的布局要求。
-This scoped extension follows the current everyday-ledger shell: cream paper, forest green, an (820px) maximum width, inline top navigation and tighter gutters at or below (720px). Earlier floating-navigation and salary-cycle layouts do not govern this component.
+本节只记录当前「记账／账单／我的」扩展，以 app/everyday-ledger.css 及 salary-budget、period-review、account-panel 的组件和专用样式为准。沿用奶油纸面、森林绿、中文系统字体和（820px）页内顶部导航容器；（720px）及以下收紧留白。前文旧浮动导航和工资周期布局不约束本节，不改写原有世界或全局 token。
+This scoped extension follows the current everyday-ledger shell and component styles: cream paper, forest green, Chinese system type, an (820px) container and inline top navigation. Earlier floating-navigation and salary-cycle layouts do not govern these components; the original world and global tokens remain intact.
 
-账单页先选日期、查看已有汇总，再按需展开「复盘这段时间」；账本与起止日期始终可见。展开后依次呈现三条已记录事实、前一等长时段比较、可选的分类/性质分布与所选账目依据。助手识别自然语言复盘时复用同一组件，默认展开。无需先设置工资周期或预算，复盘只读。
-Bills keeps the review collapsed after the date filter and existing totals. Ledger and dates remain visible. Expansion reveals three recorded facts, an equal-length previous-period comparison, optional category/nature distributions and selected transaction evidence. Natural-language review in the assistant opens the same component expanded; it is read-only and needs no cycle or budget setup.
+主信息常用（14px）、入口与小标题（15px）、输入与复盘结论（16px），辅助说明多为（12px），金额采用等宽数字。预算控件沿用（10px）圆角、复盘入口（12px）、账号字段（13px）。细线和留白组织内容，明细行保持紧凑，提示条可换行并限制在视口内；这些是现有局部取值，不是新的全局字阶或圆角系统。
+Common local sizes are (14px) for information, (15px) for entry headings, (16px) for inputs and review conclusions, and (12px) for supporting copy. Budget controls use (10px) corners, review entry (12px), and inherited account fields (13px). Flat separators, compact record rows and wrapping toasts preserve the everyday style; these are local implementation values.
 
-入口使用浅绿横条、（12px）圆角、至少（50px）高度与（14px）文字；正文（14px）、小标题（15px），金额使用等宽数字。内容以细线和留白组织，不增设浮层或独立导航。分类列表局部滚动，依据每页（5笔）且列表最高（330px）；长文字和金额允许换行。
-A pale green disclosure strip uses (12px) corners, a minimum (50px) height and (14px) type; facts use (14px), section headings (15px), and amounts use tabular numerals. Fine separators and spacing organize the inline content. Distributions scroll locally; evidence shows (5 records) per page in a list capped at (330px). Long labels and amounts wrap.
+「记账」的薪资预算默认只占一行「薪资预算 · 选填」；启用后重新进入仍收起，摘要提示已启用、有提醒或待核对，保存成功可展开一次。展开后仅保留本期范围、薪资及消费／浪费／投资三行「已用／额度」，设置、本期调整和说明按需展开；比例旁即时预览金额。临近或超额只作温和提醒，待核对日期与性质统一说明，不阻止记账；停用保留设置和账目。
+Salary budget defaults to one collapsed optional row, including on later visits after activation. Its summary exposes status; a successful save may expand it once. The expanded panel shows period, salary and three used/allowance rows. Settings, current-period overrides and explanations stay optional; allocation amounts preview beside percentages. Reminders never block recording, and disabling preserves settings and records.
 
-点击事实、比较金额或分布行，在本组件内打开对应依据，滚动并聚焦到依据区；收起后焦点回到触发控件。切换依据或翻页时列表回到顶部。比较金额的无障碍标签包含时段、项目与金额，分布行还包含笔数；展开状态、页码与空态均有文字表达。箭头过渡（180ms ease-out）遵守减少动态效果偏好。
-Evidence opens locally, scrolls into view and receives focus; closing returns focus to its trigger. Changing evidence or page resets the list scroll. Comparison labels include period, metric and amount; distribution labels also include count. Disclosure, pagination and empty states remain explicit. The arrow transition (180ms ease-out) respects reduced motion.
+复盘展开先给一句已记录事实，再提供「查看收支／与上一段比较／花在哪里」三个互斥折叠项；分类／性质共用分布位置。助手复用同一组件并默认展开。依据仍在组件内，每页（5笔）、列表最高（330px）；打开时滚动并聚焦，收起时恢复来源折叠项并归还焦点。金额标签包含时段、金额及相应笔数，长内容换行，减少动态效果偏好生效。
+Expanded review starts with one factual conclusion, followed by mutually exclusive totals, equal-length comparison and distribution disclosures. The assistant reuses it expanded. Evidence stays inline, (5 records) per page with a (330px) list cap; opening scrolls and focuses it, and closing restores the source disclosure and focus. Labels retain period, amount and relevant counts; long content wraps and reduced motion is respected.
 
-缺少本段/前段记录、日期待核对或前段越界时说明原因，不把缺失记录当成实际零收支；尚未结束的时段标明仅比较已记录账目。始终区分收支差额、账户余额与可用预算，投资性质支出不表述为投资收益。
-Explain absent records, unconfirmed dates and unsupported comparison ranges without treating missing records as real zero cash flow. Mark unfinished periods as comparisons of recorded transactions only. Keep income-minus-expense distinct from account balance or spendable budget, and investment-nature spending distinct from investment return.
-
+「我的」将账号、同步和迁移工具收在账号入口，隐私说明单独折叠；迁移保留预览和明确确认，读取失败时恢复操作可直接展开。所选时段无账目时，不显示三个零金额，也不显示空比较和三项复盘折叠；仅呈现简短空态。支出性质只在有支出时提供折叠入口。缺少记录不等于实际零收支，收支差额、可用预算、账户余额与投资收益继续明确区分。
+My collapses account, synchronization and migration tools, with privacy in a separate disclosure; migration retains preview and explicit confirmation, while load recovery may open directly. Empty periods show a short message instead of three zero totals or empty review sections. Expense nature appears only when expenses exist. Missing records do not establish real zero cash flow; recorded balance, budget, account balance and investment return remain distinct.
 
 ## Do's and Don'ts
 
