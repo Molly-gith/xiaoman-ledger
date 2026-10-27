@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import type { SalaryBudgetSettings, Transaction } from "../../lib/domain/types";
-import { addEntry, emptyLedger, exportLedger, openLedger, seedLedger } from "./ledger-helpers";
+import { addEntry, emptyLedger, exportLedger, openBills, openLedger, seedLedger } from "./ledger-helpers";
 
 const panel = (page: Page) => page.getByTestId("salary-budget");
 const config = (extra: Partial<SalaryBudgetSettings> = {}): SalaryBudgetSettings => ({
@@ -30,7 +30,7 @@ async function expand(page: Page) {
 }
 async function fillPlan(page: Page, salary = "6000", consumption = "60", waste = "0", investment = "20") {
   const budget = panel(page);
-  await budget.getByLabel("预计每月薪资（元，必填）", { exact: true }).fill(salary);
+  await budget.getByLabel("每月到手工资（元，必填）", { exact: true }).fill(salary);
   await budget.getByLabel("消费（%）", { exact: true }).fill(consumption);
   await budget.getByLabel("浪费（%）", { exact: true }).fill(waste);
   await budget.getByLabel("投资（%）", { exact: true }).fill(investment);
@@ -57,7 +57,7 @@ test("salary budgeting starts collapsed and optional without blocking an ordinar
   const budget = panel(page);
   await expect(budget.locator(":scope > summary")).toContainText("薪资预算 · 选填");
   await expect(budget).not.toHaveAttribute("open", "");
-  await expect(budget.getByLabel("预计每月薪资（元，必填）", { exact: true })).toBeHidden();
+  await expect(budget.getByLabel("每月到手工资（元，必填）", { exact: true })).toBeHidden();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await addEntry(page, { amount: "12", note: "不启用预算也能记账" });
   const { state } = await exportLedger(page);
@@ -67,6 +67,36 @@ test("salary budgeting starts collapsed and optional without blocking an ordinar
   expect(state.cycles).toEqual([]);
 });
 
+test("first-time salary uses 70/5/25 and salary edits preserve custom percentages after saving", async ({ page }) => {
+  await seedLedger(page, fixture());
+  await openLedger(page); await expand(page);
+  const budget = panel(page);
+  const salary = budget.getByLabel("每月到手工资（元，必填）", { exact: true });
+  await salary.fill("10000");
+  for (const [nature, ratio, money] of [["消费", "70", "¥7,000.00"], ["浪费", "5", "¥500.00"], ["投资", "25", "¥2,500.00"]]) {
+    await expect(budget.getByLabel(nature + "（%）", { exact: true })).toHaveValue(ratio);
+    await expect(budget.getByLabel(nature + "预算金额", { exact: true })).toHaveText(money);
+  }
+  await enable(page);
+  await editSettings(page);
+  await expect(budget.getByLabel("消费（%）", { exact: true })).toHaveValue("70");
+  await expect(budget.getByLabel("浪费（%）", { exact: true })).toHaveValue("5");
+  await expect(budget.getByLabel("投资（%）", { exact: true })).toHaveValue("25");
+  await fillPlan(page, "10000", "60", "0", "20");
+  await salary.fill("8000");
+  await expect(budget.getByLabel("消费预算金额", { exact: true })).toHaveText("¥4,800.00");
+  await expect(budget.getByLabel("浪费预算金额", { exact: true })).toHaveText("¥0.00");
+  await expect(budget.getByLabel("投资预算金额", { exact: true })).toHaveText("¥1,600.00");
+  await budget.getByRole("button", { name: "保存预算设置", exact: true }).click();
+  await page.reload(); await editSettings(page);
+  await expect(budget.getByLabel("消费（%）", { exact: true })).toHaveValue("60");
+  await expect(budget.getByLabel("浪费（%）", { exact: true })).toHaveValue("0");
+  await expect(budget.getByLabel("投资（%）", { exact: true })).toHaveValue("20");
+  const saved = (await exportLedger(page)).state;
+  expect(saved.salaryBudget).toMatchObject({ expectedSalary: 8000, percentages: { 消费: 60, 浪费: 0, 投资: 20 } });
+  expect(saved.transactions).toEqual([]);
+});
+
 test("monthly salary allocation previews money, rejects over 100 percent and creates no income", async ({ page }) => {
   await seedLedger(page, fixture(null, [recordedExpense]));
   await openLedger(page);
@@ -74,7 +104,7 @@ test("monthly salary allocation previews money, rejects over 100 percent and cre
   await fillPlan(page, "6000", "80", "0", "30");
   await panel(page).getByRole("button", { name: "保存并启用", exact: true }).click();
   await expect(panel(page).getByRole("alert")).toContainText("合计不能超过 100%");
-  await expect(panel(page).getByLabel("预计每月薪资（元，必填）", { exact: true })).toHaveValue("6000");
+  await expect(panel(page).getByLabel("每月到手工资（元，必填）", { exact: true })).toHaveValue("6000");
   await fillPlan(page);
   await expect(panel(page).getByLabel("消费预算金额", { exact: true })).toHaveText("¥3,600.00");
   await expect(panel(page).getByLabel("浪费预算金额", { exact: true })).toHaveText("¥0.00");
@@ -103,7 +133,7 @@ test("a payday can be stored without changing the month; salary periods require 
   await expand(page);
   await fillPlan(page);
   await panel(page).locator(".salary-budget-cycle > summary").click();
-  const salaryPeriod = panel(page).getByLabel("按发薪日划分预算周期（选用）", { exact: true });
+  const salaryPeriod = panel(page).getByLabel("按发薪周期计算预算（选用）", { exact: true });
   await expect(salaryPeriod).toBeDisabled();
   await panel(page).getByRole("combobox", { name: "发薪日（选填）", exact: true }).selectOption("20");
   await expect(salaryPeriod).toBeEnabled();
@@ -120,6 +150,14 @@ test("a payday can be stored without changing the month; salary periods require 
   expect(state.salaryBudget).toMatchObject({ periodMode: "salary_based", salaryDay: 20 });
   expect(state.transactions).toEqual([]);
   expect(state.profile).toBeNull();
+  await openBills(page);
+  await page.getByRole("button", { name: "发薪周期", exact: true }).click();
+  await expect(page.getByRole("region", { name: "统计日期筛选" })).toContainText("2026-08-20 — 2026-09-19");
+  await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: "记账", exact: true }).click();
+  await expand(page);
+  await panel(page).getByRole("button", { name: "查看本期账目", exact: true }).click();
+  await expect(page.getByRole("button", { name: "发薪周期", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("region", { name: "统计日期筛选" })).toContainText("2026-08-20 — 2026-09-19");
 });
 
 test("temporary salary changes only the current period and leaves the income ledger untouched", async ({ page }) => {
@@ -166,7 +204,7 @@ test("budgets remain isolated by ledger and disabling preserves records and save
   await expect(panel(page).locator(":scope > summary")).toContainText("选填");
   await page.reload();
   await expand(page);
-  await expect(panel(page).getByLabel("预计每月薪资（元，必填）", { exact: true })).toHaveValue("6000");
+  await expect(panel(page).getByLabel("每月到手工资（元，必填）", { exact: true })).toHaveValue("6000");
   await expect(panel(page).getByLabel("消费（%）", { exact: true })).toHaveValue("60");
   const { state } = await exportLedger(page);
   expect(state.salaryBudget).toEqual(config({ enabled: false }));

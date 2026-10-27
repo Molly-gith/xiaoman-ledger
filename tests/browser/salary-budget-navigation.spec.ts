@@ -11,20 +11,20 @@ test("salary-date bill filtering is optional and clips month-end paydays without
   await addEntry(page, { amount: "3", date: "2026-08-30", note: "上工资周期" });
   await openBills(page);
   await expect(page.getByRole("button", { name: "按月查看", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "工资日周期", exact: true }).click();
+  await page.getByRole("button", { name: "发薪周期", exact: true }).click();
   const range = page.getByRole("region", { name: "统计日期筛选" });
   await expect(range).toContainText("2026-08-31 — 2026-09-29");
   await expect(page.locator(".bill-list")).toContainText("本工资周期");
   await expect(page.locator(".bill-list")).not.toContainText("上工资周期");
-  await page.getByRole("button", { name: "下个工资周期", exact: true }).click();
+  await page.getByRole("button", { name: "下个发薪周期", exact: true }).click();
   await expect(range).toContainText("2026-09-30 — 2026-10-30");
   await page.getByRole("button", { name: "本期", exact: true }).click();
-  await page.getByRole("button", { name: "上个工资周期", exact: true }).click();
+  await page.getByRole("button", { name: "上个发薪周期", exact: true }).click();
   await expect(range).toContainText("2026-07-31 — 2026-08-30");
   await expect(page.locator(".bill-list")).toContainText("上工资周期");
   await page.getByTestId("current-ledger").click();
   await page.getByRole("button", { name: "家庭账本", exact: true }).click();
-  await expect(page.getByRole("button", { name: "工资日周期", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "发薪周期", exact: true })).toHaveCount(0);
   await expect(page.getByLabel("查看月份", { exact: true })).toBeVisible();
 });
 test("budget reminders occur on threshold crossings, edits and deletions recalculate, zero waste is a limit", async ({ page }) => {

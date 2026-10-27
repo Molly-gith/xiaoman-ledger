@@ -120,9 +120,9 @@ export function SalaryBudgetPanel({ settings, transactions, today, ledgerName, o
 function SalaryBudgetForm({ settings, busy, onSave }: { settings: SalaryBudgetSettings | null; busy: boolean; onSave: Save }) {
   const [salary, setSalary] = useState(settings ? String(settings.expectedSalary) : "");
   const [percentages, setPercentages] = useState<Record<(typeof NATURES)[number], string>>({
-    消费: settings ? String(settings.percentages.消费) : "",
-    浪费: settings ? String(settings.percentages.浪费) : "0",
-    投资: settings ? String(settings.percentages.投资) : "",
+    消费: settings ? String(settings.percentages.消费) : "70",
+    浪费: settings ? String(settings.percentages.浪费) : "5",
+    投资: settings ? String(settings.percentages.投资) : "25",
   });
   const [salaryDay, setSalaryDay] = useState(settings?.salaryDay ? String(settings.salaryDay) : "");
   const [periodMode, setPeriodMode] = useState<SalaryBudgetSettings["periodMode"]>(settings?.periodMode ?? "calendar_month");
@@ -162,11 +162,11 @@ function SalaryBudgetForm({ settings, busy, onSave }: { settings: SalaryBudgetSe
   }
   return <form className="salary-budget-form" onSubmit={submit}>
     <fieldset disabled={busy}>
-      <label className="salary-budget-field">预计每月薪资（元，必填）
-        <input name="expectedSalary" type="number" inputMode="decimal" min="0" max="999999999999.99" step="0.01" required value={salary} onChange={event => setSalary(event.target.value)} placeholder="填写你预计拿到的薪资" />
+      <label className="salary-budget-field">每月到手工资（元，必填）
+        <input name="expectedSalary" type="number" inputMode="decimal" min="0" max="999999999999.99" step="0.01" required value={salary} onChange={event => setSalary(event.target.value)} placeholder="填写你预计拿到的工资" />
       </label>
       <fieldset className="salary-budget-percentages" aria-describedby={distributionId}>
-        <legend>分配比例（必填，可填 0）</legend>
+        <legend>分配比例（必填，可修改）</legend>
         <div>{NATURES.map(nature => <div key={nature} className="salary-budget-percentage-field"><label>{nature}（%）<input name={"salaryBudgetPercent-" + nature} type="number" inputMode="decimal" min="0" max="100" step="0.01" required value={percentages[nature]} onChange={event => setPercentages(current => ({ ...current, [nature]: event.target.value }))} /></label>{allocation && <output aria-label={nature + "预算金额"}>{moneyFen(allocation.amountsFen[nature])}</output>}</div>)}</div>
         <p id={distributionId} className={validSum ? "salary-budget-helper" : "salary-budget-error"}>{validSum ? "合计 " + (Math.round(sum * 100) / 100) + "%，未分配 " + remainingPercent + "%" + (allocation ? "（" + moneyFen(allocation.unallocatedFen) + "）" : "") + "。不必凑满 100%。" : "三项比例合计不能超过 100%，请调低后再保存。"}</p>
       </fieldset>
@@ -177,8 +177,8 @@ function SalaryBudgetForm({ settings, busy, onSave }: { settings: SalaryBudgetSe
             <option value="">未设置</option>{Array.from({ length: 31 }, (_, index) => <option value={index + 1} key={index + 1}>每月 {index + 1} 日</option>)}
           </select>
         </label>
-        <label className="salary-budget-cycle-choice"><input name="salaryBudgetPeriod" type="checkbox" checked={periodMode === "salary_based"} disabled={!salaryDay || busy} onChange={event => setPeriodMode(event.target.checked ? "salary_based" : "calendar_month")} /><span>按发薪日划分预算周期（选用）</span></label>
-        <p id={cycleHintId} className="salary-budget-helper">{periodMode === "salary_based" ? "从发薪日到下次发薪日前一天；遇到没有该日的月份，按月末计算。" : "未选用时，按每月 1 日至月底计算。设置发薪日后可以选用工资周期。"}</p>
+        <label className="salary-budget-cycle-choice"><input name="salaryBudgetPeriod" type="checkbox" checked={periodMode === "salary_based"} disabled={!salaryDay || busy} onChange={event => setPeriodMode(event.target.checked ? "salary_based" : "calendar_month")} /><span>按发薪周期计算预算（选用）</span></label>
+        <p id={cycleHintId} className="salary-budget-helper">{periodMode === "salary_based" ? "从发薪日到下次发薪日前一天，短月按月末。保存后可在「账单 → 发薪周期」查看。" : "未选用时按自然月计算。设置发薪日后，「账单」也会提供「发薪周期」。"}</p>
       </details>
       {!!settings?.periodOverride && <p className="salary-budget-helper">已设置的本期临时薪资优先使用；预计薪资用于其他周期。改变周期时会清除本期临时调整。</p>}
       {error && <p className="salary-budget-error" role="alert">{error}</p>}
