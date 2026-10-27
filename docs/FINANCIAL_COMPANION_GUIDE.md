@@ -2,7 +2,7 @@
 
 上一轮已发布：在同一个记账入口连续聊天，用已经记录的账目给出简短、可核对的提醒。[打开体验页](https://molly-gith.github.io/xiaoman-ledger/previews/pr-24/?v=companion-20261027#/)；实际版本与测试证据见[本轮验收](evidence/financial-companion-20261027.md)。
 
-本次补充调整：重新打开默认从新对话开始，旧聊天改为主动点开回看。以下说明对应本次实现，尚待发布与验收；上面的体验链接及验收记录仍指上一轮版本。
+最新入口已发布：重新打开默认从新对话开始，旧聊天改为主动点开回看。[打开当前体验页](https://molly-gith.github.io/xiaoman-ledger/previews/pr-24/?v=fresh-chat-20261027#/)；CI #180、Pages #79及线上核验见[新对话验收](evidence/fresh-conversation-20261027.md)。
 
 ## 你平时怎么用
 
