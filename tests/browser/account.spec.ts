@@ -315,3 +315,32 @@ test("a delayed background refresh cannot give an open old edit the new cloud re
   await expect(dialog.locator('[name="amount"]')).toHaveValue("22");
   expect((cloud.accounts.get(accountA)!.get("ledger")!.payload.transactions as { amount: number }[])[0].amount).toBe(99);
 });
+
+
+test("automatic salary stays with its account and explains background versus local execution", async ({ page, context }) => {
+  const cloud = await fakeCloud(context);
+  await openLedger(page); await login(page, "a@example.test");
+  await expect(page.getByTestId("account-workspace")).toContainText("a@example.test");
+  const budget = page.getByTestId("salary-budget");
+  await budget.locator(":scope > summary").click();
+  await budget.getByLabel("每月到手工资（元，必填）", { exact: true }).fill("7000");
+  await budget.locator(".salary-budget-cycle > summary").click();
+  await budget.getByRole("combobox", { name: "发薪日（选填）", exact: true }).selectOption("15");
+  const automatic = budget.getByRole("checkbox", { name: "发薪日自动记工资（选用）", exact: true });
+  await expect(automatic).not.toBeChecked(); await automatic.check();
+  await expect(budget).toContainText("由账号后台自动记入");
+  await budget.getByRole("button", { name: "保存并启用", exact: true }).click();
+  await expect(home(page).locator(".tx-row")).toHaveCount(1);
+  const payload = cloud.accounts.get(accountA)!.get("ledger")!.payload;
+  expect((payload.salaryBudget as { autoIncome: { enabled: boolean } }).autoIncome.enabled).toBe(true);
+  expect((payload.transactions as { amount: number; autoSalary: { month: string } }[])[0]).toMatchObject({ amount: 7000, autoSalary: { month: "2026-09" } });
+  await page.reload(); await expect(home(page).locator(".tx-row")).toHaveCount(1);
+  await logout(page); await expect(home(page).locator(".tx-row")).toHaveCount(0);
+  await budget.locator(":scope > summary").click();
+  await budget.getByLabel("每月到手工资（元，必填）", { exact: true }).fill("7000");
+  await budget.locator(".salary-budget-cycle > summary").click();
+  await budget.getByRole("combobox", { name: "发薪日（选填）", exact: true }).selectOption("15");
+  await expect(automatic).not.toBeChecked(); await automatic.check();
+  await expect(budget).toContainText("下次打开会补记到期工资");
+  await expect(budget).not.toContainText("由账号后台自动记入");
+});

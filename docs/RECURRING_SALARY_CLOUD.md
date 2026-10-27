@@ -2,15 +2,20 @@
 
 ## 当前状态（2026-10-27）
 
-- 只读确认项目 `ossuymtantsctyhtwnyw` 的 PostgreSQL 为 17.6；`pg_cron` 默认版本 1.6.4 可用，但尚未启用，`cron.job` 不存在。
-- 已准备 [私有函数迁移](../supabase/migrations/20261027014643_xiaoman_recurring_salary.sql) 与 [合成回滚测试](../tests/recurring-salary.sql)。迁移不安装扩展、不建立定时任务、不处理账户数据。
-- 云端回滚测试尝试被自动审批拦截，尚未执行，不能把 SQL 草案称为线上已验证或已上线。实际被拦的是一个包含 `CREATE SCHEMA/FUNCTION`、权限语句和合成 `auth.users`/资源插入的事务，即使末尾 `ROLLBACK`，审查器仍要求可信用户授权覆盖远端 DDL。没有换通道重试；只读复核 `xiaoman_private` schema、worker 和 `cron.job` 均仍不存在。
-- 0 云端 DDL 执行、0 真实 payload 读取、Cron 未启用。账号和本机模式目前都只在打开或回到网页时补记。
-- 另经批准在忽略目录 `work/pg-verify` 安装临时 `@electric-sql/pglite@0.5.12`，不改项目依赖/锁文件、不创建服务。纯本地 PostgreSQL 18.6 / PL/pgSQL 验证：**59 条 SQL 断言通过，108 组 JS/SQL 差分一致**；回滚后私有 schema、合成用户和资源均不存在。证据为 `work/pg-verify/results.json` 与 `work/pg-verify/run.mjs`。本地通过不等于生产 PostgreSQL 17.6 或 Cron 已验证；PGlite 单连接不能实证双连接锁竞争。
+- **后台已启用**。项目 `ossuymtantsctyhtwnyw` 使用 PostgreSQL 17.6、`pg_cron` 1.6.4；生产任务 `xiaoman-recurring-salary-hourly`（job 2）于 2026-10-27 02:19:11 UTC（香港 10:19:11）启用，每小时第 5 分钟执行，角色和数据库均为 `postgres`。
+- [私有函数迁移](../supabase/migrations/20261027021256_xiaoman_recurring_salary.sql) 与 [Cron 扩展迁移](../supabase/migrations/20261027021647_xiaoman_salary_cron_runtime.sql) 已应用，文件名与远端真实迁移版本一致。命名任务在合成调度验证后单独启用；迁移本身不替既有账本开启自动工资。
+- [合成回滚测试](../tests/recurring-salary.sql) 在真实 PostgreSQL 17.6 **59/59 通过**。02:12:51 UTC 复核回滚后私有 schema、worker 不存在，测试用户残留 0，再应用正式迁移。
+- 真实临时分钟任务 **job 1 / run 1** 在 02:18:00.130978–02:18:00.194243 UTC 成功。任务只针对一个新建合成账号，内部强制断言 `checked=1` 且 `failed=0`；结果新增工资 1 笔、处理月份 `2026-10`、资源及 payload revision 同为 2，另外两本账目不变。随后只针对该合成账号重试得到 `{checked:1, changed:0, failed:0}`。
+- 02:18:49 UTC 确认临时任务已取消、合成账号及其资源已精确清理，三者残留均 0。**没有读取真实用户 payload，没有手动运行不带账号过滤的 worker 作为测试，没有模型调用或新增付费服务。**生产定时任务仅处理用户明确开启的云端账本。
+- 权限实查：5 个私有函数均 `SECURITY INVOKER`、空 `search_path`，`anon` / `authenticated` 无 schema usage 与函数 execute。安全 advisor 没有函数/RLS 问题，仅提示与本迁移无关的 Auth 泄漏密码保护未开启；本次没有改变该设置，参见[官方说明](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)。
+- 本地补充验证使用忽略目录 `work/pg-verify` 的临时 `@electric-sql/pglite@0.5.12`，不改项目依赖/锁文件、不创建服务：PostgreSQL 18.6 / PL/pgSQL 的 **59 条 SQL 断言通过，108 组 JS/SQL 差分一致**。证据 `work/pg-verify/results.json` 与 `work/pg-verify/run.mjs`。
+- 限制：尚未等到生产 hourly 任务启用后的第一次自然运行；实际调度运行已由上述合成分钟任务证明。没有执行真实双连接锁竞争测试。无时区的旧工资时间戳仍保守拒绝云端处理，见下文。
+
+授权记录：第一次远端回滚尝试曾被自动审批拦截，因为事务包含远端 DDL 和合成用户插入，回滚也不能替代授权。没有绕过；随后本人明确回复“授权测试，通过后启用后台自动工资”，才按回滚验证 → 正式迁移 → 合成调度 → 启用小时任务的顺序执行。
 
 ## 对用户的行为
 
-**当前本机和账号模式均需下次打开或回到网页补记。以下描述后台获批、验证并启用后的预期：**账号账本可在网页关闭后由服务器处理；本机模式仍需下次打开网页。只有明确开启“自动记工资”的账本生效，旧薪资预算不会自动添加收入。
+账号账本在网页关闭后可由服务器处理；本机模式仍需下次打开或回到网页补记。只有明确开启“自动记工资”的账本生效，旧薪资预算不会自动添加收入。账号后台不会自动读取或上传本机账本。
 
 统一按 `Asia/Hong_Kong` 的日期判断发薪日，浏览器对应 `recurringSalaryToday()`；建议定时任务每小时运行一次，因此正常云端处理可能晚于当天零点，不能承诺秒级或银行实际到账确认。自动收入备注始终说明“请核对实际到账”。预算计算依日期自然进入新期间；Cron 不改预算比例或新增旧 cycle。
 
@@ -43,7 +48,7 @@ worker 只筛选明确开启的 `ledger` 资源，按用户 ID 顺序 `FOR UPDAT
 
 不读取或处理助手记忆资源。日志仅允许资源计数，不输出账户 ID、金额、账目正文或 SQLERRM。部分坏数据会以 `XIAOMAN_SALARY_RESOURCES_FAILED` 警告计数出现；Cron 作业成功状态本身不代表每个资源都处理成功，需同时看该匿名警告。进程异常或项目暂停会延后执行，恢复后按水位补记。
 
-## 审查后执行顺序
+## 已执行的启用顺序与维护方式
 
 1. 一次集中获得对“远端合成回滚测试 → 通过后持久化迁移并启用 Cron”的授权。先执行一个事务：`BEGIN`、迁移文本、测试文本（去除其第二个 `BEGIN`）、最终 `ROLLBACK`。所有 worker 调用必须传测试内刚生成的 UUID；不得取消过滤或把真实账户加入测试。
 2. 通过后检查 schema/worker 仍不存在，确认回滚；检查测试计数与错误路径，不只看 SQL 请求成功。
@@ -59,7 +64,7 @@ select cron.schedule(
 );
 ```
 
-以上为待审查示例，**尚未执行**。任务每小时第 5 分钟运行；函数内转换为香港日期，无需改数据库全局时区。暂停使用 `cron.alter_job(job_id, active := false)`；删除使用 `cron.unschedule('xiaoman-recurring-salary-hourly')`，不得卸载扩展来暂停单个任务。不要直接修改 `cron.job`。
+上面的扩展启用与命名任务已分别执行，当前 job ID 为 2。任务每小时第 5 分钟运行；函数内转换为香港日期，无需改数据库全局时区。暂停使用 `cron.alter_job(2, active := false)`；删除使用 `cron.unschedule('xiaoman-recurring-salary-hourly')`，不得卸载扩展来暂停单个任务。不要直接修改 `cron.job`。
 
 检查调度只需读取该任务的 `jobname/schedule/active` 与运行状态、开始/结束时间；无需读取用户 payload。`cron.job_run_details` 默认不会自动清理；规模目前为一天 24 次，需要后续按现有维护策略保留有限天数，不在本次顺带清理别的任务日志。
 
