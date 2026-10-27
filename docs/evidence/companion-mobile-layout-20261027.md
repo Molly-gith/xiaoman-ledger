@@ -24,6 +24,12 @@
 
 ## 发布
 
-本地完成，待本轮CI与Pages部署后核验原PR24链接。主站保持原发布版本。
+已发布并核验原PR24链接。主站保持原发布版本。
 
 CI #177的两项账号断言依赖旧版始终存在的空.transactions容器，删除重复空态后因元素不存在而失败。测试定位改为实际首页区域，仍核对本机/账号及跨账号数据不可见，并增加了聊天内容一同不串用的覆盖；11项账号回归全部通过，未删去或跳过原断言。
+
+最终应用提交1af7756fd7400996b0c679d8aa4656b43a901506（界面改动347b082）。[CI #178](https://github.com/Molly-gith/xiaoman-ledger/actions/runs/40503168715)成功：365单元/API、2渲染；默认浏览器75通过/22按模式跳过、模拟AI53通过，共97个不同浏览器用例有覆盖。
+
+[Pages #77](https://github.com/Molly-gith/xiaoman-ledger/actions/runs/40503693075)成功，checkout完整1af7756，artifact12734315787。线上index-DeQdwYf6.js / index-B7fInprv.css；320/390/1280全新隔离浏览器核验HTTP200、空态间距8px、输入与发送在首屏、无重复空账目区、无溢出和页面错误。真实模型调用0次。
+
+[最终体验](https://molly-gith.github.io/xiaoman-ledger/previews/pr-24/?v=mobile-chat-20261027#/)；本次仅网页与测试文档更新，Dify #7及后端保持原版本。
