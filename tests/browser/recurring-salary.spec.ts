@@ -43,7 +43,11 @@ test("an already recorded salary prevents automatic duplicate and stopping payro
  await b.locator(".salary-budget-cycle > summary").click();
  await b.getByRole("checkbox",{name:"发薪日自动记工资（选用）",exact:true}).uncheck();
  await b.getByRole("button",{name:"保存预算设置",exact:true}).click();
- await expect(b.getByRole("button",{name:"保存预算设置",exact:true})).toHaveCount(0);
+ await expect(b.locator(".salary-budget-editor")).toHaveCount(0);
+ await expect(b.locator(".salary-budget-content")).toHaveAttribute("aria-busy", "false");
+ await b.getByRole("button",{name:"调整薪资与金额",exact:true}).click();
+ await b.locator(".salary-budget-cycle > summary").click();
+ await expect(b.getByRole("checkbox",{name:"发薪日自动记工资（选用）",exact:true})).not.toBeChecked();
  await page.clock.setFixedTime(new Date("2026-10-15T04:00:00Z"));await page.reload();
  const saved=(await exportLedger(page)).state;expect(saved.transactions).toHaveLength(1);expect(saved.transactions[0].id).toBe("manual-salary");
  expect(saved.salaryBudget.autoIncome.enabled).toBe(false);
