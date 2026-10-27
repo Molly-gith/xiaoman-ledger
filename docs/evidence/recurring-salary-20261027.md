@@ -4,7 +4,7 @@
 
 用户纠正：比例在标签括号，输入框填金额；初始三项0；填7000预估4900/350/1750并可改。加入一次开启后的每月自动工资与预算换期。
 
-网页端已随7c50df68通过CI #170和Pages #69发布并完成线上两尺寸验证。用户随后明确授权先远端虚拟回滚测试、通过后启用账号每小时后台；后台已验收并启用，账号文案发布待最终CI/Pages。
+网页端已随7c50df68通过CI #170和Pages #69发布并完成线上两尺寸验证。用户随后明确授权先远端虚拟回滚测试、通过后启用账号每小时后台；后台已验收并启用，最终账号文案已随38f3417通过CI #172、Pages #71上线，手机/桌面及线上虚拟账号核验通过。
 
 ## 已验证
 
@@ -30,7 +30,7 @@
 - [CI #170](https://github.com/Molly-gith/xiaoman-ledger/actions/runs/40436474443) success：337单元/API+2渲染，默认浏览器65通过/20按配置跳过，AI专项47通过，fixture eval3通过；结合本地全量模拟运行覆盖全部85项（此后账号执行方式测试增为86）。
 - [Pages #69](https://github.com/Molly-gith/xiaoman-ledger/actions/runs/40436844851) success，日志checkout完整7c50df68；artifact12704467806。
 - 线上index-drqlMATA.js / index-D341ub5o.css；390/1280全新浏览器虚拟账本验证均通过，0模型调用。原主站/PR23各HTTP200。
-- 用户授权后台后的账号说明更新及新测试：本地账号11/11、TypeScript和ESLint通过，后台已成功，准备发布账号文案。
+- 用户授权后台后的账号说明更新及新测试：本地账号11/11、TypeScript和ESLint通过，后台已成功，账号文案已在最终版本发布并核验。
 
 
 ## 已授权后台运行证据（2026-10-27 UTC）
@@ -44,4 +44,14 @@
 
 ## 发布检查同步修正
 
-账号文案提交3674c3b的CI #171（40437954693）唯一失败为停用自动工资浏览器测试。精确名称“保存预算设置”在busy时会变成“保存中…”，原count0等待把开始保存当作结束，随后切日期/刷新可能中断写入。产品persist在await onSave成功后才关闭编辑区；测试改为等编辑区消失且aria-busy=false，再重开核对自动工资已关闭，之后才切月刷新。没有改产品逻辑；相关3项连续3轮9/9通过，ESLint通过。最终成功CI/Pages待本次测试修正提交后补记。
+账号文案提交3674c3b的CI #171（40437954693）唯一失败为停用自动工资浏览器测试。精确名称“保存预算设置”在busy时会变成“保存中…”，原count0等待把开始保存当作结束，随后切日期/刷新可能中断写入。产品persist在await onSave成功后才关闭编辑区；测试改为等编辑区消失且aria-busy=false，再重开核对自动工资已关闭，之后才切月刷新。没有改产品逻辑；相关3项连续3轮9/9通过，ESLint通过。该修正随后通过CI #172，并随Pages #71发布。
+
+
+## 最终交付
+
+- 构建提交：38f3417de106258ea464bd0273efd94c0badf0a7（含账号文案3674c3b与等待修正；后续证据提交不改功能）。
+- [CI #172](https://github.com/Molly-gith/xiaoman-ledger/actions/runs/40438367529) success：337单元/API+2渲染、默认浏览器66通过/20按配置跳过、AI/mock48通过、fixture3通过；全部86项独立浏览器用例有覆盖。
+- [Pages #71](https://github.com/Molly-gith/xiaoman-ledger/actions/runs/40438665938) success，02:30:04 UTC完成，artifact12705875440，checkout完整38f3417。
+- 线上index-DzbYnSnk.js / index-D341ub5o.css。390/1280隔离检查金额0→7000预估、单笔自动收入、刷新不重复、次月工资与预算换期全部通过；无错误/横向溢出。
+- 390线上虚拟账号额外检查：显示账号后台说明；保存到正确模拟账号，一笔7000、autoSalary月份2026-10；无真实云端写入、无模型调用。实际后台执行另由上面的真实合成Cron证明，未将mock页面测试混同于后台运行。
+- [最终体验](https://molly-gith.github.io/xiaoman-ledger/previews/pr-24/?v=salary-auto-cloud-20261027#/)；原主站和PR23保留。
