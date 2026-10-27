@@ -64,4 +64,11 @@
 }
 
 .salary-budget-percentage-field { min-width: 0; }
-.salary-budget-percentage-field output { display: block; margin-top: 6px; color: #3c6440; font-size: 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+
+.salary-budget-edit-hint { margin-top: 3px; }
+.salary-budget-automatic { margin: 0 0 18px; }
+.salary-budget-automatic .salary-budget-helper { margin-top: 7px; }
+.salary-budget-automatic .salary-budget-edit-hint { margin-top: 3px; }
+.salary-budget-percentages input { font-variant-numeric: tabular-nums; }
+.salary-budget-percentages label > span { overflow-wrap: anywhere; }

@@ -1,6 +1,6 @@
 import { calendarMonthRange, createDateRange, type DateRange } from "./date-range.ts";
 import { cents, parseDate, salaryCycle, transactionDay } from "./finance.ts";
-import type { ExpenseNature, SalaryBudgetPercentages, SalaryBudgetSettings, Transaction } from "./types.ts";
+import type { ExpenseNature, SalaryBudgetAmounts, SalaryBudgetPercentages, SalaryBudgetSettings, Transaction } from "./types.ts";
 
 const NATURES = ["消费", "浪费", "投资"] as const;
 const BPS = BigInt(10_000);
@@ -18,8 +18,8 @@ export type SalaryBudgetSummary = {
   unclassifiedCount: number; unclassifiedAmountFen: number; alertsSuppressed: boolean;
 };
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
-function exactObject(value: unknown, keys: readonly string[]): Record<string, unknown> {
-  if (!object(value) || Object.keys(value).length !== keys.length || Object.keys(value).some(key => !keys.includes(key))) {
+function exactObject(value: unknown, keys: readonly string[], optionalKeys: readonly string[] = []): Record<string, unknown> {
+  if (!object(value) || keys.some(key => !Object.hasOwn(value, key)) || Object.keys(value).some(key => !keys.includes(key) && !optionalKeys.includes(key))) {
     throw new Error("薪资预算设置格式无效");
   }
   return value;
@@ -56,7 +56,7 @@ function rangeFor(settings: Pick<SalaryBudgetSettings, "periodMode" | "salaryDay
 /** Missing fields in earlier v4 backups mean the optional feature was never enabled. */
 export function normalizeSalaryBudgetSettings(value: unknown): SalaryBudgetSettings | null {
   if (value === undefined || value === null) return null;
-  const raw = exactObject(value, ["enabled", "periodMode", "salaryDay", "expectedSalary", "percentages", "periodOverride"]);
+  const raw = exactObject(value, ["enabled", "periodMode", "salaryDay", "expectedSalary", "percentages", "periodOverride"], ["amounts", "autoIncome"]);
   if (typeof raw.enabled !== "boolean" || (raw.periodMode !== "calendar_month" && raw.periodMode !== "salary_based")) {
     throw new Error("薪资预算周期或启用状态无效");
   }
@@ -68,6 +68,20 @@ export function normalizeSalaryBudgetSettings(value: unknown): SalaryBudgetSetti
     enabled: raw.enabled, periodMode: raw.periodMode, salaryDay: raw.salaryDay as number | null,
     expectedSalary: money(raw.expectedSalary), percentages: percentages(raw.percentages), periodOverride: null,
   };
+
+  if (raw.amounts !== undefined) result.amounts = budgetAmounts(raw.amounts, cents(result.expectedSalary));
+  if (raw.autoIncome !== undefined) {
+    const auto = exactObject(raw.autoIncome, ["enabled", "startDate", "lastProcessedMonth"]);
+    if (typeof auto.enabled !== "boolean" || typeof auto.startDate !== "string") throw new Error("自动工资设置无效");
+    parseDate(auto.startDate);
+    if (auto.lastProcessedMonth !== null) {
+      if (typeof auto.lastProcessedMonth !== "string") throw new Error("自动工资处理月份无效");
+      calendarMonthRange(auto.lastProcessedMonth);
+    }
+    if (auto.enabled && (result.salaryDay === null || result.expectedSalary <= 0)) throw new Error("开启自动记工资前，请设置发薪日和大于 0 的预计薪资");
+    result.autoIncome = { enabled: auto.enabled, startDate: auto.startDate, lastProcessedMonth: auto.lastProcessedMonth as string | null };
+  }
+
   if (raw.periodOverride !== null) {
     const override = exactObject(raw.periodOverride, ["startDate", "endDate", "salary"]);
     if (typeof override.startDate !== "string" || typeof override.endDate !== "string") throw new Error("本期薪资调整日期无效");
@@ -103,6 +117,37 @@ export function allocateSalaryBudget(salary: number, values: SalaryBudgetPercent
   return { baseFen, amountsFen: Object.fromEntries(parts.map(part => [part.nature, Number(part.fen)])) as NatureAmounts,
     unallocatedFen: Number(base - allocated) };
 }
+
+/** Exact editable amounts are authoritative. Scaling uses the original integer
+ * cents as weights, never rounded display percentages. A zero base has no
+ * implied allocation, so increasing it leaves every cent unallocated. */
+export function allocateSalaryBudgetAmounts(baseSalary: number, values: SalaryBudgetAmounts, targetSalary: number = baseSalary): {
+  baseFen: number; amountsFen: NatureAmounts; unallocatedFen: number;
+} {
+  const originalFen = cents(money(baseSalary)), baseFen = cents(money(targetSalary));
+  const amounts = budgetAmounts(values, originalFen);
+  if (originalFen === 0) return { baseFen, amountsFen: { 消费: 0, 浪费: 0, 投资: 0 }, unallocatedFen: baseFen };
+  const denominator = BigInt(originalFen), target = BigInt(baseFen);
+  const parts = NATURES.map((nature, index) => {
+    const weighted = target * BigInt(cents(amounts[nature]));
+    return { nature, index, fen: weighted / denominator, remainder: weighted % denominator };
+  });
+  const total = NATURES.reduce((sum, nature) => sum + cents(amounts[nature]), 0);
+  const allocated = target * BigInt(total) / denominator;
+  let spare = allocated - parts.reduce((sum, part) => sum + part.fen, BigInt(0));
+  const ranked = [...parts].sort((a, b) => a.remainder === b.remainder ? a.index - b.index : a.remainder > b.remainder ? -1 : 1);
+  for (const part of ranked) { if (spare === BigInt(0)) break; part.fen += BigInt(1); spare -= BigInt(1); }
+  return { baseFen, amountsFen: Object.fromEntries(parts.map(part => [part.nature, Number(part.fen)])) as NatureAmounts,
+    unallocatedFen: Number(target - allocated) };
+}
+function budgetAmounts(value: unknown, baseFen: number): SalaryBudgetAmounts {
+  const raw = exactObject(value, NATURES), result = {} as SalaryBudgetAmounts;
+  let sum = 0;
+  for (const nature of NATURES) { result[nature] = money(raw[nature]); sum += cents(result[nature]); }
+  if (!Number.isSafeInteger(sum) || sum > baseFen) throw new Error("消费、浪费和投资的预算金额合计不能超过预计薪资");
+  return result;
+}
+
 function addFen(total: number, value: number): number {
   const next = total + value;
   if (!Number.isSafeInteger(next)) throw new Error("薪资预算账目合计超过支持范围");
@@ -127,7 +172,9 @@ export function calculateSalaryBudget(settings: SalaryBudgetSettings | null, tra
   if (!config?.enabled) return null;
   const range = rangeFor(config, today);
   const overrideApplied = config.periodOverride?.startDate === range.startDate && config.periodOverride.endDate === range.endDate;
-  const allocated = allocateSalaryBudget(overrideApplied ? config.periodOverride!.salary : config.expectedSalary, config.percentages);
+  const effectiveSalary = overrideApplied ? config.periodOverride!.salary : config.expectedSalary;
+  const allocated = config.amounts ? allocateSalaryBudgetAmounts(config.expectedSalary, config.amounts, effectiveSalary)
+    : allocateSalaryBudget(effectiveSalary, config.percentages);
   const spent: NatureAmounts = { 消费: 0, 浪费: 0, 投资: 0 };
   let pendingDateCount = 0, pendingDateAmountFen = 0, unclassifiedCount = 0, unclassifiedAmountFen = 0;
   const seen = new Set<string>();

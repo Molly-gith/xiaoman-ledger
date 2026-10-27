@@ -69,6 +69,13 @@ export function normalizeTransaction(value: unknown, legacy = false): Transactio
     cycleId: legacy || v.cycleId === null ? null : string(v.cycleId), nature, spendKind };
   if (!tx.id || tx.amount <= 0) throw new Error("账目编号或金额无效");
   if (tx.cycleId && date.length > 10) tx.dateNeedsConfirmation = true;
+  if (v.autoSalary !== undefined) {
+    const auto = record(v.autoSalary);
+    if (tx.type !== "income" || Object.keys(auto).length !== 2 || Object.keys(auto).some(key => key !== "month" && key !== "scheduledDate")) throw new Error("自动工资标记无效");
+    const scheduledDate = dateOnly(auto.scheduledDate), month = string(auto.month, 7);
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || scheduledDate.slice(0, 7) !== month) throw new Error("自动工资月份与计划日期不一致");
+    tx.autoSalary = { month, scheduledDate };
+  }
   if (v.aiSuggestion !== undefined) {
     const suggestion = record(v.aiSuggestion);
     if (!["消费", "浪费", "投资"].includes(String(suggestion.nature)) || typeof suggestion.confidence !== "number" || !Number.isFinite(suggestion.confidence) || suggestion.confidence < 0 || suggestion.confidence > 1) throw new Error("AI 建议格式无效");

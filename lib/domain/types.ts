@@ -6,12 +6,17 @@ export type FundingSourceType = "salary" | "bonus" | "freelance" | "business" | 
 export type FundingSource = { id: string; type: FundingSourceType; amount: number; note?: string };
 export type DateOnly = string;
 export type SalaryBudgetPercentages = Record<ExpenseNature, number>;
+export type SalaryBudgetAmounts = Record<ExpenseNature, number>;
+export type SalaryAutoIncome = { enabled: boolean; startDate: DateOnly; lastProcessedMonth: string | null };
 export type SalaryBudgetSettings = {
   enabled: boolean; periodMode: "calendar_month" | "salary_based"; salaryDay: number | null;
   /** Planned take-home salary, not a recorded income or account balance. */
   expectedSalary: number;
-  /** Percent units, at most two decimals, total no more than 100. */
+  /** Legacy ratio allocation, used only when exact amounts are absent. */
   percentages: SalaryBudgetPercentages;
+  /** Editable yuan amounts with exact cents; authoritative when present. */
+  amounts?: SalaryBudgetAmounts;
+  autoIncome?: SalaryAutoIncome;
   periodOverride: { startDate: DateOnly; endDate: DateOnly; salary: number } | null;
 };
 export type UserProfile = { salaryDay: number };
@@ -25,6 +30,8 @@ export type Transaction = {
   id: string; type: "expense" | "income"; amount: number; date: string;
   category: string; note: string; icon: string; source: "text" | "voice" | "import";
   cycleId: string | null; nature: ExpenseNature | null; spendKind: SpendKind | null;
+  /** A scheduled entry, not proof of bank receipt. Edits may change its actual date. */
+  autoSalary?: { month: string; scheduledDate: DateOnly };
   /** Pre-date-only records retain their original timestamp/cycle until date confirmation. */
   dateNeedsConfirmation?: boolean;
   aiSuggestion?: { nature: ExpenseNature; confidence: number; reason: string; modelVersion: string; promptVersion: string };

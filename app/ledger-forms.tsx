@@ -208,7 +208,7 @@ export function EntryForm({ today, item, cycles = [], draft, onSave }: { today: 
       if (date > today) throw new Error("请记录已发生的收支，日期不能晚于今天");
       if (note.length > 100) throw new Error("备注最多 100 字，请精简后保存");
       const selectedCategory = type === "income" ? "收入" : category;
-      onSave({ ...item, id: item?.id ?? crypto.randomUUID(), type, amount: value, category: selectedCategory,
+      onSave({ ...item, autoSalary: type === "income" ? item?.autoSalary : undefined, id: item?.id ?? crypto.randomUUID(), type, amount: value, category: selectedCategory,
         note: note.trim() || selectedCategory, date,
         icon: CATEGORY_ICONS[selectedCategory as LedgerCategory] ?? selectedCategory.slice(0, 1), source,
         cycleId: chosenCycle?.id ?? null, nature: type === "expense" ? nature : null,

@@ -287,3 +287,31 @@ test("a delayed sync locks local edits so an old response cannot replace a newer
   await expect(home(page)).toContainText("同步前"); await expect(home(page)).toContainText("同步后");
   expect(cloud.accounts.get(accountA)?.get("ledger")?.payload.transactions).toHaveLength(2);
 });
+
+test("a delayed background refresh cannot give an open old edit the new cloud revision", async ({ page, context }) => {
+  const cloud = await fakeCloud(context);
+  await openLedger(page); await login(page, "a@example.test");
+  await expect(page.getByTestId("account-workspace")).toContainText("a@example.test");
+  await addEntry(page, { type: "income", amount: "11", note: "要编辑的原记录" });
+  const row = cloud.accounts.get(accountA)!.get("ledger")!;
+  const revised = structuredClone(row);
+  revised.revision++; revised.payload.revision = revised.revision;
+  (revised.payload.transactions as { amount: number }[])[0].amount = 99;
+  cloud.accounts.get(accountA)!.set("ledger", revised);
+  let release: (() => void) | undefined, held = false;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  cloud.holdRead(async (route, rows) => { held = true; await gate; await route.fulfill({ json: rows }); });
+  await page.evaluate(() => { (document.activeElement as HTMLElement | null)?.blur(); window.dispatchEvent(new Event("focus")); });
+  await expect.poll(() => held).toBe(true);
+  await home(page).getByRole("button", { name: "编辑", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "记账", exact: true });
+  await expect(dialog.locator('[name="amount"]')).toHaveValue("11");
+  const received = page.waitForResponse(response => response.url().endsWith("xiaoman_read_resources"));
+  release!(); await received;
+  await expect(home(page)).not.toContainText("99.00");
+  await dialog.locator('[name="amount"]').fill("22");
+  await dialog.getByRole("button", { name: "保存修改", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("更新");
+  await expect(dialog.locator('[name="amount"]')).toHaveValue("22");
+  expect((cloud.accounts.get(accountA)!.get("ledger")!.payload.transactions as { amount: number }[])[0].amount).toBe(99);
+});

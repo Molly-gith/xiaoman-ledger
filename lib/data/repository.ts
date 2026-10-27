@@ -1,5 +1,6 @@
 import type { BudgetPlan, FinancialCycle, InvestmentAccount, InvestmentFlow, LedgerKind, LedgerState, SalaryBudgetSettings, Transaction } from "../domain/types.ts";
 import { normalizeSalaryBudgetSettings } from "../domain/salary-budget.ts";
+import { prepareRecurringSalarySettings, reconcileRecurringSalary, recurringSalaryToday } from "../domain/recurring-salary.ts";
 import { calendarMonthCycle, cents, parseDate, transactionDay } from "../domain/finance.ts";
 import { LEDGER_KINDS, ledgerDataOf, normalizeBackup, normalizeInvestmentAccount, normalizeInvestmentFlow, normalizeMarketValueSnapshot, normalizeTransaction } from "./schema.ts";
 
@@ -11,7 +12,8 @@ export interface LedgerStore {
 export interface LedgerRepository {
   read(): Promise<LedgerState>;
   switchLedger(kind: LedgerKind, revision: number): Promise<LedgerState>;
-  saveSalaryBudget(settings: SalaryBudgetSettings | null, revision: number): Promise<LedgerState>;
+  saveSalaryBudget(settings: SalaryBudgetSettings | null, revision: number, today?: string): Promise<LedgerState>;
+  ensureRecurringSalary(today: string): Promise<LedgerState>;
   ensureCurrentCycle(today: string): Promise<LedgerState>;
   saveCycle(cycle: FinancialCycle, plan: BudgetPlan, revision: number): Promise<LedgerState>;
   replaceCurrentCycle(cycle: FinancialCycle, plan: BudgetPlan, revision: number): Promise<LedgerState>;
@@ -44,6 +46,33 @@ export function createRepository(store: LedgerStore): LedgerRepository {
     if (state.revision !== revision) throw new Error("账本已在其他页面更新，请重新载入后重试");
     const next = validateLedger({ ...change(structuredClone(state)), version: 4, revision: revision + 1 });
     await store.commit(next, revision); return next;
+  }
+  async function ensureRecurringSalary(today: string): Promise<LedgerState> {
+    parseDate(today);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const state = validateLedger(await store.read());
+      let changed = false;
+      const next = structuredClone(state);
+      for (const kind of LEDGER_KINDS) {
+        const book = kind === next.ledgerKind ? next : next.otherLedgers[kind];
+        if (!book) continue;
+        const due = reconcileRecurringSalary(book.salaryBudget, book.transactions, today);
+        if (!due.changed) continue;
+        book.salaryBudget = due.settings;
+        book.transactions = due.transactions;
+        changed = true;
+      }
+      if (!changed) return state;
+      next.revision = state.revision + 1;
+      const validated = validateLedger(next);
+      try { await store.commit(validated, state.revision); return validated; }
+      catch (error) {
+        // A lost reply or a concurrent tab may have committed already. Reread and
+        // reconcile the durable cursor; never append a second salary blindly.
+        if ((await store.read()).revision === state.revision) throw error;
+      }
+    }
+    throw new Error("账本正在其他页面更新，自动工资会在下次打开时再核对");
   }
   async function ensureCurrentCycle(today: string): Promise<LedgerState> {
     const month = calendarMonthCycle(today);
@@ -82,7 +111,13 @@ export function createRepository(store: LedgerStore): LedgerRepository {
       return { ...state, ...destination, ledgerKind: kind, otherLedgers };
     }),
     ensureCurrentCycle,
-    saveSalaryBudget: (settings, revision) => mutate(revision, state => ({ ...state, salaryBudget: normalizeSalaryBudgetSettings(settings) })),
+    ensureRecurringSalary,
+    saveSalaryBudget: (settings, revision, today = recurringSalaryToday()) => mutate(revision, state => {
+      const previous = reconcileRecurringSalary(state.salaryBudget, state.transactions, today);
+      const prepared = prepareRecurringSalarySettings(previous.settings, normalizeSalaryBudgetSettings(settings), today);
+      const due = reconcileRecurringSalary(prepared, previous.transactions, today);
+      return { ...state, salaryBudget: due.settings, transactions: due.transactions };
+    }),
     saveCycle: (cycle, plan, revision) => mutate(revision, state => ({ ...state,
       profile: (cycle.cycleType ?? "salary_based") === "salary_based" ? { salaryDay: cycle.salaryDay } : null,
       activeCycleId: cycle.id,

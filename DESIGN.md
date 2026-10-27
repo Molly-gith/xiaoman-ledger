@@ -189,7 +189,7 @@ This scoped extension follows the current everyday-ledger shell and component st
 主信息常用（14px）、入口与小标题（15px）、输入与复盘结论（16px），辅助说明多为（12px），金额采用等宽数字。预算控件沿用（10px）圆角、复盘入口（12px）、账号字段（13px）。细线和留白组织内容，明细行保持紧凑，提示条可换行并限制在视口内；这些是现有局部取值，不是新的全局字阶或圆角系统。
 Common local sizes are (14px) for information, (15px) for entry headings, (16px) for inputs and review conclusions, and (12px) for supporting copy. Budget controls use (10px) corners, review entry (12px), and inherited account fields (13px). Flat separators, compact record rows and wrapping toasts preserve the everyday style; these are local implementation values.
 
-「记账」的薪资预算默认只占一行「薪资预算 · 选填」；启用后重新进入仍收起，摘要提示已启用、有提醒或待核对，保存成功可展开一次。展开后仅保留本期范围、薪资及消费／浪费／投资三行「已用／额度」，设置、本期调整和说明按需展开；比例旁即时预览金额。临近或超额只作温和提醒，待核对日期与性质统一说明，不阻止记账；停用保留设置和账目。
+「记账」的薪资预算默认只占一行「薪资预算 · 选填」；启用后重新进入仍收起，摘要提示已启用、有提醒或待核对，保存成功可展开一次。展开后仅保留本期范围、薪资及消费／浪费／投资三行「已用／额度」，设置、本期调整和说明按需展开；标签括号显示比例，三项输入直接编辑金额；未填工资时为0，首次按70%/5%/25%预估，手改金额按分保留。发薪与周期选项内按需开启自动工资，执行方式以当前实际能力说明。临近或超额只作温和提醒，待核对日期与性质统一说明，不阻止记账；停用保留设置和账目。
 Salary budget defaults to one collapsed optional row, including on later visits after activation. Its summary exposes status; a successful save may expand it once. The expanded panel shows period, salary and three used/allowance rows. Settings, current-period overrides and explanations stay optional; allocation amounts preview beside percentages. Reminders never block recording, and disabling preserves settings and records.
 
 复盘展开先给一句已记录事实，再提供「查看收支／与上一段比较／花在哪里」三个互斥折叠项；分类／性质共用分布位置。助手复用同一组件并默认展开。依据仍在组件内，每页（5笔）、列表最高（330px）；打开时滚动并聚焦，收起时恢复来源折叠项并归还焦点。金额标签包含时段、金额及相应笔数，长内容换行，减少动态效果偏好生效。

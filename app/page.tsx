@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import type { LedgerKind, LedgerState, Transaction } from "../lib/domain/types";
 import { SalaryBudgetPanel } from "./salary-budget";
 import { calculateSalaryBudget, salaryPaydayRange } from "../lib/domain/salary-budget";
+import { recurringSalaryToday } from "../lib/domain/recurring-salary";
 import { localDate } from "../lib/domain/finance";
 import { calendarMonthRange, createDateRange, summarizeDateRange, transactionsInDateRange } from "../lib/domain/date-range";
 import { defaultState, encodeBackup, normalizeBackup } from "../lib/data/schema";
@@ -57,10 +58,42 @@ function LedgerHome({ scope }: { scope: WorkspaceScope }) {
   const showDialog = !!state && modal !== null;
 
   useEffect(() => {
-    let active = true;
-    void repository.read().then(value => { if (active && isCurrent()) setState(value); }).catch(e => { if (active && isCurrent()) setError(e instanceof Error ? e.message : "账本读取失败"); });
-    const timer = setInterval(() => setToday(localDate()), 30000);
-    return () => { active = false; clearInterval(timer); };
+    let active = true, checking = false, lastCheckedDate = "";
+    const canRefresh = () => document.visibilityState !== "hidden" && !document.querySelector(".sheet, .salary-budget[open] .salary-budget-form")
+      && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? "");
+    const refresh = async (initial = false, force = false) => {
+      if (checking || saving.current || !isCurrent()) return;
+      setToday(localDate());
+      const payrollDate = recurringSalaryToday();
+      if (!initial && !force && lastCheckedDate === payrollDate) return;
+      // Do not interrupt an open form or an active text draft with a background
+      // refresh. Initial load and the next idle/focus check still catch up.
+      if (!initial && !canRefresh()) return;
+      checking = true;
+      try {
+        const next = await repository.ensureRecurringSalary(payrollDate);
+        if (active && isCurrent() && !saving.current && (initial || canRefresh())) {
+          lastCheckedDate = payrollDate;
+          setState(previous => previous && previous.revision > next.revision ? previous : next);
+        } else {
+          // A form may have opened while the read was in flight. Keep its data
+          // and revision together; apply the refresh only after editing ends.
+          lastCheckedDate = "";
+        }
+      } catch (problem) {
+        if (initial) {
+          try { const current = await repository.read(); if (active && isCurrent()) setState(current); }
+          catch { /* Keep the original failure visible; never invent an empty ledger. */ }
+        }
+        if (active && isCurrent()) setError(problem instanceof Error ? problem.message : "自动工资暂未完成，稍后会再核对，原账目保留");
+      } finally { checking = false; }
+    };
+    void refresh(true);
+    const timer = setInterval(() => void refresh(), 30000);
+    const focus = () => void refresh(false, true);
+    window.addEventListener("focus", focus);
+    document.addEventListener("visibilitychange", focus);
+    return () => { active = false; clearInterval(timer); window.removeEventListener("focus", focus); document.removeEventListener("visibilitychange", focus); };
   }, [repository, isCurrent]);
   useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [tab]);
   useEffect(() => {
@@ -123,7 +156,7 @@ function LedgerHome({ scope }: { scope: WorkspaceScope }) {
     if (!isCurrent() || saving.current) return false;
     // A delayed read must not replace a save that completed while it was in flight.
     saving.current = true; setBusy(true);
-    try { const next = await repository.read(); if (!isCurrent()) return false; setState(next); setError(""); setModal(null); setUndo(null); setPrompt(""); setPromptVersion(value => value + 1); return true; }
+    try { const next = await repository.ensureRecurringSalary(recurringSalaryToday()); if (!isCurrent()) return false; setState(next); setError(""); setModal(null); setUndo(null); setPrompt(""); setPromptVersion(value => value + 1); return true; }
     catch (e) { if (isCurrent()) setError(e instanceof Error ? e.message : "读取失败"); return false; }
     finally { saving.current = false; setBusy(false); }
   }
@@ -200,7 +233,7 @@ function LedgerHome({ scope }: { scope: WorkspaceScope }) {
       <AssistantLedger key={`${state.ledgerKind}-${promptVersion}`} memoryRepository={memoryRepository} memoryOwnerId={memoryOwnerId} cloud={cloud} ledgerState={state} ledgerName={ledgerName} endpoint={AI_API_URL} today={today} report={report} revision={state.revision} hidden={tab !== "home" || showDialog} busy={busy} suggestedPrompt={prompt} onSave={saveAI} onManual={() => openEntry()} onMemorySettings={() => setModal("memory")} readLedgerSnapshot={() => repository.read()} />
       {cloud && allTransactionCount === 0 && <p className="account-empty">这个账号还没有账目。本机旧账没有自动上传；可在「我的」查看迁移方法。</p>}
       {undo && <div className="saved-receipt" role="status"><span>已记入{ledgerName} · {undo.ids.length} 笔</span><button onClick={() => void commit(() => repository.deleteTransactions(undo.ids, undo.revision), "已撤销这次记账")}>撤销这次记账</button></div>}
-      <SalaryBudgetPanel key={state.ledgerKind} settings={state.salaryBudget} transactions={state.transactions} today={today} ledgerName={ledgerName} onViewRecords={budgetRange => { setStartDate(budgetRange.startDate); setEndDate(budgetRange.endDate); setRangeMode(state.salaryBudget?.periodMode === "salary_based" && state.salaryBudget.salaryDay ? "salary" : "custom"); setSalaryAnchor(budgetRange.startDate); setFilter("expense"); setTab("bills"); }} onSave={settings => commit(() => repository.saveSalaryBudget(settings, state.revision), settings?.enabled ? "薪资预算已保存" : "薪资预算已关闭，账目保留")} />
+      <SalaryBudgetPanel key={state.ledgerKind} settings={state.salaryBudget} transactions={state.transactions} today={today} ledgerName={ledgerName} onViewRecords={budgetRange => { setStartDate(budgetRange.startDate); setEndDate(budgetRange.endDate); setRangeMode(state.salaryBudget?.periodMode === "salary_based" && state.salaryBudget.salaryDay ? "salary" : "custom"); setSalaryAnchor(budgetRange.startDate); setFilter("expense"); setTab("bills"); }} onSave={settings => commit(() => repository.saveSalaryBudget(settings, state.revision, recurringSalaryToday()), settings?.enabled ? "薪资预算已保存" : "薪资预算已关闭，账目保留")} />
       <section className="transactions section-block"><div className="section-title"><h2>最近账目</h2><button data-testid="home-action-bills" onClick={() => setTab("bills")}>查看全部</button></div>{recent.length ? recent.map(tx => <TransactionRow key={tx.id} item={tx} {...rowActions} />) : <EmptyState compact text="说说今天的第一笔收入或花费吧" />}</section>
     </div>
     {tab === "bills" && <>

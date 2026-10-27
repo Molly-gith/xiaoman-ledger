@@ -244,3 +244,18 @@ test('cloud transport accepts only unique resources and bounded integer revision
   f.setHook(() => ({ data: [{ resource: 'ledger', revision: 1, payload: { ...defaultState(), revision: 1 } }], error: null }));
   await assert.rejects(transport.read(['memory_personal']), /格式/, 'unrequested data cannot be silently consumed');
 });
+
+test('automatic salaries use the cloud CAS and stay isolated between identities', async () => {
+  const f = fixture();
+  const settings = {enabled:true,periodMode:'salary_based',salaryDay:15,expectedSalary:7000,percentages:{消费:70,浪费:5,投资:25},amounts:{消费:4900,浪费:350,投资:1750},periodOverride:null,autoIncome:{enabled:true,startDate:'2026-10-01',lastProcessedMonth:null}};
+  await f.repo.saveSalaryBudget(settings, 0, '2026-10-01');
+  const other = createCloudRepository(f.client, alice, () => true);
+  await Promise.all([f.repo.ensureRecurringSalary('2026-10-15'), other.ensureRecurringSalary('2026-10-15')]);
+  const state = await f.repo.read();
+  assert.equal(state.transactions.length, 1); assert.equal(state.transactions[0].amount, 7000);
+  assert.equal(state.salaryBudget.autoIncome.lastProcessedMonth, '2026-10');
+  f.setAuth(bob);
+  const b = createCloudRepository(f.client, bob, () => true);
+  assert.deepEqual(await b.ensureRecurringSalary('2026-10-15'), defaultState());
+  assert.equal(f.records.get(f.key(alice,'ledger')).payload.transactions.length,1);
+});
