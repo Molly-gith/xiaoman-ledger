@@ -211,3 +211,9 @@ My collapses account, synchronization and migration tools, with privacy in a sep
 - **Don't** 用已有影视角色替换原创种子伙伴。 / Replace the original seed companion with an existing franchise character.
 - **Don't** 把装饰字体、插画文字或持续环境动画加入日常记账控件。 / Add decorative type, text baked into artwork or continuous ambient animation to bookkeeping controls.
 - **Don't** 把未实现的着色器、养成奖励或游戏机制写成当前能力。 / Describe unimplemented shaders, progression rewards or game mechanics as current features.
+
+### Companion mobile layout / 对话首屏适配（2026-10-27）
+
+沿用奶油纸面与森林绿。空对话按真实内容自然收缩，欢迎语、两个快捷操作与输入栏连续排列，不预占半屏高度。聊天有内容后自然增长，长历史才受视口相关的最大高度约束；输入栏仍在正常文档流内，缩小视口时可滚动操作。语音、手动记账、发送均保留文字和至少44px点击高度。用户消息用深绿、助手消息用浅鼠尾草色区分。没有账目时不再重复显示第二个空状态；账单入口始终保留。
+
+The empty conversation follows content height rather than reserving half a viewport. Long histories retain bounded internal scrolling; the composer remains in document flow. Existing controls, ownership and confirmation semantics stay unchanged. No-record home states omit the duplicated recent-transactions placeholder.

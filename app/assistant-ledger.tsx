@@ -11,6 +11,7 @@ import { applyPreferenceToDraft, parsePreferenceProposal } from "../lib/domain/a
 import { createAssistantMemoryRepository, type AssistantMemoryRepository, type ConversationMessage, type MemoryState, type CompanionPreferences } from "../lib/data/assistant-memory";
 import { validateAssistantDraft } from "../lib/ai/assistant-contract";
 import { VoiceInput } from "./voice-note";
+import { StoryIcon } from "./story-icons";
 import { LEDGER_KINDS, money } from "./ledger-components";
 import { PeriodReviewPanel } from "./period-review";
 import { buildPeriodReview, describePeriodReview } from "../lib/domain/period-review";
@@ -275,9 +276,9 @@ export function AssistantLedger({ endpoint, today, report, revision, ledgerName,
     <div className="chat-toolbar"><div><h2>和小满聊聊</h2><p>{ledgerName} · 只根据你记下的账目</p></div><details className="companion-settings" ref={preferencesDetails}><summary>陪伴偏好</summary>{memory && <CompanionPreferencesForm key={JSON.stringify(memory.companion)} value={memory.companion} today={today} disabled={busy || working || memoryBusy} onSave={saveCompanion} />}</details></div>
     {memoryError && <p role="alert" className="inline-error">{memoryError}<button onClick={() => window.location.reload()}>重新载入</button></p>}
     {!!allMessages.length && <div className="chat-history-tools"><details><summary>按日期找对话</summary><label>对话日期（北京时间）<input type="date" value={historyDate} max={chatToday} onChange={event => { setHistoryDate(event.target.value); setVisibleCount(20); }} /></label></details>{historyDate ? <button onClick={() => { setHistoryDate(""); setVisibleCount(20); }}>回到最新</button> : <span>{allMessages.length} 条已保存</span>}</div>}
-    <div ref={conversationLog} className="conversation-log chat-thread" role="log" aria-label={`${ledgerName}对话记录`} aria-live="polite" aria-relevant="additions" aria-busy={working}>
+    <div ref={conversationLog} className={`conversation-log chat-thread${allMessages.length || working ? "" : " is-empty"}`} role="log" aria-label={`${ledgerName}对话记录`} aria-live="polite" aria-relevant="additions" aria-busy={working}>
       {matching.length > visibleCount && <button className="chat-load-more" onClick={() => { const element = conversationLog.current; if (element) scrollRestore.current = { height: element.scrollHeight, top: element.scrollTop }; setVisibleCount(count => count + 20); }}>加载更早的对话</button>}
-      {!allMessages.length && <div className="chat-welcome"><p>花了多少，可以记。<br />怎么花得舒服，也可以聊。</p><small>记账先给你确认；建议留给你决定。</small><div><button onClick={() => suggest("本月支出多少？")}>看看本月花费</button><button onClick={() => suggest("帮我复盘这个月")}>一起复盘</button></div></div>}
+      {!allMessages.length && <div className="chat-welcome"><p>今天，想记点什么？</p><small>说一笔花费，或聊聊今天。小满听着。</small><div><button onClick={() => suggest("本月支出多少？")}><StoryIcon name="book" />看看本月花费</button><button onClick={() => suggest("帮我复盘这个月")}><StoryIcon name="leaf" />一起复盘</button></div></div>}
       {historyDate && !matching.length && <p className="chat-empty">这一天还没有保存的对话。</p>}
       {visibleMessages.map((item, index) => {
         const isAnswer = currentAnswer?.id === item.id;
@@ -322,8 +323,8 @@ export function AssistantLedger({ endpoint, today, report, revision, ledgerName,
       {!!drafts.length && !visibleMessages.some(item => item.id === draftMessageId) && <button className="chat-pending-link" onClick={() => { setHistoryDate(""); setVisibleCount(allMessages.length); }}>回到待确认账目</button>}
       <form className="natural-composer" onSubmit={event => void submit(event)}>
         <label className="sr-only" htmlFor="assistant-question">记账或问小满</label>
-        <textarea ref={input} id="assistant-question" placeholder={clarification ? "补充这条信息就好…" : "记一笔，或接着聊聊…"} value={text} onChange={event => { setText(event.target.value); setSource("text"); }} maxLength={1000} rows={2} disabled={working || busy} />
-        <div className="composer-tools"><div className="composer-input-tools"><VoiceInput disabled={hidden || working || busy} onResult={value => { setText(current => current ? `${current} ${value}` : value); setSource("voice"); input.current?.focus(); }} /><button type="button" data-testid="home-action-add" disabled={working || busy} onClick={onManual}>手动记一笔</button></div><div>{working ? <button key="cancel-request" type="button" onClick={event => { event.preventDefault(); request.current?.abort(); request.current = null; setWorking(false); setMessage("已取消，文字保留。"); }}>取消</button> : <button key="send-request" className="primary" type="submit" aria-label="发送给小满" disabled={!text.trim() || busy || memoryBusy || !memory || !!memoryError}>发送</button>}</div></div>
+        <textarea ref={input} id="assistant-question" placeholder={clarification ? "补充这条信息就好…" : allMessages.length ? "记一笔，或接着聊聊…" : "比如：今天午饭35元"} value={text} onChange={event => { setText(event.target.value); setSource("text"); }} maxLength={1000} rows={2} disabled={working || busy} />
+        <div className="composer-tools"><div className="composer-input-tools"><VoiceInput disabled={hidden || working || busy} onResult={value => { setText(current => current ? `${current} ${value}` : value); setSource("voice"); input.current?.focus(); }} /><button type="button" data-testid="home-action-add" disabled={working || busy} onClick={onManual}><StoryIcon name="plus" />手动记一笔</button></div><div>{working ? <button key="cancel-request" type="button" onClick={event => { event.preventDefault(); request.current?.abort(); request.current = null; setWorking(false); setMessage("已取消，文字保留。"); }}>取消</button> : <button key="send-request" className="primary" type="submit" aria-label="发送给小满" disabled={!text.trim() || busy || memoryBusy || !memory || !!memoryError}>发送</button>}</div></div>
       </form>
       <div className="composer-foot"><button onClick={onMemorySettings}>记忆与偏好</button><details><summary>数据怎么使用</summary><p>对话保存在{cloud ? "当前账号的云端" : "本机"}，可翻阅历史。模型只接收最近八条对话、当前文字及必要的账目汇总和陪伴偏好，不自动发送全部逐笔账目。语音由浏览器转成文字。提醒仅在页面内显示。</p></details></div>
     </div>
