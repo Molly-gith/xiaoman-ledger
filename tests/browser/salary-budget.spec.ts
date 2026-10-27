@@ -88,6 +88,9 @@ test("first-time salary uses 70/5/25 and salary edits preserve custom percentage
   await expect(budget.getByLabel("浪费预算金额", { exact: true })).toHaveText("¥0.00");
   await expect(budget.getByLabel("投资预算金额", { exact: true })).toHaveText("¥1,600.00");
   await budget.getByRole("button", { name: "保存预算设置", exact: true }).click();
+  await expect(budget.getByRole("button", { name: "保存预算设置", exact: true })).toHaveCount(0);
+  await expect(budget.locator(".salary-budget-base")).toContainText("¥8,000.00");
+  await expect(budget.locator(".salary-budget-row").first()).toContainText("额度 ¥4,800.00");
   await page.reload(); await editSettings(page);
   await expect(budget.getByLabel("消费（%）", { exact: true })).toHaveValue("60");
   await expect(budget.getByLabel("浪费（%）", { exact: true })).toHaveValue("0");
