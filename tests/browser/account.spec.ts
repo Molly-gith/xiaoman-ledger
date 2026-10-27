@@ -75,7 +75,8 @@ async function logout(page: Page) {
   await expect(page.getByRole("textbox", { name: "记账或问小满", exact: true })).toBeVisible();
   await expect(page.getByTestId("account-workspace")).toHaveCount(0);
 }
-const home = (page: Page) => page.locator(".transactions").first();
+// The home surface remains present even when an empty recent list is omitted.
+const home = (page: Page) => page.locator(".app-content > div").filter({ has: page.getByRole("region", { name: "与小满对话", exact: true }) });
 async function preference(page: Page, keyword: string) {
   await page.getByRole("button", { name: "记忆与偏好", exact: true }).click();
   await page.getByRole("button", { name: "添加分类偏好", exact: true }).click();
