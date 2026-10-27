@@ -5,6 +5,8 @@ import { addExpense, emptyLedger, exportLedger, openLedger, seedLedger } from ".
 const endpoint = "https://xiaoman-ai-test.example/api/ai/assistant";
 const input = (page: Page) => page.getByRole("textbox", { name: "记账或问小满", exact: true });
 const answer = (page: Page) => page.getByTestId("ai-answer");
+const openHistory = (page: Page) => page.getByRole("button", { name: "查看历史对话", exact: true }).click();
+const returnCurrent = (page: Page) => page.getByRole("button", { name: "返回当前对话", exact: true }).click();
 const preview = (page: Page) => page.getByRole("region", { name: "待保存账目" });
 const names = { personal: "个人账本", family: "家庭账本", travel: "旅行账本" } as const;
 type Kind = keyof typeof names;
@@ -72,21 +74,35 @@ test("local dining follow-ups compare months and read another ledger without swi
   expect(calls).toBe(0);
 });
 
-test("refresh retains query context, each book has its own history, and clearing a conversation keeps the ledger", async ({ page }) => {
+test("refresh starts a new query context, history stays book-scoped, and clearing history keeps the ledger", async ({ page }) => {
   await seedLedger(page, fixture()); await openLedger(page);
   await send(page, "上个月餐饮花了多少？"); await expect(answer(page)).toContainText("支出30元");
-  await page.reload();
-  await expect(await history(page, "personal")).toContainText("上个月餐饮花了多少？");
-  await expect(page.getByRole("log", { name: "个人账本对话记录", exact: true })).toContainText("当时的回答");
+  await input(page).fill("跟前一个月比呢");
+  await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: "账单", exact: true }).click();
+  await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: "记账", exact: true }).click();
+  await expect(input(page)).toHaveValue("跟前一个月比呢");
+  await expect(answer(page)).toContainText("支出30元");
   await send(page, "跟前一个月比呢"); await expect(answer(page)).toContainText("差额：支出20元");
+  await page.reload();
+  await expect(page.locator(".chat-thread .conversation-message")).toHaveCount(0);
+  await openHistory(page);
+  await expect(await history(page, "personal")).toContainText("上个月餐饮花了多少？");
+  await expect(await history(page, "personal")).toContainText("当时的回答");
+  await expect(input(page)).toBeHidden();
+  await returnCurrent(page);
+  await send(page, "跟前一个月比呢");
+  await expect(page.locator(".clarification")).toContainText(/还没有可沿用的查询|请先说明当前要比较的日期范围/);
+  await expect(answer(page)).toHaveCount(0);
   await switchBook(page, "family");
   await expect(page.locator(".chat-thread .conversation-message")).toHaveCount(0);
   await send(page, "上个月餐饮花了多少？"); await expect(answer(page)).toContainText("支出70元");
-  const familyHistory = await history(page, "family");
-  await expect(familyHistory).not.toContainText("支出30元");
+  await expect(await history(page, "family")).not.toContainText("支出30元");
   await switchBook(page, "personal");
+  await expect(page.locator(".chat-thread .conversation-message")).toHaveCount(0);
+  await openHistory(page);
   await expect(await history(page, "personal")).toContainText("差额：支出20元");
   await expect(await history(page, "personal")).not.toContainText("支出70元");
+  await returnCurrent(page);
   const before = (await exportLedger(page)).state;
   const panel = await memoryPanel(page);
   await panel.getByRole("button", { name: "清除本账本对话", exact: true }).click();
@@ -95,7 +111,7 @@ test("refresh retains query context, each book has its own history, and clearing
   await page.getByRole("dialog").getByRole("button", { name: "关闭", exact: true }).click();
   await expect(page.locator(".chat-thread .conversation-message")).toHaveCount(0);
   expect(ledgerContent((await exportLedger(page)).state)).toEqual(ledgerContent(before));
-  await switchBook(page, "family");
+  await switchBook(page, "family"); await openHistory(page);
   await expect(await history(page, "family")).toContainText("支出70元");
 });
 
@@ -111,6 +127,8 @@ test("a stale tab rejects a conversation write instead of overwriting another ta
   await expect(input(stale)).toHaveValue("上个月餐饮花了多少？");
   await expect(answer(stale)).toHaveCount(0);
   await stale.reload();
+  await expect(stale.locator(".chat-thread .conversation-message")).toHaveCount(0);
+  await openHistory(stale);
   const log = await history(stale, "personal");
   await expect(log).toContainText("本月支出多少？");
   await expect(log).not.toContainText("上个月餐饮花了多少？");
@@ -130,7 +148,10 @@ test("a rejected stale-tab clear preserves conversation memory as well as newer 
   await send(page, "本月支出多少？"); await expect(answer(page)).toBeVisible();
   const before = (await exportMemory(page)).backup;
   const stale = await context.newPage(); await openLedger(stale);
+  await expect(stale.locator(".chat-thread .conversation-message")).toHaveCount(0);
+  await openHistory(stale);
   await expect(await history(stale, "personal")).toContainText("本月支出多少？");
+  await returnCurrent(stale);
   await addExpense(page, "35", "已保存的新账目");
   await stale.getByRole("button", { name: "本地数据与备份", exact: true }).click();
   await stale.getByRole("button", { name: "清空这台设备的数据", exact: true }).click();
@@ -220,20 +241,41 @@ test.describe("conversation protocol with mocked AI", () => {
     expect(calls).toBe(3);
   });
 
-  test("pending clarification survives refresh and reset clears it persistently", async ({ page }) => {
+  test("refresh excludes old clarification and query from model context but preserves companion preferences", async ({ page }) => {
     const requests: Request[] = [];
     await page.route(endpoint, route => {
       requests.push(route.request().postDataJSON());
-      return route.fulfill({ json: requests.length === 2 ? drafts([mockDraft({ amount: 28, category: "餐饮", note: "午饭" })]) : { status: "clarification", question: "这次午饭花了多少钱？" } });
+      return route.fulfill({ json: requests.length === 2
+        ? { status: "answer", answer: "这是新的一段对话，可以重新说完整的一笔。", nextActions: [] }
+        : requests.length === 4 ? drafts([mockDraft({ amount: 28, category: "餐饮", note: "午饭" })])
+        : { status: "clarification", question: "这次午饭花了多少钱？" } });
     });
-    await openLedger(page); await send(page, "今天吃了午饭");
+    await openLedger(page);
+    const prefs = page.locator(".companion-settings");
+    await prefs.locator(":scope > summary").click();
+    await prefs.getByRole("radio", { name: "温柔", exact: true }).check();
+    await prefs.getByRole("button", { name: "保存陪伴偏好", exact: true }).click();
+    await send(page, "本月支出多少？"); await expect(answer(page)).toBeVisible();
+    await send(page, "今天吃了午饭");
     await expect(page.locator(".clarification")).toContainText("这次午饭花了多少钱？");
+    expect(requests[0].memory.previousQuery).toBeTruthy();
     await page.reload();
-    await expect(page.locator(".clarification")).toContainText("这次午饭花了多少钱？");
-    await send(page, "28元");
-    await expect(preview(page)).toContainText("¥28.00");
-    expect(requests[1].clarification).toEqual({ originalText: "今天吃了午饭", question: "这次午饭花了多少钱？", answer: "28元" });
+    await expect(page.locator(".chat-thread .conversation-message")).toHaveCount(0);
+    await expect(page.locator(".clarification")).toHaveCount(0);
+    await openHistory(page);
+    await expect(await history(page, "personal")).toContainText("这次午饭花了多少钱？");
+    await expect(page.getByRole("button", { name: "重新说一笔", exact: true })).toHaveCount(0);
+    await returnCurrent(page);
+    await send(page, "28元"); await expect(answer(page)).toContainText("新的一段对话");
+    expect(requests[1].clarification).toBeUndefined();
+    expect(requests[1].memory.recentMessages).toEqual([]);
+    expect(requests[1].memory.previousQuery).toBeUndefined();
+    expect(requests[1].companion).toMatchObject({ tone: "gentle" });
     expect((await exportLedger(page)).state.transactions).toEqual([]);
+    // Within the current conversation, a real follow-up must still carry its original question.
+    await send(page, "今天吃了午饭"); await expect(page.locator(".clarification")).toBeVisible();
+    await send(page, "28元"); await expect(preview(page)).toContainText("¥28.00");
+    expect(requests[3].clarification).toEqual({ originalText: "今天吃了午饭", question: "这次午饭花了多少钱？", answer: "28元" });
     await preview(page).getByRole("button", { name: "不保存", exact: true }).click();
     await send(page, "今天吃了午饭"); await expect(page.locator(".clarification")).toBeVisible();
     await page.getByRole("button", { name: "重新说一笔", exact: true }).click();

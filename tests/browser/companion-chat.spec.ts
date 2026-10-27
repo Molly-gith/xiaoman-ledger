@@ -5,6 +5,8 @@ const endpoint = "https://xiaoman-ai-test.example/api/ai/assistant";
 const composer = (page: Page) => page.getByRole("textbox", { name: "记账或问小满", exact: true });
 const log = (page: Page, name = "个人账本") => page.getByRole("log", { name: name + "对话记录", exact: true });
 const preferences = (page: Page) => page.locator(".companion-settings");
+const openHistory = (page: Page) => page.getByRole("button", { name: "查看历史对话", exact: true }).click();
+const returnCurrent = (page: Page) => page.getByRole("button", { name: "返回当前对话", exact: true }).click();
 const defaults: { tone: "playful" | "gentle" | "plain"; remindersEnabled: boolean; lunchReference: number | null; dailyExpenseTarget: number | null; mutedUntil: string | null } = { tone: "playful", remindersEnabled: true, lunchReference: null, dailyExpenseTarget: null, mutedUntil: null };
 const draft = { type: "expense", amount: 28, category: "餐饮", occurred_at: "2026-09-15", note: "奶茶", nature_suggestion: "消费", confidence: .9, ambiguous: false };
 async function send(page: Page, text: string) {
@@ -49,14 +51,17 @@ async function switchBook(page: Page, name: string) {
   await expect(page.getByRole("button", { name: "切换账本，当前：" + name, exact: true })).toBeVisible();
 }
 
-test("history beyond forty messages remains available by page and Hong Kong date after a new turn", async ({ page }) => {
+test("refresh starts empty while all history remains available by page and Hong Kong date", async ({ page }) => {
   await openLedger(page);
   const messages = Array.from({ length: 50 }, (_, index) => ({ id: "archive-" + index, role: index % 2 ? "assistant" : "user",
     content: "历史消息编号" + String(index).padStart(2, "0"), createdAt: index < 30 ? "2026-08-01T12:00:00.000Z" : "2026-09-14T18:00:00.000Z" }));
   await setMemory(page, messages);
+  await expect(log(page).locator(".conversation-message")).toHaveCount(0);
+  await expect(log(page)).not.toContainText("历史消息编号49");
+  await openHistory(page);
   await expect(log(page).locator(".conversation-message")).toHaveCount(20);
   await expect(log(page)).toContainText("历史消息编号49");
-  await expect(log(page)).not.toContainText("历史消息编号00");
+  await expect(composer(page)).toBeHidden();
   await log(page).getByRole("button", { name: "加载更早的对话", exact: true }).click();
   await expect(log(page).locator(".conversation-message")).toHaveCount(40);
   await log(page).getByRole("button", { name: "加载更早的对话", exact: true }).click();
@@ -69,15 +74,19 @@ test("history beyond forty messages remains available by page and Hong Kong date
   await expect(log(page)).toContainText("历史消息编号49");
   await page.getByLabel("对话日期（北京时间）", { exact: true }).fill("2026-09-14");
   await expect(log(page)).toContainText("这一天还没有保存的对话");
-  await page.getByRole("button", { name: "回到最新", exact: true }).click();
+  await returnCurrent(page);
+  await expect(log(page).locator(".conversation-message")).toHaveCount(0);
   await send(page, "本月支出多少？");
   await expect(page.getByTestId("ai-answer")).toBeVisible();
   const persisted = await storedMemory(page);
   expect(persisted.conversation).toHaveLength(52);
   expect(persisted.conversation[0].content).toBe("历史消息编号00");
+  await openHistory(page); await expect(log(page)).toContainText("本月支出多少？");
+  await returnCurrent(page); await expect(log(page)).toContainText("本月支出多少？");
   await page.reload();
-  await expect(log(page)).toContainText("本月支出多少？");
-  await expect(page.locator(".conversation-history")).toHaveCount(0);
+  await expect(log(page).locator(".conversation-message")).toHaveCount(0);
+  await openHistory(page); await expect(log(page)).toContainText("本月支出多少？");
+  await returnCurrent(page); await expect(log(page).locator(".conversation-message")).toHaveCount(0);
 });
 
 test("companion preferences allow zero daily target, persist and stay in their own book", async ({ page }) => {
@@ -116,10 +125,15 @@ test("reminders persist once per threshold and a later entry can surface another
   await expect(log(page)).toContainText("超过你设置的日支出参考目标");
   let reminders = (await storedMemory(page)).conversation.filter(item => item.reminderId);
   expect(reminders).toHaveLength(2); expect(new Set(reminders.map(item => item.reminderId)).size).toBe(2);
-  await page.reload(); await expect(log(page)).toContainText("已达到八成");
+  await page.reload(); await expect(log(page).locator(".conversation-message")).toHaveCount(0);
+  await openHistory(page); await expect(log(page)).toContainText("已达到八成");
+  await expect(log(page).getByRole("button", { name: "今天少唠叨", exact: true })).toHaveCount(0);
+  await returnCurrent(page);
   reminders = (await storedMemory(page)).conversation.filter(item => item.reminderId);
   expect(reminders).toHaveLength(2);
-  await log(page).getByRole("button", { name: "今天少唠叨", exact: true }).click();
+  await preferences(page).locator(":scope > summary").click();
+  await preferences(page).getByRole("checkbox", { name: "今天少唠叨", exact: true }).check();
+  await preferences(page).getByRole("button", { name: "保存陪伴偏好", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "今天安静陪你" })).toBeVisible();
   await addExpense(page, "50", "安静时跨过更高阈值");
   expect((await storedMemory(page)).conversation.filter(item => item.reminderId)).toHaveLength(2);
@@ -137,6 +151,11 @@ test.describe("continuous companion with mocked AI", () => {
     await openLedger(page); await send(page, "今天奶茶28元");
     await page.getByRole("region", { name: "待保存账目", exact: true }).getByRole("button", { name: "保存这笔", exact: true }).click();
     await expect(log(page)).toContainText("已确认，1 笔账目已保存");
+    await composer(page).fill("今天累就是想喝");
+    await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: "账单", exact: true }).click();
+    await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: "记账", exact: true }).click();
+    await expect(composer(page)).toHaveValue("今天累就是想喝");
+    await expect(log(page)).toContainText("已确认，1 笔账目已保存");
     await send(page, "今天累就是想喝");
     await expect(page.getByTestId("ai-answer")).toContainText("好好享受这杯");
     expect(requests[1].memory.recentMessages.map(item => item.content).join("\n")).toContain("今天奶茶28元");
@@ -145,7 +164,9 @@ test.describe("continuous companion with mocked AI", () => {
     await expect(log(page)).toContainText("今天累就是想喝");
     await expect(page.locator(".answer-copy,.conversation-history")).toHaveCount(0);
     expect((await exportLedger(page)).state.transactions).toHaveLength(1);
-    await page.reload(); await expect(log(page)).toContainText("好好享受这杯");
+    await page.reload(); await expect(log(page).locator(".conversation-message")).toHaveCount(0);
+    await openHistory(page); await expect(log(page)).toContainText("好好享受这杯");
+    await expect(page.getByRole("button", { name: "保存这笔", exact: true })).toHaveCount(0);
   });
   test("chatting does not discard the pending draft and double confirmation still saves once", async ({ page }) => {
     let calls = 0;
@@ -154,6 +175,16 @@ test.describe("continuous companion with mocked AI", () => {
       : { status: "answer", answer: "可以先想一想，这笔还没保存。", nextActions: [] } }); });
     await page.setViewportSize({ width: 320, height: 568 }); await openLedger(page);
     await send(page, "奶茶28元"); await expect(page.getByRole("region", { name: "待保存账目", exact: true })).toBeVisible();
+    await composer(page).fill("还没发出的想法");
+    await openHistory(page);
+    await expect(log(page)).toContainText("尚未保存");
+    await expect(composer(page)).toBeHidden();
+    await expect(page.getByRole("button", { name: "保存这笔", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "修改第1笔", exact: true })).toHaveCount(0);
+    expect((await exportLedger(page)).state.transactions).toHaveLength(0);
+    await returnCurrent(page);
+    await expect(composer(page)).toHaveValue("还没发出的想法");
+    await expect(page.getByRole("region", { name: "待保存账目", exact: true })).toBeVisible();
     await send(page, "先陪我聊一句"); await expect(page.getByTestId("ai-answer")).toContainText("还没保存");
     const pending = page.getByRole("region", { name: "待保存账目", exact: true });
     await expect(pending).toContainText("¥28.00");

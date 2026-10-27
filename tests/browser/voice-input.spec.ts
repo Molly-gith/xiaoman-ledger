@@ -103,3 +103,16 @@ test("voice text requires explicit send and confirmation, then saves with voice 
   await expect(page.getByRole("region",{name:"待保存账目"})).toHaveCount(0);
   expect((await exportLedger(page)).state.transactions[0]).toMatchObject({amount:35,source:"voice",cycleId:null});expect(calls).toBe(1);
 });
+
+test("opening read-only history stops recording and ignores delayed speech",async({page})=>{
+  await mockSpeech(page);await openLedger(page);
+  await input(page).fill("本月支出多少");await page.getByRole("button",{name:"发送给小满",exact:true}).click();
+  await expect(page.getByTestId("ai-answer")).toBeVisible();
+  await input(page).fill("回来接着聊");await page.getByRole("button",{name:"语音输入",exact:true}).click();
+  await page.getByRole("button",{name:"查看历史对话",exact:true}).click();
+  expect(await page.evaluate(()=>(window as unknown as {testSpeech:VoiceHarness}).testSpeech.aborted)).toBe(1);
+  await page.evaluate(()=>(window as unknown as {testSpeech:VoiceHarness}).testSpeech.late("旧录音不填入"));
+  await expect(input(page)).toBeHidden();
+  await page.getByRole("button",{name:"返回当前对话",exact:true}).click();
+  await expect(input(page)).toHaveValue("回来接着聊");
+});

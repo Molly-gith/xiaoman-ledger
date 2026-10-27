@@ -246,6 +246,13 @@ test("copying local data requires a preview and confirmation, transfers all four
   expect(cloud.writes).toHaveLength(1);
   expect(cloud.writes[0].changes.map(change => change.resource).sort()).toEqual(["ledger", "memory_family", "memory_personal", "memory_travel"]);
   await returnHome(page); await expect(home(page)).toContainText("确认后才上传");
+  await page.reload(); await returnHome(page);
+  const conversation = page.getByRole("log", { name: "个人账本对话记录", exact: true });
+  await expect(conversation.locator(".conversation-message")).toHaveCount(0);
+  await page.getByRole("button", { name: "查看历史对话", exact: true }).click();
+  await expect(conversation).toContainText("收入17元");
+  await expect(page.getByRole("textbox", { name: "记账或问小满", exact: true })).toBeHidden();
+  await page.getByRole("button", { name: "返回当前对话", exact: true }).click();
   await page.getByRole("button", { name: "记忆与偏好", exact: true }).click();
   await expect(page.getByRole("button", { name: "修改偏好：健身课", exact: true })).toBeVisible();
   await expect(page.getByText("已保存 2 条", { exact: false })).toBeVisible();

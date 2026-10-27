@@ -22,9 +22,12 @@ test("natural review resets earlier category filters, saves factual history and 
  await review.getByRole("button",{name:"查看本段全部账目",exact:true}).click();
  await expect(review.getByRole("region",{name:"复盘账目依据"})).toContainText("共 3 笔");
  await page.reload();
+ await expect(page.getByRole("log",{name:"个人账本对话记录",exact:true}).locator(".conversation-message")).toHaveCount(0);
+ await page.getByRole("button",{name:"查看历史对话",exact:true}).click();
  await expect(page.getByRole("log",{name:"个人账本对话记录",exact:true})).toContainText("收入1000.00元");
  await expect(page.getByRole("log",{name:"个人账本对话记录",exact:true})).toContainText("支出80.00元");
- await send(page,"那收入呢");await expect(page.getByTestId("ai-answer")).toContainText("收入1000元");
+ await page.getByRole("button",{name:"返回当前对话",exact:true}).click();
+ await send(page,"本月收入多少");await expect(page.getByTestId("ai-answer")).toContainText("收入1000元");
  expect(unchanged((await exportLedger(page)).state)).toEqual(unchanged(before));expect(calls).toBe(0);
 });
 test("reviewing a named book reads only that book and does not switch the writing destination",async({page})=>{

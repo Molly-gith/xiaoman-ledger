@@ -23,6 +23,9 @@
 .companion-baselines label { font-size: 12px; color: #53644b; margin: 0; min-width: 0; }
 .companion-baselines input { display: block; width: 100%; min-width: 0; min-height: 44px; margin-top: 6px; padding: 10px; font: inherit; font-size: 16px; border: 1px solid #cbd7be; border-radius: 10px; background: #fffef8; color: #303e2c; }
 .companion-preferences-form .primary { width: auto; min-width: 130px; min-height: 44px; margin: 0; padding: 10px 16px; font-size: 14px; border-radius: 12px; background: #3c6440; color: #fffdf5; }
+.companion-chat .chat-history-switch { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0 12px; color: #53644b; font-size: 12px; }
+.companion-chat .chat-history-switch button { min-height: 44px; padding: 8px 0; color: #45623c; font-size: 13px; text-decoration: underline; text-underline-offset: 4px; }
+.companion-chat .chat-composer-area[hidden] { display: none; }
 .companion-chat .chat-history-tools { display: flex; justify-content: space-between; align-items: start; gap: 10px; font-size: 12px; color: #53644b; padding: 0 0 6px; }
 .chat-history-tools summary { min-height: 36px; display: flex; align-items: center; cursor: pointer; }
 .chat-history-tools>span { padding-top: 10px; }

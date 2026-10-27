@@ -35,7 +35,7 @@ async function seedLongConversation(page: Page) {
     };
   }));
   await page.reload();
-  await expect(conversation(page).locator(".conversation-message")).toHaveCount(20);
+  await expect(conversation(page).locator(".conversation-message")).toHaveCount(0);
 }
 
 test.describe("companion responsive layout", () => {
@@ -60,18 +60,23 @@ test.describe("companion responsive layout", () => {
     });
   }
 
-  test("long history scrolls inside the conversation without pushing the composer down the page", async ({ page }) => {
+  test("archived history scrolls locally and returning restores a compact current composer", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openLedger(page); await seedLongConversation(page);
+    await page.getByRole("button", { name: "查看历史对话", exact: true }).click();
+    await expect(conversation(page).locator(".conversation-message")).toHaveCount(20);
     const initialPageHeight = await page.evaluate(() => document.documentElement.scrollHeight);
     const dimensions = await conversation(page).evaluate(element => ({ visible: element.clientHeight, all: element.scrollHeight }));
     expect(dimensions.all).toBeGreaterThan(dimensions.visible * 2);
-    await expect(input(page)).toBeInViewport({ ratio: 1 });
-    await expect(send(page)).toBeInViewport({ ratio: 1 });
+    await expect(input(page)).toBeHidden();
+    await expect(page.getByRole("button", { name: "返回当前对话", exact: true })).toBeInViewport({ ratio: 1 });
     await conversation(page).evaluate(element => { element.scrollTop = 0; });
     await conversation(page).getByRole("button", { name: "加载更早的对话", exact: true }).click();
     await expect(conversation(page).locator(".conversation-message")).toHaveCount(40);
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(initialPageHeight + 64);
+    await page.getByRole("button", { name: "返回当前对话", exact: true }).click();
+    await expect(input(page)).toBeInViewport({ ratio: 1 });
+    await expect(send(page)).toBeInViewport({ ratio: 1 });
     await input(page).fill("继续聊聊");
     await expect(send(page)).toBeEnabled();
     await expectNoHorizontalOverflow(page);
@@ -80,6 +85,8 @@ test.describe("companion responsive layout", () => {
   test("a keyboard-sized viewport keeps typing and manual entry usable", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openLedger(page); await seedLongConversation(page);
+    await input(page).fill("本月支出多少？"); await send(page).click();
+    await expect(page.getByTestId("ai-answer")).toBeVisible();
     await input(page).focus();
     // Desktop browser viewport reduction exercises the resize contract; this is
     // not a claim that a physical iOS keyboard was used in the test.
