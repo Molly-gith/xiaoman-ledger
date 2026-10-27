@@ -41,10 +41,10 @@ export async function handleAssistantRequest(request: Request, env: AIEnv, depen
       // ledger conversation window travels with this stateless workflow call.
       const { protocolVersion: _version, context, ...payload } = body;
       void _version;
-      const value = await Promise.race([provider.generate("assistLedgerV2", payload, context, controller.signal), new Promise<never>((_, reject) => {
+      const value = await Promise.race([provider.generate(body.companion ? "assistLedgerCompanion" : "assistLedgerV2", payload, context, controller.signal), new Promise<never>((_, reject) => {
         timer = setTimeout(() => { controller.abort(); reject(new Error("Deadline")); }, dependencies.timeoutMs ?? 25000);
       })]);
-      if (!validateConversationOutput(value, context.today)) return result(502, "invalid_output");
+      if (!validateConversationOutput(value, context.today, body.companion)) return result(502, "invalid_output");
       return new Response(JSON.stringify(conversationResult(value, body, { modelVersion: env.DIFY_MODEL_VERSION, workflowVersion: env.DIFY_WORKFLOW_VERSION })), { status: 200, headers });
     }
     if (!validateAssistantRequest(body)) return result(400, "invalid_request");

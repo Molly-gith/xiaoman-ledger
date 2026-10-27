@@ -3,6 +3,8 @@ import { validateAssistantDraft } from "./assistant-contract.ts";
 import { validateQueryPlan, type QueryPlan } from "../domain/ledger-query.ts";
 import type { DateRange } from "../domain/date-range.ts";
 import type { ExpenseNature, LedgerKind } from "../domain/types.ts";
+import { validateCompanionContext, type CompanionContext } from "../domain/companion-context.ts";
+import { renderCompanionAnswer, safeCompanionFallback } from "./companion-contract.ts";
 
 export type PreferenceProposal = { keyword: string; category: string | null; nature: ExpenseNature | null };
 export type ConversationRequest = {
@@ -10,11 +12,13 @@ export type ConversationRequest = {
   ledgerKind: LedgerKind; defaultRange: DateRange;
   memory: { recentMessages: { role: "user" | "assistant"; content: string }[]; previousQuery?: QueryPlan };
   clarification?: { originalText: string; question: string; answer: string };
+  companion?: CompanionContext;
 };
 export type ConversationOutput = {
-  intent: "transactions" | "query" | "preference" | "clarification" | "question";
+  intent: "transactions" | "query" | "preference" | "clarification" | "question" | "companion";
   transactions: TransactionDraft[]; query: QueryPlan | null; preference: PreferenceProposal | null;
   answer: string; clarification: string; confidence: number;
+  referenced_facts?: string[];
 };
 export type ConversationResult =
   | { status: "transactions"; drafts: TransactionDraft[]; modelVersion: string; workflowVersion: string }
@@ -35,20 +39,25 @@ export function validatePreferenceProposal(v: unknown): v is PreferenceProposal 
     && (v.nature === null || ["消费", "浪费", "投资"].includes(v.nature as string)) && (v.category !== null || v.nature !== null);
 }
 export function validateConversationRequest(v: unknown): v is ConversationRequest {
-  if (!record(v) || !keys(v, ["protocolVersion", "text", "context", "ledgerKind", "defaultRange", "memory"], ["clarification"])
+  if (!record(v) || !keys(v, ["protocolVersion", "text", "context", "ledgerKind", "defaultRange", "memory"], ["clarification", "companion"])
     || v.protocolVersion !== 2 || !txt(v.text, 1000) || !["personal", "family", "travel"].includes(v.ledgerKind as string)
     || !record(v.context) || !keys(v.context, ["today", "timezone"]) || !day(v.context.today) || !txt(v.context.timezone, 64) || !range(v.defaultRange)
     || !record(v.memory) || !keys(v.memory, ["recentMessages"], ["previousQuery"]) || !Array.isArray(v.memory.recentMessages) || v.memory.recentMessages.length > 8
     || !v.memory.recentMessages.every(m => record(m) && keys(m, ["role", "content"]) && ["user", "assistant"].includes(m.role as string) && txt(m.content, 1000))
     || (v.memory.previousQuery !== undefined && !validateQueryPlan(v.memory.previousQuery))) return false;
+  if (v.companion !== undefined && (!validateCompanionContext(v.companion) || v.companion.ledgerKind !== v.ledgerKind || v.companion.today !== v.context.today)) return false;
   try { new Intl.DateTimeFormat("en", { timeZone: v.context.timezone }); } catch { return false; }
   return v.clarification === undefined || (record(v.clarification) && keys(v.clarification, ["originalText", "question", "answer"])
     && txt(v.clarification.originalText, 2000) && txt(v.clarification.question, 300) && v.clarification.answer === v.text);
 }
-export function validateConversationOutput(v: unknown, today: string): v is ConversationOutput {
-  if (!record(v) || !keys(v, ["intent", "transactions", "query", "preference", "answer", "clarification", "confidence"])
+export function validateConversationOutput(v: unknown, today: string, companion?: CompanionContext): v is ConversationOutput {
+  if (!record(v) || !keys(v, ["intent", "transactions", "query", "preference", "answer", "clarification", "confidence"], companion ? ["referenced_facts"] : [])
     || !Array.isArray(v.transactions) || v.transactions.length > 5 || !v.transactions.every(d => validateAssistantDraft(d, today) && !d.ambiguous)
     || !txt(v.answer, 1200, true) || !txt(v.clarification, 300, true) || typeof v.confidence !== "number" || !Number.isFinite(v.confidence) || v.confidence < 0 || v.confidence > 1) return false;
+  if (companion && (!Array.isArray(v.referenced_facts) || v.referenced_facts.length > 3 || new Set(v.referenced_facts).size !== v.referenced_facts.length
+    || !v.referenced_facts.every(id => typeof id === "string" && companion.facts.some(f => f.id === id)))) return false;
+  if (v.intent !== "companion" && Array.isArray(v.referenced_facts) && v.referenced_facts.length) return false;
+  if (v.intent === "companion") return !!companion && !v.transactions.length && v.query === null && v.preference === null && v.clarification === "" && !!v.answer.trim() && v.answer.length <= 650;
   const noText = v.answer === "" && v.clarification === "";
   if (v.intent === "transactions") return v.transactions.length > 0 && v.query === null && v.preference === null && noText;
   if (v.intent === "query") return !v.transactions.length && validateQueryPlan(v.query) && v.preference === null && noText;
@@ -87,6 +96,10 @@ function ownTransferResult(request: ConversationRequest): ConversationResult | n
 export function conversationResult(v: ConversationOutput, request: ConversationRequest, versions: { modelVersion: string; workflowVersion: string }): ConversationResult {
   const transfer = ownTransferResult(request);
   if (transfer) return transfer;
+  if (v.intent === "companion" && request.companion) {
+    const answer = renderCompanionAnswer(v.answer, v.referenced_facts ?? [], request.companion) ?? safeCompanionFallback(request.companion);
+    return { status: "answer", answer, nextActions: [] };
+  }
   if (v.intent === "query") return { status: "query", plan: v.query! };
   if (v.intent === "preference") return { status: "preference", preference: v.preference! };
   if (v.intent === "clarification") return { status: "clarification", question: v.clarification };

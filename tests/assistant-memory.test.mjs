@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { IDBFactory } from 'fake-indexeddb';
-import { createAssistantMemoryRepository, validateOwnerMemoryBackup, MAX_CONVERSATION_MESSAGES, MAX_MESSAGE_LENGTH } from '../lib/data/assistant-memory.ts';
+import { createAssistantMemoryRepository, validateOwnerMemoryBackup, DEFAULT_COMPANION_PREFERENCES, MAX_MESSAGE_LENGTH, MAX_MEMORY_BACKUP_BYTES, normalizeMemoryContents, assertMemoryWriteCapacity } from '../lib/data/assistant-memory.ts';
 import { applyPreferenceToDraft, parsePreferenceProposal, validatePreferenceRule } from '../lib/domain/assistant-preferences.ts';
 
 const owner='local-owner-alice', other='local-owner-bob';
@@ -13,7 +13,7 @@ const plan={range:{startDate:'2026-10-01',endDate:'2026-10-31'},type:'expense',c
 function fixture(){const indexedDB=new IDBFactory();return {indexedDB,repo:createAssistantMemoryRepository({indexedDB})};}
 const revisions=all=>Object.fromEntries(kinds.map(kind=>[kind,all[kind].revision]));
 async function rawWrite(indexedDB,key,value) {
-  const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('xiaoman-assistant-memory-db',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('xiaoman-assistant-memory-db');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
   try{await new Promise((resolve,reject)=>{const tx=db.transaction('memory','readwrite');tx.objectStore('memory').put(value,key);tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);});}finally{db.close();}
 }
 
@@ -41,10 +41,10 @@ test('conversations, clarification and saved query survive refresh and isolate e
   assert.equal((await repo.read(owner,'personal')).conversation[0].content,'对话u');
 });
 
-test('retention trims oldest messages while bad or duplicate new messages never partially save',async()=>{
+test('history beyond forty messages is retained while bad or duplicate new messages never partially save',async()=>{
   const {repo}=fixture();let saved=await repo.appendConversation(owner,'personal',Array.from({length:40},(_,i)=>message(`m${i}`)),0);
   saved=await repo.appendConversation(owner,'personal',[message('m40'),message('m41')],saved.revision);
-  assert.equal(saved.conversation.length,MAX_CONVERSATION_MESSAGES);assert.equal(saved.conversation[0].id,'m2');
+  assert.equal(saved.conversation.length,42);assert.equal(saved.conversation[0].id,'m0');
   for(const batch of [[message('m41')],[message('bad',{content:'a'.repeat(MAX_MESSAGE_LENGTH+1)})],[message('bad',{role:'system'})],[message('bad',{createdAt:'2026-02-30T12:00:00.000Z'})],[message('bad',{query:plan})],[message('bad',{role:'assistant',query:{...plan,sql:'drop table'}})]]) {
     await assert.rejects(repo.appendConversation(owner,'personal',batch,saved.revision));assert.deepEqual(await repo.read(owner,'personal'),saved);
   }
@@ -131,7 +131,7 @@ test('damaged saved records and owner metadata fail closed without resetting dat
 
 test('failed durable commits reject rather than returning a successful in-memory save',async()=>{
   const {repo,indexedDB}=fixture();await repo.read(owner,'personal');
-  const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('xiaoman-assistant-memory-db',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('xiaoman-assistant-memory-db');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
   const prototype=Object.getPrototypeOf(db.transaction('memory').objectStore('memory'));db.close();
   const original=prototype.put;
   try {
@@ -139,6 +139,66 @@ test('failed durable commits reject rather than returning a successful in-memory
     await assert.rejects(repo.appendConversation(owner,'personal',[message('lost')],0),/空间不足/);
   } finally {prototype.put=original;}
   assert.equal((await repo.read(owner,'personal')).revision,0);assert.deepEqual((await repo.read(owner,'personal')).conversation,[]);
+});
+
+test('v1 IndexedDB upgrades without changing identity or history and blocks old version-one writers',async()=>{
+  const indexedDB=new IDBFactory();
+  const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('xiaoman-assistant-memory-db',1);r.onupgradeneeded=()=>r.result.createObjectStore('memory');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const old={version:1,ownerId:owner,ledgerKind:'personal',revision:9,conversation:Array.from({length:40},(_,i)=>message(`old-${i}`)),preferences:[rule()],clarification:{originalText:'午饭',question:'金额？'}};
+  await new Promise((resolve,reject)=>{const t=db.transaction('memory','readwrite');t.objectStore('memory').put(owner,'localOwnerId');t.objectStore('memory').put(old,JSON.stringify([owner,'personal']));t.oncomplete=resolve;t.onabort=()=>reject(t.error);});db.close();
+  const repo=createAssistantMemoryRepository({indexedDB});assert.equal(await repo.getLocalOwnerId(),owner);
+  const upgraded=await repo.read(owner,'personal');assert.equal(upgraded.version,2);assert.equal(upgraded.revision,9);
+  assert.deepEqual(upgraded.conversation,old.conversation);assert.deepEqual(upgraded.preferences,old.preferences);assert.deepEqual(upgraded.companion,DEFAULT_COMPANION_PREFERENCES);
+  const saved=await repo.appendConversation(owner,'personal',[message('next')],9);assert.equal(saved.conversation.length,41);
+  await assert.rejects(new Promise((resolve,reject)=>{const r=indexedDB.open('xiaoman-assistant-memory-db',1);r.onsuccess=()=>{r.result.close();resolve();};r.onerror=()=>reject(r.error);}),{name:'VersionError'});
+  assert.deepEqual((await repo.read(owner,'personal')).conversation,saved.conversation);
+});
+
+test('companion preferences are scoped, durable, portable, and preserved by conversation-only clearing',async()=>{
+  const {repo,indexedDB}=fixture(),prefs={tone:'gentle',remindersEnabled:false,dailyExpenseTarget:80.25,lunchReference:28.5,mutedUntil:'2026-11-01'};
+  let saved=await repo.setCompanionPreferences(owner,'personal',prefs,0);prefs.tone='plain';
+  assert.equal(saved.companion.tone,'gentle');assert.deepEqual((await createAssistantMemoryRepository({indexedDB}).read(owner,'personal')).companion,saved.companion);
+  assert.deepEqual((await repo.read(owner,'family')).companion,DEFAULT_COMPANION_PREFERENCES);assert.deepEqual((await repo.read(other,'personal')).companion,DEFAULT_COMPANION_PREFERENCES);
+  saved=await repo.appendConversation(owner,'personal',[message('u'),message('reminder',{role:'assistant',reminderId:'personal:daily:2026-10-24',replyTo:'u'})],saved.revision);
+  const backup=await repo.exportOwner(owner);assert.equal(backup.version,2);
+  const imported=await repo.importOwner(other,backup,{personal:0,family:0,travel:0});assert.deepEqual(imported.personal.companion,saved.companion);assert.equal(imported.personal.conversation[1].reminderId,'personal:daily:2026-10-24');
+  const cleared=await repo.clearOwnerConversations(owner);assert.deepEqual(cleared.personal.companion,saved.companion);
+  const full=await repo.clearOwner(owner);assert.deepEqual(full.personal.companion,DEFAULT_COMPANION_PREFERENCES);
+  await assert.rejects(repo.setCompanionPreferences(owner,'personal',{...saved.companion,tone:'plain'},saved.revision),/其他页面更新/);
+  for(const patch of [{tone:'unknown'},{remindersEnabled:'yes'},{dailyExpenseTarget:-1},{dailyExpenseTarget:1.001},{lunchReference:0},{mutedUntil:'2026-02-30'},{mutedUntil:'2026-10-24T00:00:00Z'},{extra:true}])await assert.rejects(repo.setCompanionPreferences(owner,'personal',{...DEFAULT_COMPANION_PREFERENCES,...patch},full.personal.revision),/无效/);
+});
+
+test('blocked v1 upgrade explains how to recover and closes its abandoned late connection',async()=>{
+  const indexedDB=new IDBFactory();
+  const old=await new Promise((resolve,reject)=>{const r=indexedDB.open('xiaoman-assistant-memory-db',1);r.onupgradeneeded=()=>r.result.createObjectStore('memory');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const repo=createAssistantMemoryRepository({indexedDB});
+  await assert.rejects(repo.read(owner,'personal'),/关闭旧页面后重试/);
+  old.close();
+  // deleteDatabase queues after the abandoned upgrade. It must not be blocked
+  // by a late onsuccess connection that was already reported as unsuccessful.
+  await new Promise((resolve,reject)=>{const r=indexedDB.deleteDatabase('xiaoman-assistant-memory-db');r.onsuccess=resolve;r.onerror=()=>reject(r.error);r.onblocked=()=>reject(new Error('abandoned connection still open'));});
+  assert.equal((await repo.read(owner,'personal')).version,2);
+});
+
+test('capacity is measured in bytes, refuses the whole save, and never trims recoverable history',async()=>{
+  const {repo}=fixture();let saved=await repo.appendConversation(owner,'personal',[message('kept')],0);
+  const large=Array.from({length:350},(_,i)=>message(`long-${i}`,{content:'字'.repeat(2000)}));
+  assert.throws(()=>assertMemoryWriteCapacity(normalizeMemoryContents({conversation:large,preferences:[],clarification:null})),/空间不足.*导出/);
+  await assert.rejects(repo.appendConversation(owner,'personal',large,saved.revision),/空间不足.*原有历史已保留/);
+  assert.deepEqual(await repo.read(owner,'personal'),saved);assert.equal((await repo.exportOwner(owner)).ledgers.personal.conversation[0].id,'kept');
+  await assert.rejects(repo.appendConversation(owner,'personal',[message('bad-reminder',{reminderId:'test'})],saved.revision));
+});
+
+test('complete multi-book history above the old 2 MB backup limit roundtrips and accepts legacy v1 backups',async()=>{
+  const {repo}=fixture();
+  for(const kind of kinds)await repo.appendConversation(owner,kind,Array.from({length:180},(_,i)=>message(`${kind}-${i}`,{content:'字'.repeat(1800)})),0);
+  const backup=await repo.exportOwner(owner),bytes=new TextEncoder().encode(JSON.stringify(backup)).length;
+  assert.ok(bytes>2_000_000&&bytes<MAX_MEMORY_BACKUP_BYTES);assert.equal(validateOwnerMemoryBackup(backup),true);
+  const restored=await repo.importOwner(other,backup,{personal:0,family:0,travel:0});
+  for(const kind of kinds){assert.equal(restored[kind].conversation.length,180);assert.equal(restored[kind].conversation[0].id,`${kind}-0`);}
+  const legacy={app:'xiaoman-assistant-memory',version:1,exportedAt:'2026-10-24T12:00:00.000Z',ledgers:Object.fromEntries(kinds.map(kind=>[kind,{conversation:[message(`legacy-${kind}`)],preferences:[rule()],clarification:null}]))};
+  assert.equal(validateOwnerMemoryBackup(legacy),true);
+  const imported=await repo.importOwner(other,legacy,revisions(restored));assert.equal(imported.personal.version,2);assert.deepEqual(imported.personal.companion,DEFAULT_COMPANION_PREFERENCES);assert.equal(imported.personal.conversation[0].id,'legacy-personal');
 });
 
 test('explicit keyword preference changes only category/nature with an explainable match; income is never changed',()=>{

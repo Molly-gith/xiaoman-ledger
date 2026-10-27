@@ -1,5 +1,5 @@
 import type { AssistantMemoryRepository, MemoryContents } from "./assistant-memory.ts";
-import { normalizeMemoryContents } from "./assistant-memory.ts";
+import { assertMemoryWriteCapacity, normalizeMemoryContents } from "./assistant-memory.ts";
 import { createCloudTransport, cloudInvalid, type CloudChange, type CloudClient } from "./cloud-transport.ts";
 import type { LedgerRepository } from "./repository.ts";
 import { LEDGER_KINDS, normalizeBackup } from "./schema.ts";
@@ -38,8 +38,11 @@ export async function prepareLocalToCloudMigration(
   transport.assertCurrent();
   const contents = Object.fromEntries(LEDGER_KINDS.map(kind => {
     const state = memories[kind];
-    if (!state || state.version !== 1 || state.ownerId !== localOwner || state.ledgerKind !== kind) throw cloudInvalid();
-    return [kind, normalizeMemoryContents({ conversation: state.conversation, preferences: state.preferences, clarification: state.clarification })];
+    if (!state || ![1, 2].includes(state.version) || state.ownerId !== localOwner || state.ledgerKind !== kind) throw cloudInvalid();
+    const content = normalizeMemoryContents({ conversation: state.conversation, preferences: state.preferences, clarification: state.clarification,
+      ...(state.version === 2 ? { version: 2, companion: state.companion } : {}) });
+    assertMemoryWriteCapacity(content);
+    return [kind, content];
   })) as Record<LedgerKind, MemoryContents>;
 
   const perLedger = Object.freeze(Object.fromEntries(LEDGER_KINDS.map(kind => {

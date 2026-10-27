@@ -27,8 +27,6 @@ async function switchBook(page: Page, kind: Kind) {
   await expect(page.getByRole("button", { name: `切换账本，当前：${names[kind]}`, exact: true })).toBeVisible();
 }
 async function history(page: Page, kind: Kind) {
-  const details = page.locator(".conversation-history");
-  if (!(await details.evaluate(element => (element as HTMLDetailsElement).open))) await details.locator("summary").click();
   return page.getByRole("log", { name: `${names[kind]}对话记录`, exact: true });
 }
 async function memoryPanel(page: Page) {
@@ -79,10 +77,10 @@ test("refresh retains query context, each book has its own history, and clearing
   await send(page, "上个月餐饮花了多少？"); await expect(answer(page)).toContainText("支出30元");
   await page.reload();
   await expect(await history(page, "personal")).toContainText("上个月餐饮花了多少？");
-  await expect(page.locator(".conversation-history")).toContainText("当时的回答");
+  await expect(page.getByRole("log", { name: "个人账本对话记录", exact: true })).toContainText("当时的回答");
   await send(page, "跟前一个月比呢"); await expect(answer(page)).toContainText("差额：支出20元");
   await switchBook(page, "family");
-  await expect(page.locator(".conversation-history")).toHaveCount(0);
+  await expect(page.locator(".chat-thread .conversation-message")).toHaveCount(0);
   await send(page, "上个月餐饮花了多少？"); await expect(answer(page)).toContainText("支出70元");
   const familyHistory = await history(page, "family");
   await expect(familyHistory).not.toContainText("支出30元");
@@ -95,7 +93,7 @@ test("refresh retains query context, each book has its own history, and clearing
   await panel.getByRole("button", { name: "确认清除对话", exact: true }).click();
   await expect(panel).toContainText("本账本对话已清除");
   await page.getByRole("dialog").getByRole("button", { name: "关闭", exact: true }).click();
-  await expect(page.locator(".conversation-history")).toHaveCount(0);
+  await expect(page.locator(".chat-thread .conversation-message")).toHaveCount(0);
   expect(ledgerContent((await exportLedger(page)).state)).toEqual(ledgerContent(before));
   await switchBook(page, "family");
   await expect(await history(page, "family")).toContainText("支出70元");
@@ -309,7 +307,7 @@ test.describe("conversation protocol with mocked AI", () => {
     for (let i = 0; i < 6; i++) { await send(page, `请说明小满有哪些功能，第${i}个个人话题`); await expect(answer(page)).toBeVisible(); }
     const request = requests.at(-1)!;
     expect(request.protocolVersion).toBe(2); expect(request.ledgerKind).toBe("personal");
-    expect(Object.keys(request).sort()).toEqual(["context", "defaultRange", "ledgerKind", "memory", "protocolVersion", "text"]);
+    expect(Object.keys(request).sort()).toEqual(["companion", "context", "defaultRange", "ledgerKind", "memory", "protocolVersion", "text"]);
     expect(request.memory.recentMessages).toHaveLength(8);
     expect(request.memory.recentMessages.filter(message => message.role === "user").map(message => message.content)).toEqual([1, 2, 3, 4].map(i => `请说明小满有哪些功能，第${i}个个人话题`));
     expect(request.memory.recentMessages.every(message => message.content.length <= 1000)).toBe(true);

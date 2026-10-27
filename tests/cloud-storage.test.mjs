@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createCloudRepository, createCloudStore } from '../lib/data/cloud-adapter.ts';
 import { createCloudMemoryRepository } from '../lib/data/cloud-memory.ts';
 import { createCloudTransport } from '../lib/data/cloud-transport.ts';
+import { DEFAULT_COMPANION_PREFERENCES, normalizeMemoryContents } from '../lib/data/assistant-memory.ts';
 import { defaultState } from '../lib/data/schema.ts';
 
 const alice = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', bob = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -147,7 +148,7 @@ test('all memory reads use one RPC, contents are cloud-only and identity/revisio
   assert.equal(f.calls.length - count, 1); assert.deepEqual(all.personal, state); assert.equal(all.family.revision, 0);
   assert.deepEqual(f.calls.at(-1).args.resources, ['memory_personal', 'memory_family', 'memory_travel']);
   const stored = f.records.get(f.key(alice, 'memory_personal'));
-  assert.deepEqual(Object.keys(stored.payload).sort(), ['clarification', 'conversation', 'preferences']);
+  assert.deepEqual(Object.keys(stored.payload).sort(), ['clarification', 'companion', 'conversation', 'preferences', 'version']);
   assert.doesNotMatch(JSON.stringify(stored.payload), /ownerId|revision|aaaaaaaa/);
   const reload = createCloudMemoryRepository(f.client, alice, () => true);
   assert.deepEqual(await reload.read(alice, 'personal'), state);
@@ -171,7 +172,7 @@ test('memory preserves retention and validation, clones caller input before awai
   const f = fixture(); let state = await f.memory.appendConversation(alice, 'personal', Array.from({ length: 40 }, (_, i) => message(`m${i}`)), 0);
   const messages = [message('m40')]; const promise = f.memory.appendConversation(alice, 'personal', messages, state.revision); messages[0].content = 'late mutation';
   state = await promise;
-  assert.equal(state.conversation.length, 40); assert.equal(state.conversation[0].id, 'm1'); assert.equal(state.conversation.at(-1).content, '对话m40');
+  assert.equal(state.conversation.length, 41); assert.equal(state.conversation[0].id, 'm0'); assert.equal(state.conversation.at(-1).content, '对话m40');
   await assert.rejects(f.memory.appendConversation(alice, 'personal', [message('m40')], state.revision), /已经保存/);
   const before = f.calls.length;
   await assert.rejects(f.memory.appendConversation(alice, 'personal', [message('bad', { role: 'system' })], state.revision));
@@ -258,4 +259,36 @@ test('automatic salaries use the cloud CAS and stay isolated between identities'
   const b = createCloudRepository(f.client, bob, () => true);
   assert.deepEqual(await b.ensureRecurringSalary('2026-10-15'), defaultState());
   assert.equal(f.records.get(f.key(alice,'ledger')).payload.transactions.length,1);
+});
+
+test('cloud v1 memory upgrades with complete history and companion configuration roundtrips through backup',async()=>{
+  const f=fixture();f.records.set(f.key(alice,'memory_personal'),{resource:'memory_personal',revision:7,payload:{...emptyMemory(),conversation:Array.from({length:40},(_,i)=>message(`old-${i}`))}});
+  const old=await f.memory.read(alice,'personal');assert.equal(old.version,2);assert.deepEqual(old.companion,DEFAULT_COMPANION_PREFERENCES);
+  const prefs={tone:'plain',remindersEnabled:false,dailyExpenseTarget:0,lunchReference:30,mutedUntil:'2026-11-01'};
+  let saved=await f.memory.setCompanionPreferences(alice,'personal',prefs,7);saved=await f.memory.appendConversation(alice,'personal',[message('new')],saved.revision);
+  assert.equal(saved.conversation.length,41);assert.equal(saved.conversation[0].id,'old-0');assert.deepEqual(f.records.get(f.key(alice,'memory_personal')).payload.companion,prefs);
+  const backup=await f.memory.exportOwner(alice);assert.equal(backup.version,2);const imported=await f.memory.importOwner(alice,backup,revisions(await f.memory.readOwner(alice)));
+  assert.deepEqual(imported.personal.companion,prefs);assert.equal(imported.personal.conversation.length,41);
+  let cleared=await f.memory.clearOwnerConversations(alice);assert.deepEqual(cleared.personal.companion,prefs);
+  cleared=await f.memory.clearOwner(alice);assert.deepEqual(cleared.personal.companion,DEFAULT_COMPANION_PREFERENCES);
+});
+
+test('cloud capacity rejection sends no write and companion CAS conflicts preserve the winning history',async()=>{
+  const f=fixture();const saved=await f.memory.appendConversation(alice,'personal',[message('kept')],0);
+  const before=f.calls.filter(c=>c.name==='xiaoman_write_resources').length;
+  await assert.rejects(f.memory.appendConversation(alice,'personal',Array.from({length:350},(_,i)=>message(`large-${i}`,{content:'字'.repeat(2000)})),saved.revision),/空间不足.*导出/);
+  assert.equal(f.calls.filter(c=>c.name==='xiaoman_write_resources').length,before);assert.deepEqual(await f.memory.read(alice,'personal'),saved);
+  const second=createCloudMemoryRepository(f.client,alice,()=>true);
+  const outcomes=await Promise.allSettled([f.memory.setCompanionPreferences(alice,'personal',{...DEFAULT_COMPANION_PREFERENCES,tone:'gentle'},1),second.appendConversation(alice,'personal',[message('new')],1)]);
+  assert.equal(outcomes.filter(x=>x.status==='fulfilled').length,1);assert.match(outcomes.find(x=>x.status==='rejected').reason.message,/更新/);
+  assert.equal((await f.memory.read(alice,'personal')).conversation[0].id,'kept');
+});
+
+test('cloud companion remains isolated by account and book and v2 malformed configuration is rejected',async()=>{
+  const f=fixture();await f.memory.setCompanionPreferences(alice,'family',{...DEFAULT_COMPANION_PREFERENCES,lunchReference:20},0);
+  assert.equal((await f.memory.read(alice,'personal')).companion.lunchReference,null);
+  f.setAuth(bob);const second=createCloudMemoryRepository(f.client,bob,()=>true);assert.equal((await second.read(bob,'family')).companion.lunchReference,null);
+  f.setAuth(alice);const corrupt=normalizeMemoryContents(emptyMemory());corrupt.companion.lunchReference=0;
+  f.records.set(f.key(alice,'memory_travel'),{resource:'memory_travel',revision:1,payload:corrupt});
+  await assert.rejects(f.memory.read(alice,'travel'),/无效/);
 });

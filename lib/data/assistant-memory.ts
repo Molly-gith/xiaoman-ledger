@@ -1,24 +1,34 @@
 import type { LedgerKind } from "../domain/types.ts";
 import { validateQueryPlan, type QueryPlan } from "../domain/ledger-query.ts";
 import { MAX_PREFERENCES, preferenceKeyword, validatePreferenceRule, type PreferenceRule } from "../domain/assistant-preferences.ts";
+import { cents, parseDate } from "../domain/finance.ts";
 
 export type { PreferenceRule } from "../domain/assistant-preferences.ts";
-export type ConversationMessage = { id: string; role: "user" | "assistant"; content: string; createdAt: string; query?: QueryPlan; clarification?: ClarificationMemory };
+export type ConversationMessage = { id: string; role: "user" | "assistant"; content: string; createdAt: string; query?: QueryPlan; clarification?: ClarificationMemory; reminderId?: string; replyTo?: string };
 export type ClarificationMemory = { originalText: string; question: string };
-export type MemoryState = { version: 1; ownerId: string; ledgerKind: LedgerKind; revision: number;
-  conversation: ConversationMessage[]; preferences: PreferenceRule[]; clarification: ClarificationMemory | null };
+export type CompanionPreferences = { tone: "gentle" | "playful" | "plain"; remindersEnabled: boolean;
+  dailyExpenseTarget: number | null; lunchReference: number | null; mutedUntil: string | null };
+export const DEFAULT_COMPANION_PREFERENCES: Readonly<CompanionPreferences> = Object.freeze({
+  tone: "playful", remindersEnabled: true, dailyExpenseTarget: null, lunchReference: null, mutedUntil: null,
+});
+export type MemoryState = { version: 2; ownerId: string; ledgerKind: LedgerKind; revision: number;
+  conversation: ConversationMessage[]; preferences: PreferenceRule[]; clarification: ClarificationMemory | null; companion: CompanionPreferences };
 export type OwnerMemory = Record<LedgerKind, MemoryState>;
 export type MemoryRevisions = Record<LedgerKind, number>;
-export type MemoryContents = Pick<MemoryState, "conversation" | "preferences" | "clarification">;
+type LegacyMemoryContents = Pick<MemoryState, "conversation" | "preferences" | "clarification">;
+export type MemoryContents = Pick<MemoryState, "version" | "conversation" | "preferences" | "clarification" | "companion">;
 /** Portable content only. Local identifiers are not authentication and never become an imported identity. */
-export type OwnerMemoryBackup = { app: "xiaoman-assistant-memory"; version: 1; exportedAt: string; ledgers: Record<LedgerKind, MemoryContents> };
-export const MAX_CONVERSATION_MESSAGES = 40;
+export type OwnerMemoryBackup = { app: "xiaoman-assistant-memory"; exportedAt: string } & (
+  { version: 1; ledgers: Record<LedgerKind, LegacyMemoryContents> } | { version: 2; ledgers: Record<LedgerKind, MemoryContents> });
 export const MAX_MESSAGE_LENGTH = 2000;
-export const MAX_MEMORY_BACKUP_BYTES = 2_000_000;
+/** Conservative JSON whitespace accounting plus headroom under the cloud's 2 MB resource limit. */
+export const MAX_MEMORY_RESOURCE_BYTES = 1_950_000;
+export const MAX_MEMORY_BACKUP_BYTES = 7_000_000;
 const KINDS: readonly LedgerKind[] = ["personal", "family", "travel"];
 const DB_NAME = "xiaoman-assistant-memory-db", STORE = "memory", OWNER_KEY = "localOwnerId";
 const conflict = () => new Error("助手记忆已在其他页面更新，请重新载入后重试");
 const invalid = () => new Error("助手记忆数据无效，原有内容已保留");
+const capacity = () => new Error("助手记忆空间不足，原有历史已保留。请先导出备份，再整理或清除对话后重试");
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 const keys = (value: Record<string, unknown>, required: readonly string[], optional: readonly string[] = []) => required.every(key => Object.hasOwn(value, key)) && Object.keys(value).every(key => required.includes(key) || optional.includes(key));
 const text = (value: unknown, max: number): value is string => typeof value === "string" && value.trim().length > 0 && value.length <= max;
@@ -33,40 +43,75 @@ function scope(owner: string, kind: LedgerKind) {
 }
 function empty(owner: string, kind: LedgerKind): MemoryState {
   scope(owner, kind);
-  return { version: 1, ownerId: owner, ledgerKind: kind, revision: 0, conversation: [], preferences: [], clarification: null };
+  return { version: 2, ownerId: owner, ledgerKind: kind, revision: 0, conversation: [], preferences: [], clarification: null, companion: { ...DEFAULT_COMPANION_PREFERENCES } };
+}
+export function normalizeCompanionPreferences(value: unknown): CompanionPreferences {
+  if (!record(value) || !keys(value, ["tone", "remindersEnabled", "dailyExpenseTarget", "lunchReference", "mutedUntil"])
+    || !["gentle", "playful", "plain"].includes(String(value.tone)) || typeof value.remindersEnabled !== "boolean") throw invalid();
+  const normalized = structuredClone(value) as CompanionPreferences;
+  for (const field of ["dailyExpenseTarget", "lunchReference"] as const) {
+    const amount = value[field];
+    if (amount !== null) {
+      if (typeof amount !== "number" || (field === "lunchReference" && amount <= 0)) throw invalid();
+      try { normalized[field] = cents(amount) / 100; } catch { throw invalid(); }
+    }
+  }
+  if (value.mutedUntil !== null) {
+    if (typeof value.mutedUntil !== "string") throw invalid();
+    try { parseDate(value.mutedUntil); } catch { throw invalid(); }
+  }
+  return normalized;
 }
 function validateClarification(value: unknown): value is ClarificationMemory | null {
   return value === null || (record(value) && keys(value, ["originalText", "question"]) && text(value.originalText, 2000) && text(value.question, 300));
 }
 export function validateConversationMessage(value: unknown): value is ConversationMessage {
-  return record(value) && keys(value, ["id", "role", "content", "createdAt"], ["query", "clarification"])
+  return record(value) && keys(value, ["id", "role", "content", "createdAt"], ["query", "clarification", "reminderId", "replyTo"])
     && id(value.id) && (value.role === "user" || value.role === "assistant") && text(value.content, MAX_MESSAGE_LENGTH) && timestamp(value.createdAt)
     && (value.query === undefined || (value.role === "assistant" && validateQueryPlan(value.query)))
-    && (value.clarification === undefined || (value.role === "assistant" && value.clarification !== null && validateClarification(value.clarification)));
+    && (value.clarification === undefined || (value.role === "assistant" && value.clarification !== null && validateClarification(value.clarification)))
+    && (value.reminderId === undefined || (value.role === "assistant" && typeof value.reminderId === "string" && /^[A-Za-z0-9:_-]{1,200}$/.test(value.reminderId)))
+    && (value.replyTo === undefined || (value.role === "assistant" && id(value.replyTo)));
 }
 function contents(value: unknown): MemoryContents {
-  if (!record(value) || !keys(value, ["conversation", "preferences", "clarification"])) throw invalid();
-  if (!Array.isArray(value.conversation) || value.conversation.length > MAX_CONVERSATION_MESSAGES || !value.conversation.every(validateConversationMessage)
+  if (!record(value) || !keys(value, ["conversation", "preferences", "clarification"], ["version", "companion"])
+    || (value.version !== undefined && value.version !== 2) || (value.version === 2 && value.companion === undefined)
+    || (value.version === undefined && value.companion !== undefined)) throw invalid();
+  if (!Array.isArray(value.conversation) || !value.conversation.every(validateConversationMessage)
     || new Set(value.conversation.map(message => message.id)).size !== value.conversation.length
     || !Array.isArray(value.preferences) || value.preferences.length > MAX_PREFERENCES || !value.preferences.every(validatePreferenceRule)
     || new Set(value.preferences.map(rule => rule.id)).size !== value.preferences.length
     || new Set(value.preferences.map(rule => preferenceKeyword(rule.keyword))).size !== value.preferences.length
     || !validateClarification(value.clarification)) throw invalid();
-  return structuredClone(value) as MemoryContents;
+  return { version: 2, conversation: structuredClone(value.conversation), preferences: structuredClone(value.preferences),
+    clarification: structuredClone(value.clarification), companion: value.version === 2 ? normalizeCompanionPreferences(value.companion) : { ...DEFAULT_COMPANION_PREFERENCES } };
 }
 /** Shared validation for cloud payloads; identity and revisions are not portable content. */
 export function normalizeMemoryContents(value: unknown): MemoryContents { return contents(value); }
+/** Writes fail before changing old content; reads/exports stay possible for a full resource. */
+export function assertMemoryWriteCapacity(value: MemoryContents): void {
+  if (new TextEncoder().encode(JSON.stringify(value, null, 1)).length > MAX_MEMORY_RESOURCE_BYTES) throw capacity();
+}
+export function memoryContentsOf(state: MemoryState): MemoryContents {
+  return contents({ version: state.version, conversation: state.conversation, preferences: state.preferences, clarification: state.clarification, companion: state.companion });
+}
 function decode(value: unknown, owner: string, kind: LedgerKind): MemoryState {
   if (value === undefined) return empty(owner, kind);
-  if (!record(value) || !keys(value, ["version", "ownerId", "ledgerKind", "revision", "conversation", "preferences", "clarification"])
-    || value.version !== 1 || value.ownerId !== owner || value.ledgerKind !== kind || !revision(value.revision)) throw invalid();
-  return { ...empty(owner, kind), revision: value.revision, ...contents({ conversation: value.conversation, preferences: value.preferences, clarification: value.clarification }) };
+  if (!record(value) || !keys(value, ["version", "ownerId", "ledgerKind", "revision", "conversation", "preferences", "clarification"], ["companion"])
+    || (value.version !== 1 && value.version !== 2) || (value.version === 1 && value.companion !== undefined)
+    || value.ownerId !== owner || value.ledgerKind !== kind || !revision(value.revision)) throw invalid();
+  return { ...empty(owner, kind), revision: value.revision, ...contents({ conversation: value.conversation, preferences: value.preferences, clarification: value.clarification,
+    ...(value.version === 2 ? { version: 2, companion: value.companion } : {}) }) };
 }
 export function validateOwnerMemoryBackup(value: unknown): value is OwnerMemoryBackup {
   try {
-    if (!record(value) || !keys(value, ["app", "version", "exportedAt", "ledgers"]) || value.app !== "xiaoman-assistant-memory" || value.version !== 1
+    if (!record(value) || !keys(value, ["app", "version", "exportedAt", "ledgers"]) || value.app !== "xiaoman-assistant-memory" || (value.version !== 1 && value.version !== 2)
       || !timestamp(value.exportedAt) || !record(value.ledgers) || !keys(value.ledgers, KINDS)) return false;
-    for (const kind of KINDS) contents(value.ledgers[kind]);
+    for (const kind of KINDS) {
+      const book = value.ledgers[kind];
+      if (!record(book) || (value.version === 1 ? book.version !== undefined || book.companion !== undefined : book.version !== 2)) return false;
+      contents(book);
+    }
     return new TextEncoder().encode(JSON.stringify(value)).length <= MAX_MEMORY_BACKUP_BYTES;
   } catch { return false; }
 }
@@ -82,6 +127,7 @@ export interface AssistantMemoryRepository {
   clearConversation(owner: string, kind: LedgerKind, expectedRevision: number): Promise<MemoryState>;
   upsertPreference(owner: string, kind: LedgerKind, rule: PreferenceRule, expectedRevision: number): Promise<MemoryState>;
   deletePreference(owner: string, kind: LedgerKind, preferenceId: string, expectedRevision: number): Promise<MemoryState>;
+  setCompanionPreferences(owner: string, kind: LedgerKind, preferences: CompanionPreferences, expectedRevision: number): Promise<MemoryState>;
   /** Keeps preferences; used after replacing ledger records to remove obsolete context. */
   clearOwnerConversations(owner: string): Promise<OwnerMemory>;
   /** Explicitly clears conversations AND preferences in all three books, retaining revision tombstones. */
@@ -98,7 +144,7 @@ export function createAssistantMemoryRepository(options: { indexedDB?: IDBFactor
     const factory = options.indexedDB ?? globalThis.indexedDB;
     if (!factory) throw new Error("本机无法打开助手记忆，尚未保存。请使用支持本地数据库的浏览器");
     return new Promise((resolve, reject) => {
-      const request = factory.open(DB_NAME, 1);
+      const request = factory.open(DB_NAME, 2);
       let abandoned = false;
       request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains(STORE)) request.result.createObjectStore(STORE); };
       request.onsuccess = () => {
@@ -117,7 +163,7 @@ export function createAssistantMemoryRepository(options: { indexedDB?: IDBFactor
         const tx = db.transaction(STORE, mode); let value: T, failure: unknown;
         const fail = (error: unknown) => { failure = error; try { tx.abort(); } catch { /* Already aborted. */ } };
         tx.oncomplete = () => resolve(value);
-        tx.onabort = () => reject(failure ?? tx.error ?? new Error("助手记忆保存失败，原有内容已保留"));
+        tx.onabort = () => { const reason = failure ?? tx.error; reject(reason instanceof DOMException && reason.name === "QuotaExceededError" ? capacity() : reason ?? new Error("助手记忆保存失败，原有内容已保留")); };
         tx.onerror = () => { failure ??= tx.error; };
         try { work(tx.objectStore(STORE), result => { value = result; }, fail); } catch (error) { fail(error); }
       });
@@ -140,6 +186,7 @@ export function createAssistantMemoryRepository(options: { indexedDB?: IDBFactor
           const current = decode(request.result, owner, kind);
           if (current.revision !== expectedRevision) throw conflict();
           const next = decode({ ...change(current), revision: current.revision + 1 }, owner, kind);
+          assertMemoryWriteCapacity(memoryContentsOf(next));
           store.put(next, key); result(next);
         } catch (error) { fail(error); }
       };
@@ -156,7 +203,7 @@ export function createAssistantMemoryRepository(options: { indexedDB?: IDBFactor
             all[kind] = decode(request.result, owner, kind);
             if (++count !== KINDS.length) return;
             const next = change ? change(all) : all;
-            if (change) for (const book of KINDS) store.put(decode(next[book], owner, book), scope(owner, book));
+            if (change) for (const book of KINDS) { const value = decode(next[book], owner, book); assertMemoryWriteCapacity(memoryContentsOf(value)); store.put(value, scope(owner, book)); }
             result(next);
           } catch (error) { fail(error); }
         };
@@ -165,17 +212,17 @@ export function createAssistantMemoryRepository(options: { indexedDB?: IDBFactor
   }
   const clearOwner = (owner: string, preferences: boolean) => ownerTransaction(owner, "readwrite", current => {
     for (const kind of KINDS) current[kind] = { ...current[kind], revision: current[kind].revision + 1, conversation: [], clarification: null,
-      preferences: preferences ? [] : current[kind].preferences };
+      preferences: preferences ? [] : current[kind].preferences, companion: preferences ? { ...DEFAULT_COMPANION_PREFERENCES } : current[kind].companion };
     return current;
   });
   const conversation = (replace: boolean, owner: string, kind: LedgerKind, messages: readonly ConversationMessage[], expectedRevision: number, clarification?: ClarificationMemory | null) => {
-    if (!Array.isArray(messages) || messages.length > MAX_CONVERSATION_MESSAGES || !messages.every(validateConversationMessage)
+    if (!Array.isArray(messages) || !messages.every(validateConversationMessage)
       || (clarification !== undefined && !validateClarification(clarification))) return Promise.reject(invalid());
     const capturedMessages = structuredClone(messages), capturedClarification = structuredClone(clarification);
     return update(owner, kind, expectedRevision, current => {
       const all = replace ? [...capturedMessages] : [...current.conversation, ...capturedMessages];
       if (new Set(all.map(message => message.id)).size !== all.length) throw new Error("这条对话已经保存，请重新载入后重试");
-      return { ...current, conversation: all.slice(-MAX_CONVERSATION_MESSAGES), ...(capturedClarification !== undefined ? { clarification: capturedClarification } : {}) };
+      return { ...current, conversation: all, ...(capturedClarification !== undefined ? { clarification: capturedClarification } : {}) };
     });
   };
   return {
@@ -206,11 +253,17 @@ export function createAssistantMemoryRepository(options: { indexedDB?: IDBFactor
       if (!id(preferenceId) || !current.preferences.some(rule => rule.id === preferenceId)) throw new Error("这条偏好已不存在，请重新载入后重试");
       return { ...current, preferences: current.preferences.filter(rule => rule.id !== preferenceId) };
     }),
+    setCompanionPreferences: async (owner, kind, preferences, expected) => {
+      const captured = normalizeCompanionPreferences(preferences);
+      return update(owner, kind, expected, current => ({ ...current, companion: captured }));
+    },
     clearOwnerConversations: owner => clearOwner(owner, false), clearOwner: owner => clearOwner(owner, true),
     exportOwner: async owner => {
       const all = await ownerTransaction(owner, "readonly");
-      const ledgers = Object.fromEntries(KINDS.map(kind => [kind, contents({ conversation: all[kind].conversation, preferences: all[kind].preferences, clarification: all[kind].clarification })])) as OwnerMemoryBackup["ledgers"];
-      return { app: "xiaoman-assistant-memory", version: 1, exportedAt: new Date().toISOString(), ledgers };
+      const ledgers = Object.fromEntries(KINDS.map(kind => [kind, memoryContentsOf(all[kind])])) as Record<LedgerKind, MemoryContents>;
+      const backup = { app: "xiaoman-assistant-memory" as const, version: 2 as const, exportedAt: new Date().toISOString(), ledgers };
+      if (!validateOwnerMemoryBackup(backup)) throw new Error("助手记忆备份超过 7 MB，原有历史已保留，请先整理后再导出");
+      return backup;
     },
     importOwner: async (owner, backup, expected) => {
       if (!validateOwnerMemoryBackup(backup) || !record(expected) || !keys(expected, KINDS) || !KINDS.every(kind => revision(expected[kind]))) throw invalid();

@@ -59,7 +59,7 @@ function LedgerHome({ scope }: { scope: WorkspaceScope }) {
 
   useEffect(() => {
     let active = true, checking = false, lastCheckedDate = "";
-    const canRefresh = () => document.visibilityState !== "hidden" && !document.querySelector(".sheet, .salary-budget[open] .salary-budget-form")
+    const canRefresh = () => document.visibilityState !== "hidden" && !document.querySelector(".sheet, .salary-budget[open] .salary-budget-form, .companion-settings[open] .companion-preferences-form")
       && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? "");
     const refresh = async (initial = false, force = false) => {
       if (checking || saving.current || !isCurrent()) return;

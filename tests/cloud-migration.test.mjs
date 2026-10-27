@@ -57,7 +57,7 @@ test('one confirmation copies all four captured resources atomically and never c
   assert.equal(f.rows.get('ledger').payload.otherLedgers.travel.investmentAccounts[0].currentMarketValue, 1000);
   for (const kind of kinds) {
     const row = f.rows.get(`memory_${kind}`); assert.equal(row.revision, 1);
-    assert.deepEqual(row.payload, { conversation: before.memories[kind].conversation, preferences: before.memories[kind].preferences, clarification: null });
+    assert.deepEqual(row.payload, { version: 2, companion: {tone:'playful',remindersEnabled:true,dailyExpenseTarget:null,lunchReference:null,mutedUntil:null}, conversation: before.memories[kind].conversation, preferences: before.memories[kind].preferences, clarification: null });
     assert.doesNotMatch(JSON.stringify(row.payload), /ownerId|revision|local-device/);
   }
   assert.deepEqual({ ledger: f.ledger, memories: f.memories }, before);
@@ -137,4 +137,11 @@ test('a lost response is uncertain, never retries the copy, and preserves the or
   await assert.rejects(prepared.execute(), /已经提交过/);
   assert.equal(f.rows.size, 4); assert.deepEqual(f.ledger, before);
   assert.equal(f.calls.filter(call => call.name === 'xiaoman_write_resources').length, 1);
+});
+
+test('v2 device-to-account copy retains more than forty messages and every companion setting',async()=>{
+  const f=fixture();
+  for(const kind of kinds){f.memories[kind].version=2;f.memories[kind].companion={tone:'gentle',remindersEnabled:false,dailyExpenseTarget:80,lunchReference:25,mutedUntil:'2026-11-01'};f.memories[kind].conversation=Array.from({length:60},(_,i)=>message(`${kind}-${i}`));}
+  const prepared=await f.prepare();assert.equal(prepared.counts.conversations,180);await prepared.execute();
+  for(const kind of kinds){const payload=f.rows.get(`memory_${kind}`).payload;assert.equal(payload.version,2);assert.equal(payload.conversation.length,60);assert.equal(payload.conversation[0].id,`${kind}-0`);assert.deepEqual(payload.companion,f.memories[kind].companion);}
 });

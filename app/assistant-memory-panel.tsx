@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import type { LedgerKind } from "../lib/domain/types";
+import { localDate } from "../lib/domain/finance";
+import { CompanionPreferencesForm } from "./companion-preferences";
 import { EXPENSE_CATEGORIES, type PreferenceRule } from "../lib/domain/assistant-preferences";
 import { createAssistantMemoryRepository, validateOwnerMemoryBackup, MAX_MEMORY_BACKUP_BYTES, type AssistantMemoryRepository, type MemoryState, type OwnerMemoryBackup, type MemoryRevisions } from "../lib/data/assistant-memory";
 
@@ -20,10 +22,10 @@ export function AssistantMemoryPanel({ ledgerKind, ledgerName, onChanged, memory
     return () => { active = false; };
   }, [repository, memoryOwnerId, ledgerKind]);
   async function mutate(action: () => Promise<MemoryState>, message: string) {
-    if (busy) return;
+    if (busy) return false;
     setBusy(true); setError(""); setNotice("");
-    try { setState(await action()); setEditing(null); setClear(false); setNotice(message); onChanged(); }
-    catch (e) { setError(e instanceof Error ? e.message : "尚未保存，请重试"); }
+    try { setState(await action()); setEditing(null); setClear(false); setNotice(message); onChanged(); return true; }
+    catch (e) { setError(e instanceof Error ? e.message : "尚未保存，请重试"); return false; }
     finally { setBusy(false); }
   }
   async function reloadMemory() {
@@ -47,7 +49,7 @@ export function AssistantMemoryPanel({ ledgerKind, ledgerName, onChanged, memory
   async function choose(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]; event.target.value = ""; if (!file || !state) return;
     try {
-      if (file.size > MAX_MEMORY_BACKUP_BYTES) throw Error("请选择不超过 2 MB 的助手记忆备份");
+      if (file.size > MAX_MEMORY_BACKUP_BYTES) throw Error("请选择不超过 7 MB 的助手记忆备份");
       const backup: unknown = JSON.parse(await file.text());
       if (!validateOwnerMemoryBackup(backup)) throw Error("这不是有效的助手记忆备份；账本备份请到数据与备份中导入。");
       const all = await repository.readOwner(state.ownerId);
@@ -70,12 +72,13 @@ export function AssistantMemoryPanel({ ledgerKind, ledgerName, onChanged, memory
     {error && <p className="inline-error" role="alert">{error}<button disabled={busy} onClick={() => void reloadMemory()}>重新读取</button></p>}
     {notice && <p role="status">{notice}</p>}
     {state && <fieldset className="app-content" disabled={busy}>
+      <details className="memory-companion"><summary>陪伴偏好</summary><CompanionPreferencesForm key={JSON.stringify(state.companion)} value={state.companion} today={localDate()} disabled={busy} onSave={value => mutate(() => repository.setCompanionPreferences(state.ownerId, ledgerKind, value, state.revision), "陪伴偏好已保存。")} /></details>
       <div className="memory-section"><h3>我记住的分类偏好</h3><p className="helper">只用于这个账本的新支出草稿。你本次说的要求优先，收入不受影响。</p>
         {state.preferences.length ? <ul className="preference-list">{state.preferences.map(rule => <li key={rule.id}><div><b>{rule.keyword}</b><span>{[rule.category, rule.nature].filter(Boolean).join(" · ")}</span></div><button aria-label={`修改偏好：${rule.keyword}`} onClick={() => setEditing({ ...rule })}>修改</button><button aria-label={`删除偏好：${rule.keyword}`} onClick={() => void mutate(() => repository.deletePreference(state.ownerId, ledgerKind, rule.id, state.revision), "偏好已删除，账目没有改变。")}>删除</button></li>)}</ul> : <p>还没有保存偏好。可以对小满说“以后健身课算投资”。</p>}
         {!editing && <button onClick={() => setEditing({ id: crypto.randomUUID(), keyword: "", category: null, nature: null })}>添加分类偏好</button>}
         {editing && <form className="preference-edit" onSubmit={save}><label>关键词（必填）<input autoComplete="off" minLength={2} maxLength={40} value={editing.keyword} onChange={e => setEditing({ ...editing, keyword: e.target.value })} placeholder="例如：健身课" required /></label><label>分类（选填）<select value={editing.category ?? ""} onChange={e => setEditing({ ...editing, category: (e.target.value || null) as PreferenceRule["category"] })}><option value="">沿用识别结果</option>{EXPENSE_CATEGORIES.map(c => <option key={c}>{c}</option>)}</select></label><label>性质（选填）<select value={editing.nature ?? ""} onChange={e => setEditing({ ...editing, nature: (e.target.value || null) as PreferenceRule["nature"] })}><option value="">沿用识别结果</option><option>消费</option><option>浪费</option><option>投资</option></select></label><p className="helper">分类和性质至少选择一项。</p><div className="draft-actions"><button type="button" onClick={() => setEditing(null)}>取消修改</button><button className="primary" type="submit">保存偏好</button></div></form>}
       </div>
-      <div className="memory-section"><h3>连续对话</h3><p>已保存 {state.conversation.length} 条，最多保留最近四十条。刷新后可以继续，其他账本的对话不会混入。</p>
+      <div className="memory-section"><h3>连续对话</h3><p>已保存 {state.conversation.length} 条，历史不会自动删除。首页可加载更早消息或按日期查找；其他账本的对话不会混入。</p>
         {clear ? <div className="memory-confirm"><p>清除{ledgerName}的对话与追问上下文？分类偏好和账目都会保留。</p><button onClick={() => setClear(false)}>保留对话</button><button onClick={() => void mutate(() => repository.clearConversation(state.ownerId, ledgerKind, state.revision), "本账本对话已清除，偏好与账目保留。")}>确认清除对话</button></div> : <button onClick={() => setClear(true)}>清除本账本对话</button>}
       </div>
       <details className="memory-backup"><summary>助手记忆备份</summary><p className="helper">包含三个账本的对话和偏好，不包含账目。换设备前请同时导出账本备份。</p><button onClick={() => void exportMemory()}>导出助手记忆</button><label className="memory-file">导入助手记忆<input type="file" accept=".json,application/json" onChange={event => void choose(event)} /></label>

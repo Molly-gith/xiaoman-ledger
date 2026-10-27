@@ -1,0 +1,300 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "answer": {
+      "maxLength": 1200,
+      "type": "string"
+    },
+    "clarification": {
+      "maxLength": 300,
+      "type": "string"
+    },
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "type": "number"
+    },
+    "intent": {
+      "enum": [
+        "transactions",
+        "query",
+        "preference",
+        "clarification",
+        "question",
+        "companion"
+      ],
+      "type": "string"
+    },
+    "preference": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "enum": [
+            "餐饮",
+            "购物",
+            "交通",
+            "居住",
+            "健康",
+            "医疗",
+            "学习",
+            "娱乐",
+            "其他",
+            null
+          ],
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "keyword": {
+          "maxLength": 40,
+          "minLength": 2,
+          "type": "string"
+        },
+        "nature": {
+          "enum": [
+            "消费",
+            "浪费",
+            "投资",
+            null
+          ],
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "keyword",
+        "category",
+        "nature"
+      ],
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "query": {
+      "additionalProperties": false,
+      "properties": {
+        "breakdownBy": {
+          "enum": [
+            "category",
+            "nature"
+          ],
+          "type": "string"
+        },
+        "categories": {
+          "items": {
+            "enum": [
+              "餐饮",
+              "购物",
+              "交通",
+              "居住",
+              "健康",
+              "医疗",
+              "学习",
+              "娱乐",
+              "其他",
+              "收入"
+            ],
+            "type": "string"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "comparison": {
+          "enum": [
+            "previous_month",
+            "previous_period"
+          ],
+          "type": "string"
+        },
+        "ledgerKind": {
+          "enum": [
+            "personal",
+            "family",
+            "travel"
+          ],
+          "type": "string"
+        },
+        "metric": {
+          "enum": [
+            "total",
+            "count",
+            "breakdown"
+          ],
+          "type": "string"
+        },
+        "natures": {
+          "items": {
+            "enum": [
+              "消费",
+              "浪费",
+              "投资",
+              "未分类"
+            ],
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "range": {
+          "additionalProperties": false,
+          "properties": {
+            "endDate": {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            "startDate": {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "startDate",
+            "endDate"
+          ],
+          "type": "object"
+        },
+        "type": {
+          "enum": [
+            "income",
+            "expense",
+            "all"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "range",
+        "type",
+        "metric"
+      ],
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "transactions": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "ambiguous": {
+            "type": "boolean"
+          },
+          "amount": {
+            "exclusiveMinimum": 0,
+            "maximum": 999999999999.99,
+            "type": "number"
+          },
+          "category": {
+            "enum": [
+              "餐饮",
+              "购物",
+              "交通",
+              "居住",
+              "健康",
+              "医疗",
+              "学习",
+              "娱乐",
+              "其他",
+              "收入"
+            ],
+            "type": "string"
+          },
+          "confidence": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "nature_suggestion": {
+            "enum": [
+              "消费",
+              "浪费",
+              "投资",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "note": {
+            "maxLength": 100,
+            "type": "string"
+          },
+          "occurred_at": {
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "income",
+              "expense"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "amount",
+          "category",
+          "occurred_at",
+          "note",
+          "nature_suggestion",
+          "confidence",
+          "ambiguous"
+        ],
+        "type": "object"
+      },
+      "maxItems": 5,
+      "type": "array"
+    },
+    "referenced_facts": {
+      "type": "array",
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "period_record_count",
+          "period_income_fen",
+          "period_expense_fen",
+          "period_consume_fen",
+          "period_waste_fen",
+          "period_invest_fen",
+          "period_unclassified_fen",
+          "period_pending_count",
+          "day_expense_fen",
+          "day_expense_count",
+          "day_pending_count",
+          "consume_budget_fen",
+          "consume_spent_fen",
+          "waste_budget_fen",
+          "waste_spent_fen",
+          "budget_pending_count",
+          "budget_unclassified_count",
+          "day_target_fen",
+          "lunch_reference_fen",
+          "day_lunch_equivalent_hundredths"
+        ]
+      }
+    }
+  },
+  "required": [
+    "intent",
+    "transactions",
+    "query",
+    "preference",
+    "answer",
+    "clarification",
+    "confidence",
+    "referenced_facts"
+  ],
+  "type": "object"
+}
