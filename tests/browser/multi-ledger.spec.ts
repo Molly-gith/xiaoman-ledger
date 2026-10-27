@@ -169,7 +169,8 @@ test.describe("multi-ledger assistant isolation", () => {
       await send(page, "记录收入和午饭");
       await expect(preview(page)).toContainText("2 笔 · 尚未保存");
       expect(requests[index]).toMatchObject({ protocolVersion: 2, ledgerKind: kind, memory: { recentMessages: [] } });
-      expect(Object.keys(requests[index]).sort()).toEqual(["context", "defaultRange", "ledgerKind", "memory", "protocolVersion", "text"]);
+      expect(Object.keys(requests[index]).sort()).toEqual(["companion", "context", "defaultRange", "ledgerKind", "memory", "protocolVersion", "text"]);
+      expect(requests[index]).toMatchObject({ companion: { ledgerKind: kind, facts: expect.arrayContaining([{ id: "period_expense_fen", value: (index + 1) * 1000 }]) } });
       expect(JSON.stringify(requests[index])).not.toMatch(/私人备注|transactions|otherLedgers|ownerId|apiKey|个人账本|家庭账本|旅行账本/);
       await preview(page).getByRole("button", { name: "保存这 2 笔", exact: true }).click();
       await expect(preview(page)).toHaveCount(0);
