@@ -21,9 +21,9 @@
 
 ## 云端启用
 
-迁移20261027132232_xiaoman_memory_retention已应用。纯函数与触发器不新增SECURITY DEFINER、浏览器RPC或RLS豁免；现有CAS与所有权检查继续生效。触发器在现有数据校验后执行。
+本地迁移文件20261027132232_xiaoman_memory_retention.sql已应用；后台记录为20261027133634 / xiaoman_memory_retention（连接器以执行时间登记版本）。同名内容已生效，不重复执行。纯函数与触发器不新增SECURITY DEFINER、浏览器RPC或RLS豁免；现有CAS与所有权检查继续生效。触发器在现有数据校验后执行。
 
-已启用xiaoman-memory-retention-hourly（job 3，17 * * * *，active=true），每小时第17分钟检查。原自动工资job 2不变。启用后仅查询worker汇总：checked=1、changed=0、deletedMessages=0、failed=0；未读取正文。安全顾问没有新增发现，仅原有泄露密码检测未启用提示，未修改无关账号设置。
+已启用xiaoman-memory-retention-hourly（job 3，17 * * * *，active=true），每小时第17分钟检查。原自动工资job 2不变。启用后仅查询worker汇总：checked=1、changed=0、deletedMessages=0、failed=0；未读取正文。安全顾问没有新增发现，仅原有泄露密码检测未启用提示，未修改无关账号设置（[既有密码检测提示说明](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)）。2026-10-27 22:17香港时间，正式job 3首次自然运行状态为succeeded，耗时约52ms。
 
 ## Dify存储核验
 
@@ -35,4 +35,10 @@
 
 ## 发布
 
-PR24前端发布与线上隔离核验进行中。Dify第7版和现有AI后端不变；本轮无主站合并。
+应用提交f6cec01b792f89de7b1da16cc74dddd101ad98a4已发布。CI #183（run40517436756）与Pages #82（run40519171507）成功，Pages日志确认checkout该提交；产物12741820166。
+
+完整CI：378单元/API、2渲染；默认浏览器78通过、23按模式跳过，AI模拟模式57通过。离线Dify校验和fixture eval通过，真实模型0次。
+
+线上index-BBdehmDj.js / index-Dj_KGa8G.css在320、390、1280三屏宽核验通过：三个账本的91天聊天物理清理，89天聊天可主动回看；旧账目和两类偏好保留；默认空对话、首屏输入和发送可见，无横向溢出和页面错误。线上仍用新建隔离上下文、虚拟账目，屏蔽全部AI/账号网络。首次公开HTML短暂命中旧CDN缓存，等待新指纹可读后才计入通过，未修改产品代码绕过。
+
+Dify第7版和现有AI后端不变；本轮无主站合并。[体验链接](https://molly-gith.github.io/xiaoman-ledger/previews/pr-24/?v=f6cec01#/)；本地日志与线上结果为work/retention-20261027/live.json。
