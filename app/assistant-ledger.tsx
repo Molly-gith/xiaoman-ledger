@@ -8,7 +8,7 @@ import { converse } from "../lib/ai/conversation-client";
 import type { ConversationResult, PreferenceProposal } from "../lib/ai/conversation-contract";
 import { executeLedgerQuery, resolveLedgerQuery, type QueryPlan } from "../lib/domain/ledger-query";
 import { applyPreferenceToDraft, parsePreferenceProposal } from "../lib/domain/assistant-preferences";
-import { createAssistantMemoryRepository, type AssistantMemoryRepository, type ConversationMessage, type MemoryState, type CompanionPreferences } from "../lib/data/assistant-memory";
+import { createAssistantMemoryRepository, memoryContentsOf, pruneExpiredMemoryContents, type AssistantMemoryRepository, type ConversationMessage, type MemoryState, type CompanionPreferences } from "../lib/data/assistant-memory";
 import { validateAssistantDraft } from "../lib/ai/assistant-contract";
 import { VoiceInput } from "./voice-note";
 import { StoryIcon } from "./story-icons";
@@ -27,6 +27,13 @@ function messageDay(value: string) {
 
 type ReviewAnswer = { transactions: Transaction[]; range: DateRange; ledgerName: string };
 type Draft = TransactionDraft & { id: string; preferenceReason?: string | null };
+function sessionClarification(memory: MemoryState, candidate: Omit<ClarificationContext, "answer"> | null, sessionIds: ReadonlySet<string>) {
+  if (!candidate) return null;
+  const retained = pruneExpiredMemoryContents(memoryContentsOf(memory), new Date()).contents;
+  if (retained.clarification?.originalText !== candidate.originalText || retained.clarification.question !== candidate.question) return null;
+  return retained.conversation.some(item => sessionIds.has(item.id) && item.role === "assistant"
+    && item.clarification?.originalText === candidate.originalText && item.clarification.question === candidate.question) ? candidate : null;
+}
 type Props = {
   endpoint: string; today: string; report: DateRangeSummary; revision: number; ledgerName: string; ledgerState: LedgerState;
   hidden: boolean; busy: boolean; suggestedPrompt: string;
@@ -79,11 +86,37 @@ export function AssistantLedger({ endpoint, today, report, revision, ledgerName,
 
   useEffect(() => {
     let active = true;
-    void (memoryOwnerId ? Promise.resolve(memoryOwnerId) : memoryRepository.getLocalOwnerId()).then(owner => memoryRepository.read(owner, ledgerState.ledgerKind)).then(value => {
+    void (memoryOwnerId ? Promise.resolve(memoryOwnerId) : memoryRepository.getLocalOwnerId()).then(async owner => (await memoryRepository.readOwner(owner))[ledgerState.ledgerKind]).then(value => {
       if (active) { memoryLatest.current = value; setMemory(value); }
     }).catch(e => { if (active) setMemoryError(e instanceof Error ? e.message : "对话记忆读取失败，请重新载入。"); });
     return () => { active = false; };
   }, [memoryRepository, memoryOwnerId, ledgerState.ledgerKind]);
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      const current = memoryLatest.current;
+      if (!current || hidden || busy || document.visibilityState === "hidden" || request.current || saving.current || memoryWriting.current) return;
+      memoryWriting.current = true; setMemoryBusy(true);
+      try {
+        const next = (await memoryRepository.readOwner(current.ownerId))[ledgerState.ledgerKind];
+        if (!active || !live.current) return;
+        // Preserve stale-tab conflict detection unless this page actually expired content.
+        const removed = current.conversation.some(item => !next.conversation.some(kept => kept.id === item.id));
+        if (next.revision !== current.revision && !removed && !pruneExpiredMemoryContents(memoryContentsOf(current), new Date()).changed) return;
+        remember(next); setMemoryError("");
+        if (draftMessageId && !next.conversation.some(item => item.id === draftMessageId)) { setDrafts([]); setDraftMessageId(null); setEditing(null); }
+        if (preferenceMessageId && !next.conversation.some(item => item.id === preferenceMessageId)) { setPreference(null); setPreferenceMessageId(null); }
+        setClarification(current => sessionClarification(next, current, sessionMessageIds));
+      } catch { /* A transient refresh failure must not erase cached input; writes retain CAS checks. */ }
+      finally { memoryWriting.current = false; if (live.current) setMemoryBusy(false); }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 60 * 60 * 1000);
+    const foreground = () => { if (document.visibilityState === "visible") void refresh(); };
+    document.addEventListener("visibilitychange", foreground);
+    return () => { active = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", foreground); };
+  }, [memoryRepository, ledgerState.ledgerKind, hidden, busy, draftMessageId, preferenceMessageId, remember, sessionMessageIds]);
+
   useLayoutEffect(() => {
     const element = conversationLog.current;
     if (!element) return;
@@ -140,13 +173,15 @@ export function AssistantLedger({ endpoint, today, report, revision, ledgerName,
     const requestedRevision = revision;
     setWorking(true); setMessage(""); setNotice(""); setAnswer(null); setHistoryDate(""); setVisibleCount(20);
     try {
-      const currentMemory = memoryLatest.current!;
+      const storedMemory = memoryLatest.current!;
+      const currentMemory = { ...storedMemory, ...pruneExpiredMemoryContents(memoryContentsOf(storedMemory), new Date()).contents };
+      const activeClarification = sessionClarification(currentMemory, clarification, sessionMessageIds);
       const sessionMessages = currentMemory.conversation.filter(item => sessionMessageIds.has(item.id));
       const previousQuery = [...sessionMessages].reverse().find(m => m.query)?.query;
       const proposal = parsePreferenceProposal(original);
       const queryContext = { today, defaultRange: report.range, ledgerKind: ledgerState.ledgerKind, previousQuery };
-      const reviewIntent = clarification ? { kind: "none" as const } : resolvePeriodReview(original, queryContext);
-      const local = clarification ? { kind: "none" as const } : reviewIntent.kind === "none" ? resolveLedgerQuery(original, queryContext) : reviewIntent;
+      const reviewIntent = activeClarification ? { kind: "none" as const } : resolvePeriodReview(original, queryContext);
+      const local = activeClarification ? { kind: "none" as const } : reviewIntent.kind === "none" ? resolveLedgerQuery(original, queryContext) : reviewIntent;
       let result: ConversationResult;
       if (proposal) result = { status: "preference", preference: { keyword: proposal.keyword, category: proposal.category, nature: proposal.nature } };
       else if (local.kind === "query" || local.kind === "review") result = { status: "query", plan: local.plan };
@@ -161,11 +196,11 @@ export function AssistantLedger({ endpoint, today, report, revision, ledgerName,
         result = await converse({ endpoint, protocolVersion: 2, text: original, context: { today, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }, ledgerKind: ledgerState.ledgerKind, defaultRange: report.range,
         memory: { recentMessages: sessionMessages.slice(-8).map(m => ({ role: m.role, content: m.content.slice(0, 1000) })), ...(previousQuery ? { previousQuery } : {}) },
         ...(companion ? { companion } : {}),
-        ...(clarification ? { clarification: { ...clarification, answer: original } } : {}), signal: controller.signal });
+        ...(activeClarification ? { clarification: { ...activeClarification, answer: original } } : {}), signal: controller.signal });
       }
       if (request.current !== controller || controller.signal.aborted || latestRevision.current !== requestedRevision) return;
       if (result.status === "unavailable") { setMessage(result.reason); return; }
-      if (result.status === "transactions" && drafts.length) { setMessage("还有待确认账目，请先保存或取消，再发送这句话。文字已保留。"); return; }
+      if (result.status === "transactions" && drafts.length && currentMemory.conversation.some(item => item.id === draftMessageId)) { setMessage("还有待确认账目，请先保存或取消，再发送这句话。文字已保留。"); return; }
       let responseText: string, query: QueryPlan | undefined, review: ReviewAnswer | undefined;
       let nextClarification: Omit<ClarificationContext, "answer"> | null = null;
       if (result.status === "query") {
@@ -184,17 +219,17 @@ export function AssistantLedger({ endpoint, today, report, revision, ledgerName,
       else if (result.status === "preference") responseText = `建议记住：“${result.preference.keyword}”${result.preference.category ? `分类为${result.preference.category}` : ""}${result.preference.nature ? `算${result.preference.nature}` : ""}。等你确认后生效。`;
       else if (result.status === "clarification") {
         responseText = result.question;
-        nextClarification = { originalText: (clarification ? `${clarification.originalText}\n补充：${original}` : original).slice(0, 2000), question: result.question };
+        nextClarification = { originalText: (activeClarification ? `${activeClarification.originalText}\n补充：${original}` : original).slice(0, 2000), question: result.question };
       } else responseText = result.answer;
       const messages: ConversationMessage[] = [
         { id: crypto.randomUUID(), role: "user", content: original, createdAt: new Date().toISOString() },
-        { id: crypto.randomUUID(), role: "assistant", content: responseText.slice(0, 2000), createdAt: new Date().toISOString(), ...(query ? { query } : {}) },
+        { id: crypto.randomUUID(), role: "assistant", content: responseText.slice(0, 2000), createdAt: new Date().toISOString(), ...(query ? { query } : {}), ...(nextClarification ? { clarification: nextClarification } : {}) },
       ];
       if (request.current !== controller || controller.signal.aborted || latestRevision.current !== requestedRevision) return;
       const nextMemory = await memoryRepository.appendConversation(currentMemory.ownerId, ledgerState.ledgerKind, messages, currentMemory.revision, nextClarification);
       if (request.current !== controller || controller.signal.aborted || latestRevision.current !== requestedRevision) return;
       remember(nextMemory, messages); setText(""); setClarification(nextClarification);
-      if (result.status === "transactions") { setDraftMessageId(messages[1].id); setDraftSource(source); setDrafts(result.drafts.map(draft => { const applied = applyPreferenceToDraft(draft, nextMemory.preferences, `${clarification?.originalText ?? ""}\n${original}`); return { ...applied.draft, id: crypto.randomUUID(), preferenceReason: applied.reason }; })); }
+      if (result.status === "transactions") { setDraftMessageId(messages[1].id); setDraftSource(source); setDrafts(result.drafts.map(draft => { const applied = applyPreferenceToDraft(draft, nextMemory.preferences, `${activeClarification?.originalText ?? ""}\n${original}`); return { ...applied.draft, id: crypto.randomUUID(), preferenceReason: applied.reason }; })); }
       else if (result.status === "preference") { setPreference(result.preference); setPreferenceMessageId(messages[1].id); }
       else if (result.status === "answer" || result.status === "query") setAnswer({ id: messages[1].id, status: "answer", answer: responseText, nextActions: [], revision: requestedRevision, reportKey, query, review });
       input.current?.focus();
@@ -285,7 +320,7 @@ export function AssistantLedger({ endpoint, today, report, revision, ledgerName,
   return <section ref={assistantRoot} className="ledger-assistant companion-chat" aria-label="与小满对话">
     <div className="chat-toolbar"><div><h2>和小满聊聊</h2><p>{ledgerName} · 只根据你记下的账目</p></div><details className="companion-settings" ref={preferencesDetails}><summary>陪伴偏好</summary>{memory && <CompanionPreferencesForm key={JSON.stringify(memory.companion)} value={memory.companion} today={today} disabled={busy || working || memoryBusy} onSave={saveCompanion} />}</details></div>
     {memoryError && <p role="alert" className="inline-error">{memoryError}<button onClick={() => window.location.reload()}>重新载入</button></p>}
-    {!!allMessages.length && <div className="chat-history-switch"><button aria-expanded={historyOpen} aria-controls="xiaoman-conversation-log" disabled={working || busy || memoryBusy} onClick={() => { setHistoryOpen(value => !value); setHistoryDate(""); setVisibleCount(20); }}>{historyOpen ? "返回当前对话" : "查看历史对话"}</button>{historyOpen && <span>只读回看 · {allMessages.length} 条</span>}</div>}
+    {!!allMessages.length && <div className="chat-history-switch"><button aria-expanded={historyOpen} aria-controls="xiaoman-conversation-log" disabled={working || busy || memoryBusy} onClick={() => { setHistoryOpen(value => !value); setHistoryDate(""); setVisibleCount(20); }}>{historyOpen ? "返回当前对话" : "查看历史对话"}</button>{historyOpen && <span>近90天 · {allMessages.length} 条</span>}</div>}
     {historyOpen && <div className="chat-history-tools"><details><summary>按日期找对话</summary><label>对话日期（北京时间）<input type="date" value={historyDate} max={chatToday} onChange={event => { setHistoryDate(event.target.value); setVisibleCount(20); }} /></label></details>{historyDate ? <button onClick={() => { setHistoryDate(""); setVisibleCount(20); }}>回到最新</button> : null}</div>}
     <div ref={conversationLog} id="xiaoman-conversation-log" className={`conversation-log chat-thread${displayedMessages.length || working ? "" : " is-empty"}`} role="log" aria-label={`${ledgerName}对话记录`} aria-live={historyOpen ? "off" : "polite"} aria-relevant="additions" aria-busy={working}>
       {matching.length > visibleCount && <button className="chat-load-more" onClick={() => { const element = conversationLog.current; if (element) scrollRestore.current = { height: element.scrollHeight, top: element.scrollTop }; setVisibleCount(count => count + 20); }}>加载更早的对话</button>}
@@ -337,7 +372,7 @@ export function AssistantLedger({ endpoint, today, report, revision, ledgerName,
         <textarea ref={input} id="assistant-question" placeholder={clarification ? "补充这条信息就好…" : sessionMessages.length ? "记一笔，或接着聊聊…" : "比如：今天午饭35元"} value={text} onChange={event => { setText(event.target.value); setSource("text"); }} maxLength={1000} rows={2} disabled={working || busy} />
         <div className="composer-tools"><div className="composer-input-tools"><VoiceInput disabled={hidden || historyOpen || working || busy} onResult={value => { setText(current => current ? `${current} ${value}` : value); setSource("voice"); input.current?.focus(); }} /><button type="button" data-testid="home-action-add" disabled={working || busy} onClick={onManual}><StoryIcon name="plus" />手动记一笔</button></div><div>{working ? <button key="cancel-request" type="button" onClick={event => { event.preventDefault(); request.current?.abort(); request.current = null; setWorking(false); setMessage("已取消，文字保留。"); }}>取消</button> : <button key="send-request" className="primary" type="submit" aria-label="发送给小满" disabled={!text.trim() || busy || memoryBusy || !memory || !!memoryError}>发送</button>}</div></div>
       </form>
-      <div className="composer-foot"><button onClick={onMemorySettings}>记忆与偏好</button><details><summary>数据怎么使用</summary><p>对话保存在{cloud ? "当前账号的云端" : "本机"}，可点“查看历史对话”回看。重新打开从新对话开始；回看不会续接旧话题。模型只接收本次最近八条对话、当前文字及必要的账目汇总和陪伴偏好，不自动发送全部逐笔账目。语音由浏览器转成文字。提醒仅在页面内显示。</p></details></div>
+      <div className="composer-foot"><button onClick={onMemorySettings}>记忆与偏好</button><details><summary>数据怎么使用</summary><p>对话保存在{cloud ? "当前账号的云端" : "本机"}，聊天原文保留90天，到期自动清理；账目和确认的分类、陪伴偏好长期保留。可点“查看历史对话”回看。重新打开从新对话开始；回看不会续接旧话题。模型只接收本次最近八条对话、当前文字及必要的账目汇总和陪伴偏好，不自动发送全部逐笔账目。Dify会记录AI请求的运行日志，按其独立规则保留。语音由浏览器转成文字。提醒仅在页面内显示。</p></details></div>
     </div>
   </section>;
 }

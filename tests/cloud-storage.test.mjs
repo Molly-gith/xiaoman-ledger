@@ -3,11 +3,14 @@ import assert from 'node:assert/strict';
 import { createCloudRepository, createCloudStore } from '../lib/data/cloud-adapter.ts';
 import { createCloudMemoryRepository } from '../lib/data/cloud-memory.ts';
 import { createCloudTransport } from '../lib/data/cloud-transport.ts';
-import { DEFAULT_COMPANION_PREFERENCES, normalizeMemoryContents } from '../lib/data/assistant-memory.ts';
+import { DEFAULT_COMPANION_PREFERENCES, normalizeMemoryContents, pruneExpiredMemoryContents } from '../lib/data/assistant-memory.ts';
 import { defaultState } from '../lib/data/schema.ts';
 
 const alice = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', bob = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const kinds = ['personal', 'family', 'travel'];
+const fixedNow = () => new Date('2026-10-27T12:00:00.000Z');
+const cutoff = new Date(fixedNow().getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
+const expiredAt = new Date(Date.parse(cutoff) - 1).toISOString();
 const message = (id, extra = {}) => ({ id, role: 'user', content: `对话${id}`, createdAt: '2026-10-25T02:00:00.000Z', ...extra });
 const rule = (extra = {}) => ({ id: 'fitness', keyword: '健身课', category: null, nature: '投资', ...extra });
 const tx = (id, extra = {}) => ({ id, type: 'expense', amount: 35, date: '2026-10-25', category: '餐饮', note: '午饭', icon: '🍜', source: 'text', cycleId: null, nature: '消费', spendKind: 'variable', ...extra });
@@ -17,7 +20,7 @@ const error = code => ({ data: null, error: { code, message: 'PRIVATE DATABASE D
 
 // A credential-free in-memory RPC double: atomic batches and auth identity checks,
 // never a replacement for the database RLS tests or a live Supabase connection.
-function fixture() {
+function fixture(serverNow) {
   const records = new Map(), calls = [];
   let authenticated = alice, current = true, hook = null;
   const key = (owner, resource) => `${owner}:${resource}`;
@@ -31,7 +34,7 @@ function fixture() {
     for (const change of args.changes) {
       const existing = records.get(key(authenticated, change.resource));
       if ((existing?.revision ?? 0) !== change.expected_revision) return error('40001');
-      updates.push({ resource: change.resource, revision: change.expected_revision + 1, payload: structuredClone(change.payload) });
+      updates.push({ resource: change.resource, revision: change.expected_revision + 1, payload: serverNow && change.resource.startsWith('memory_') ? pruneExpiredMemoryContents(normalizeMemoryContents(change.payload), serverNow()).contents : structuredClone(change.payload) });
     }
     for (const row of updates) records.set(key(authenticated, row.resource), row);
     return { data: structuredClone(updates), error: null };
@@ -291,4 +294,86 @@ test('cloud companion remains isolated by account and book and v2 malformed conf
   f.setAuth(alice);const corrupt=normalizeMemoryContents(emptyMemory());corrupt.companion.lunchReference=0;
   f.records.set(f.key(alice,'memory_travel'),{resource:'memory_travel',revision:1,payload:corrupt});
   await assert.rejects(f.memory.read(alice,'travel'),/无效/);
+});
+
+const retentionContents = (conversation, extra = {}) => normalizeMemoryContents({ version: 2, conversation, preferences: [rule()],
+  clarification: { originalText: '过期的待补充原文', question: '金额？' },
+  companion: { ...DEFAULT_COMPANION_PREFERENCES, tone: 'gentle', dailyExpenseTarget: 60, lunchReference: 14 }, ...extra });
+function seedMemory(f, kind, conversation, revision = 4, owner = alice) {
+  const row = { resource: `memory_${kind}`, revision, payload: retentionContents(conversation) };
+  f.records.set(f.key(owner, row.resource), structuredClone(row));
+  return row;
+}
+
+test('fast and slow device clocks never filter authoritative cloud reads, writes, exports or imports',async t=>{
+  for(const deviceTime of ['2027-10-27T12:00:00.000Z','2025-10-27T12:00:00.000Z']) {
+    t.mock.timers.enable({apis:['Date'],now:Date.parse(deviceTime)});
+    try {
+      const f=fixture(),stored=seedMemory(f,'personal',[message('recent'),message('boundary',{createdAt:cutoff})]);
+      for(const method of ['read','getConversation','getPreferences'])assert.deepEqual((await f.memory[method](alice,'personal')).conversation,stored.payload.conversation);
+      assert.deepEqual((await f.memory.readOwner(alice)).personal.conversation,stored.payload.conversation);
+      const backup=await f.memory.exportOwner(alice);
+      assert.deepEqual(backup.ledgers.personal.conversation,stored.payload.conversation);
+      assert.equal(f.calls.filter(call=>call.name==='xiaoman_write_resources').length,0);
+      let saved=await f.memory.upsertPreference(alice,'personal',rule({nature:'消费'}),4);
+      assert.deepEqual(saved.conversation,stored.payload.conversation);assert.equal(saved.revision,5);
+      saved=await f.memory.setCompanionPreferences(alice,'personal',{...saved.companion,tone:'plain'},saved.revision);
+      assert.deepEqual(saved.conversation,stored.payload.conversation);
+      saved=await f.memory.appendConversation(alice,'personal',[message('new')],saved.revision);
+      assert.deepEqual(saved.conversation.map(item=>item.id),['recent','boundary','new']);
+      saved=await f.memory.replaceConversation(alice,'personal',saved.conversation,saved.revision);
+      assert.deepEqual(saved.conversation.map(item=>item.id),['recent','boundary','new']);
+      const imported=await f.memory.importOwner(alice,backup,{personal:saved.revision,family:0,travel:0});
+      assert.deepEqual(imported.personal.conversation,stored.payload.conversation);
+      const write=f.calls.find(call=>call.name==='xiaoman_write_resources');
+      assert.deepEqual(write.args.changes[0].payload.conversation,stored.payload.conversation,'preference edits must not turn a fast clock into cloud data deletion');
+    } finally {t.mock.timers.reset();}
+  }
+});
+
+test('cloud retention uses the simulated server write trigger and its returned revision, independently of device time',async t=>{
+  t.mock.timers.enable({apis:['Date'],now:Date.parse('2025-10-27T12:00:00.000Z')});
+  try {
+    const f=fixture(fixedNow),pending={originalText:'今天午饭',question:'多少钱？'};
+    const stored=seedMemory(f,'personal',[message('old',{createdAt:expiredAt}),message('boundary',{role:'assistant',createdAt:cutoff,clarification:pending})]);
+    stored.payload.clarification=pending;f.records.set(f.key(alice,'memory_personal'),structuredClone(stored));
+    const result=await f.memory.upsertPreference(alice,'personal',rule({nature:'消费'}),4);
+    const write=f.calls.find(call=>call.name==='xiaoman_write_resources');
+    assert.deepEqual(write.args.changes[0].payload.conversation,stored.payload.conversation,'the client leaves age decisions to the server');
+    assert.equal(result.revision,5);assert.deepEqual(result.conversation.map(item=>item.id),['boundary']);
+    assert.deepEqual(result.clarification,pending,'a valid source remains after unrelated expiry');
+    assert.deepEqual(result.preferences,[rule({nature:'消费'})]);assert.deepEqual(result.companion,stored.payload.companion);
+    assert.deepEqual(f.records.get(f.key(alice,'memory_personal')).payload.conversation,result.conversation);
+  } finally {t.mock.timers.reset();}
+});
+
+test('cloud old backup import is sent intact and accepts server-filtered history without client revision synthesis',async()=>{
+  const f=fixture(fixedNow);
+  const backup={app:'xiaoman-assistant-memory',version:2,exportedAt:fixedNow().toISOString(),ledgers:Object.fromEntries(kinds.map(kind=>[kind,retentionContents([
+    message(`${kind}-old`,{createdAt:expiredAt}),message(`${kind}-boundary`,{createdAt:cutoff}),
+  ])]))};
+  const result=await f.memory.importOwner(alice,backup,{personal:0,family:0,travel:0});
+  const writes=f.calls.filter(call=>call.name==='xiaoman_write_resources');
+  assert.equal(writes.length,1);assert.equal(writes[0].args.changes.length,3);
+  for(const kind of kinds) {
+    const payload=writes[0].args.changes.find(change=>change.resource===`memory_${kind}`).payload;
+    assert.deepEqual(payload,backup.ledgers[kind],'only the server is allowed to apply its retention cutoff');
+    assert.equal(result[kind].revision,1);assert.deepEqual(result[kind].conversation.map(item=>item.id),[`${kind}-boundary`]);
+    assert.equal(result[kind].clarification,null,'server cleanup removes unproven pending raw text');
+    assert.deepEqual(result[kind].preferences,backup.ledgers[kind].preferences);assert.deepEqual(result[kind].companion,backup.ledgers[kind].companion);
+  }
+});
+
+test('server cleanup racing a cloud write still rejects stale revisions without retry or history restoration',async()=>{
+  const f=fixture(fixedNow),stored=seedMemory(f,'personal',[message('old',{createdAt:expiredAt})],4);
+  f.setHook(name=>{
+    if(name==='xiaoman_write_resources')f.records.set(f.key(alice,'memory_personal'),{...stored,revision:5,payload:{...stored.payload,conversation:[],clarification:null}});
+  });
+  await assert.rejects(f.memory.appendConversation(alice,'personal',[message('new')],4),/更新/);
+  const writes=f.calls.filter(call=>call.name==='xiaoman_write_resources');
+  assert.equal(writes.length,1);assert.equal(writes[0].args.changes[0].expected_revision,4);
+  assert.deepEqual(writes[0].args.changes[0].payload.conversation.map(item=>item.id),['old','new']);
+  const saved=f.records.get(f.key(alice,'memory_personal'));
+  assert.equal(saved.revision,5);assert.deepEqual(saved.payload.conversation,[]);
+  assert.deepEqual(saved.payload.preferences,stored.payload.preferences);assert.deepEqual(saved.payload.companion,stored.payload.companion);
 });

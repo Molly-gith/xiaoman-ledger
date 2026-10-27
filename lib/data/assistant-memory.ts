@@ -21,6 +21,7 @@ export type MemoryContents = Pick<MemoryState, "version" | "conversation" | "pre
 export type OwnerMemoryBackup = { app: "xiaoman-assistant-memory"; exportedAt: string } & (
   { version: 1; ledgers: Record<LedgerKind, LegacyMemoryContents> } | { version: 2; ledgers: Record<LedgerKind, MemoryContents> });
 export const MAX_MESSAGE_LENGTH = 2000;
+export const CONVERSATION_RETENTION_DAYS = 90;
 /** Conservative JSON whitespace accounting plus headroom under the cloud's 2 MB resource limit. */
 export const MAX_MEMORY_RESOURCE_BYTES = 1_950_000;
 export const MAX_MEMORY_BACKUP_BYTES = 7_000_000;
@@ -88,6 +89,32 @@ function contents(value: unknown): MemoryContents {
 }
 /** Shared validation for cloud payloads; identity and revisions are not portable content. */
 export function normalizeMemoryContents(value: unknown): MemoryContents { return contents(value); }
+/** Retain exactly 90 elapsed days. Preferences are durable; only raw conversation context expires. */
+export function pruneExpiredMemoryContents(value: MemoryContents, now: Date): { contents: MemoryContents; changed: boolean } {
+  const normalized = contents(value), instant = now.getTime();
+  if (!Number.isFinite(instant)) throw invalid();
+  const cutoff = instant - CONVERSATION_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  const retained = normalized.conversation.filter(message => Date.parse(message.createdAt) >= cutoff);
+  const expired = retained.length !== normalized.conversation.length;
+  const retainedIds = new Set(retained.map(message => message.id));
+  let changed = expired;
+  normalized.conversation = retained.map(message => {
+    if (message.replyTo === undefined || retainedIds.has(message.replyTo)) return message;
+    const cleaned = { ...message };
+    delete cleaned.replyTo;
+    changed = true;
+    return cleaned;
+  });
+  // Pending context has no timestamp of its own; a retained assistant message must prove its source.
+  const pending = normalized.clarification;
+  if (pending !== null && !retained.some(message => message.role === "assistant"
+    && message.clarification?.originalText === pending.originalText
+    && message.clarification.question === pending.question)) {
+    normalized.clarification = null;
+    changed = true;
+  }
+  return { contents: normalized, changed };
+}
 /** Writes fail before changing old content; reads/exports stay possible for a full resource. */
 export function assertMemoryWriteCapacity(value: MemoryContents): void {
   if (new TextEncoder().encode(JSON.stringify(value, null, 1)).length > MAX_MEMORY_RESOURCE_BYTES) throw capacity();
@@ -139,7 +166,8 @@ export interface AssistantMemoryRepository {
 /** Device-local storage only. An owner ID selects a local partition; it grants no server/account access.
  * No ledger state, credentials, or in-memory fallback is written by this repository.
  */
-export function createAssistantMemoryRepository(options: { indexedDB?: IDBFactory } = {}): AssistantMemoryRepository {
+export function createAssistantMemoryRepository(options: { indexedDB?: IDBFactory; now?: () => Date } = {}): AssistantMemoryRepository {
+  const now = options.now ?? (() => new Date());
   async function open(): Promise<IDBDatabase> {
     const factory = options.indexedDB ?? globalThis.indexedDB;
     if (!factory) throw new Error("本机无法打开助手记忆，尚未保存。请使用支持本地数据库的浏览器");
@@ -171,9 +199,17 @@ export function createAssistantMemoryRepository(options: { indexedDB?: IDBFactor
   }
   async function read(owner: string, kind: LedgerKind): Promise<MemoryState> {
     const key = scope(owner, kind);
-    return transaction("readonly", (store, result, fail) => {
+    return transaction("readwrite", (store, result, fail) => {
       const request = store.get(key);
-      request.onsuccess = () => { try { result(decode(request.result, owner, kind)); } catch (error) { fail(error); } };
+      request.onsuccess = () => {
+        try {
+          const current = decode(request.result, owner, kind);
+          const pruned = pruneExpiredMemoryContents(memoryContentsOf(current), now());
+          const next = pruned.changed ? decode({ ...current, ...pruned.contents, revision: current.revision + 1 }, owner, kind) : current;
+          if (pruned.changed) store.put(next, key);
+          result(next);
+        } catch (error) { fail(error); }
+      };
     });
   }
   async function update(owner: string, kind: LedgerKind, expectedRevision: number, change: (current: MemoryState) => MemoryState): Promise<MemoryState> {
@@ -185,16 +221,20 @@ export function createAssistantMemoryRepository(options: { indexedDB?: IDBFactor
         try {
           const current = decode(request.result, owner, kind);
           if (current.revision !== expectedRevision) throw conflict();
-          const next = decode({ ...change(current), revision: current.revision + 1 }, owner, kind);
-          assertMemoryWriteCapacity(memoryContentsOf(next));
+          // Compare the stored revision before pruning: cleanup and the user's change are one CAS write.
+          const instant = now(), pruned = pruneExpiredMemoryContents(memoryContentsOf(current), instant);
+          const changed = change({ ...current, ...pruned.contents });
+          const payload = pruneExpiredMemoryContents(memoryContentsOf(changed), instant).contents;
+          const next = decode({ ...changed, ...payload, revision: current.revision + 1 }, owner, kind);
+          assertMemoryWriteCapacity(payload);
           store.put(next, key); result(next);
         } catch (error) { fail(error); }
       };
     });
   }
-  async function ownerTransaction(owner: string, mode: IDBTransactionMode, change?: (current: OwnerMemory) => OwnerMemory): Promise<OwnerMemory> {
+  async function ownerTransaction(owner: string, change?: (current: OwnerMemory) => OwnerMemory): Promise<OwnerMemory> {
     for (const kind of KINDS) scope(owner, kind);
-    return transaction(mode, (store, result, fail) => {
+    return transaction("readwrite", (store, result, fail) => {
       const all = {} as OwnerMemory; let count = 0;
       for (const kind of KINDS) {
         const request = store.get(scope(owner, kind));
@@ -202,15 +242,28 @@ export function createAssistantMemoryRepository(options: { indexedDB?: IDBFactor
           try {
             all[kind] = decode(request.result, owner, kind);
             if (++count !== KINDS.length) return;
-            const next = change ? change(all) : all;
-            if (change) for (const book of KINDS) { const value = decode(next[book], owner, book); assertMemoryWriteCapacity(memoryContentsOf(value)); store.put(value, scope(owner, book)); }
+            const instant = now();
+            const pruned = Object.fromEntries(KINDS.map(book => [book, pruneExpiredMemoryContents(memoryContentsOf(all[book]), instant)])) as Record<LedgerKind, ReturnType<typeof pruneExpiredMemoryContents>>;
+            const clean = Object.fromEntries(KINDS.map(book => [book, { ...all[book], ...pruned[book].contents }])) as OwnerMemory;
+            // Imported expected revisions still compare to the original stored revisions.
+            const next = change ? change(clean) : clean;
+            for (const book of KINDS) {
+              if (change) {
+                const payload = pruneExpiredMemoryContents(memoryContentsOf(next[book]), instant).contents;
+                next[book] = decode({ ...next[book], ...payload }, owner, book);
+                assertMemoryWriteCapacity(payload);
+              } else if (pruned[book].changed) {
+                next[book] = decode({ ...next[book], revision: all[book].revision + 1 }, owner, book);
+              }
+              if (change || pruned[book].changed) store.put(next[book], scope(owner, book));
+            }
             result(next);
           } catch (error) { fail(error); }
         };
       }
     });
   }
-  const clearOwner = (owner: string, preferences: boolean) => ownerTransaction(owner, "readwrite", current => {
+  const clearOwner = (owner: string, preferences: boolean) => ownerTransaction(owner, current => {
     for (const kind of KINDS) current[kind] = { ...current[kind], revision: current[kind].revision + 1, conversation: [], clarification: null,
       preferences: preferences ? [] : current[kind].preferences, companion: preferences ? { ...DEFAULT_COMPANION_PREFERENCES } : current[kind].companion };
     return current;
@@ -240,7 +293,7 @@ export function createAssistantMemoryRepository(options: { indexedDB?: IDBFactor
       };
     }),
     read, getConversation: read, getPreferences: read,
-    readOwner: owner => ownerTransaction(owner, "readonly"),
+    readOwner: owner => ownerTransaction(owner),
     appendConversation: (owner, kind, messages, expected, clarification) => conversation(false, owner, kind, messages, expected, clarification),
     replaceConversation: (owner, kind, messages, expected, clarification) => conversation(true, owner, kind, messages, expected, clarification),
     clearConversation: (owner, kind, expected) => update(owner, kind, expected, current => ({ ...current, conversation: [], clarification: null })),
@@ -259,16 +312,16 @@ export function createAssistantMemoryRepository(options: { indexedDB?: IDBFactor
     },
     clearOwnerConversations: owner => clearOwner(owner, false), clearOwner: owner => clearOwner(owner, true),
     exportOwner: async owner => {
-      const all = await ownerTransaction(owner, "readonly");
+      const all = await ownerTransaction(owner);
       const ledgers = Object.fromEntries(KINDS.map(kind => [kind, memoryContentsOf(all[kind])])) as Record<LedgerKind, MemoryContents>;
-      const backup = { app: "xiaoman-assistant-memory" as const, version: 2 as const, exportedAt: new Date().toISOString(), ledgers };
+      const backup = { app: "xiaoman-assistant-memory" as const, version: 2 as const, exportedAt: now().toISOString(), ledgers };
       if (!validateOwnerMemoryBackup(backup)) throw new Error("助手记忆备份超过 7 MB，原有历史已保留，请先整理后再导出");
       return backup;
     },
     importOwner: async (owner, backup, expected) => {
       if (!validateOwnerMemoryBackup(backup) || !record(expected) || !keys(expected, KINDS) || !KINDS.every(kind => revision(expected[kind]))) throw invalid();
       const captured = structuredClone(backup), revisions = structuredClone(expected);
-      return ownerTransaction(owner, "readwrite", current => {
+      return ownerTransaction(owner, current => {
         for (const kind of KINDS) {
           if (current[kind].revision !== revisions[kind]) throw conflict();
           current[kind] = { ...empty(owner, kind), revision: current[kind].revision + 1, ...contents(captured.ledgers[kind]) };

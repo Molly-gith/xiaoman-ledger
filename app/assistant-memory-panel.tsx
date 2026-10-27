@@ -59,7 +59,7 @@ export function AssistantMemoryPanel({ ledgerKind, ledgerName, onChanged, memory
   async function restore() {
     if (!state || !pending || busy) return;
     setBusy(true); setError("");
-    try { const all = await repository.importOwner(state.ownerId, pending.backup, pending.revisions); setState(all[ledgerKind]); setPending(null); setNotice("三个账本的对话与偏好已恢复，账目没有改变。"); onChanged(); }
+    try { const all = await repository.importOwner(state.ownerId, pending.backup, pending.revisions); setState(all[ledgerKind]); setPending(null); setNotice("三个账本近90天的对话与偏好已恢复，账目没有改变。"); onChanged(); }
     catch (e) { setError(e instanceof Error ? e.message : "恢复失败，原内容已保留"); }
     finally { setBusy(false); }
   }
@@ -78,11 +78,12 @@ export function AssistantMemoryPanel({ ledgerKind, ledgerName, onChanged, memory
         {!editing && <button onClick={() => setEditing({ id: crypto.randomUUID(), keyword: "", category: null, nature: null })}>添加分类偏好</button>}
         {editing && <form className="preference-edit" onSubmit={save}><label>关键词（必填）<input autoComplete="off" minLength={2} maxLength={40} value={editing.keyword} onChange={e => setEditing({ ...editing, keyword: e.target.value })} placeholder="例如：健身课" required /></label><label>分类（选填）<select value={editing.category ?? ""} onChange={e => setEditing({ ...editing, category: (e.target.value || null) as PreferenceRule["category"] })}><option value="">沿用识别结果</option>{EXPENSE_CATEGORIES.map(c => <option key={c}>{c}</option>)}</select></label><label>性质（选填）<select value={editing.nature ?? ""} onChange={e => setEditing({ ...editing, nature: (e.target.value || null) as PreferenceRule["nature"] })}><option value="">沿用识别结果</option><option>消费</option><option>浪费</option><option>投资</option></select></label><p className="helper">分类和性质至少选择一项。</p><div className="draft-actions"><button type="button" onClick={() => setEditing(null)}>取消修改</button><button className="primary" type="submit">保存偏好</button></div></form>}
       </div>
-      <div className="memory-section"><h3>连续对话</h3><p>已保存 {state.conversation.length} 条，历史不会自动删除。首页可加载更早消息或按日期查找；其他账本的对话不会混入。</p>
+      <div className="memory-section"><h3>聊天记录</h3><p>已保存 {state.conversation.length} 条，聊天原文保留90天，到期自动清理。账目、确认过的分类习惯和陪伴偏好长期保留。</p>
+        <p className="helper">{cloud ? "云端每小时检查，关闭网页也会清理。" : "本机在打开网页时清理；保持打开时每小时检查。"}</p>
         {clear ? <div className="memory-confirm"><p>清除{ledgerName}的对话与追问上下文？分类偏好和账目都会保留。</p><button onClick={() => setClear(false)}>保留对话</button><button onClick={() => void mutate(() => repository.clearConversation(state.ownerId, ledgerKind, state.revision), "本账本对话已清除，偏好与账目保留。")}>确认清除对话</button></div> : <button onClick={() => setClear(true)}>清除本账本对话</button>}
       </div>
       <details className="memory-backup"><summary>助手记忆备份</summary><p className="helper">包含三个账本的对话和偏好，不包含账目。换设备前请同时导出账本备份。</p><button onClick={() => void exportMemory()}>导出助手记忆</button><label className="memory-file">导入助手记忆<input type="file" accept=".json,application/json" onChange={event => void choose(event)} /></label>
-        {pending && <div className="memory-confirm"><p>用备份替换三个账本的全部对话和偏好？账目不会改变。建议先导出当前助手记忆。</p><button onClick={() => setPending(null)}>取消导入</button><button onClick={() => void restore()}>确认恢复助手记忆</button></div>}
+        {pending && <div className="memory-confirm"><p>用备份替换三个账本的全部对话和偏好？账目不会改变，超过90天的对话不会恢复。建议先导出当前助手记忆。</p><button onClick={() => setPending(null)}>取消导入</button><button onClick={() => void restore()}>确认恢复助手记忆</button></div>}
       </details>
     </fieldset>}
   </section>;

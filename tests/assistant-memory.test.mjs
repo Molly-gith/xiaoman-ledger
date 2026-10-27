@@ -1,16 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { IDBFactory } from 'fake-indexeddb';
-import { createAssistantMemoryRepository, validateOwnerMemoryBackup, DEFAULT_COMPANION_PREFERENCES, MAX_MESSAGE_LENGTH, MAX_MEMORY_BACKUP_BYTES, normalizeMemoryContents, assertMemoryWriteCapacity } from '../lib/data/assistant-memory.ts';
+import { createAssistantMemoryRepository, validateOwnerMemoryBackup, DEFAULT_COMPANION_PREFERENCES, MAX_MESSAGE_LENGTH, MAX_MEMORY_BACKUP_BYTES, normalizeMemoryContents, assertMemoryWriteCapacity, pruneExpiredMemoryContents, CONVERSATION_RETENTION_DAYS } from '../lib/data/assistant-memory.ts';
 import { applyPreferenceToDraft, parsePreferenceProposal, validatePreferenceRule } from '../lib/domain/assistant-preferences.ts';
 
 const owner='local-owner-alice', other='local-owner-bob';
 const kinds=['personal','family','travel'];
+const fixedNow=()=>new Date('2026-10-27T12:00:00.000Z');
+const cutoff=new Date(fixedNow().getTime()-90*24*60*60*1000).toISOString();
+const expiredAt=new Date(Date.parse(cutoff)-1).toISOString();
 const message=(id,extra={})=>({id,role:'user',content:`对话${id}`,createdAt:'2026-10-24T12:00:00.000Z',...extra});
 const rule=(extra={})=>({id:'fitness',keyword:'健身课',category:null,nature:'投资',...extra});
 const draft=(extra={})=>({type:'expense',amount:200,category:'健康',occurred_at:'2026-10-24',note:'健身课',nature_suggestion:'消费',confidence:0.9,ambiguous:false,...extra});
 const plan={range:{startDate:'2026-10-01',endDate:'2026-10-31'},type:'expense',categories:['餐饮'],metric:'total'};
-function fixture(){const indexedDB=new IDBFactory();return {indexedDB,repo:createAssistantMemoryRepository({indexedDB})};}
+function fixture(now=fixedNow){const indexedDB=new IDBFactory();return {indexedDB,repo:createAssistantMemoryRepository({indexedDB,now})};}
 const revisions=all=>Object.fromEntries(kinds.map(kind=>[kind,all[kind].revision]));
 async function rawWrite(indexedDB,key,value) {
   const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('xiaoman-assistant-memory-db');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
@@ -19,19 +22,20 @@ async function rawWrite(indexedDB,key,value) {
 
 test('local owner is durable and atomically shared between tabs, but not an authenticated account',async()=>{
   const {repo,indexedDB}=fixture();
-  const second=createAssistantMemoryRepository({indexedDB});
+  const second=createAssistantMemoryRepository({indexedDB,now:fixedNow});
   const owners=await Promise.all([repo.getLocalOwnerId(),second.getLocalOwnerId(),repo.getLocalOwnerId()]);
   assert.match(owners[0],/^local-[a-f0-9-]+$/);assert.equal(new Set(owners).size,1);
-  assert.equal(await createAssistantMemoryRepository({indexedDB}).getLocalOwnerId(),owners[0]);
+  assert.equal(await createAssistantMemoryRepository({indexedDB,now:fixedNow}).getLocalOwnerId(),owners[0]);
   assert.notEqual(await fixture().repo.getLocalOwnerId(),owners[0]);
   assert.equal((await repo.read(other,'personal')).ownerId,other,'partition selection provides no authentication');
 });
 
 test('conversations, clarification and saved query survive refresh and isolate every owner and ledger',async()=>{
   const {repo,indexedDB}=fixture();const clarification={originalText:'昨天午饭',question:'花了多少元？'};
-  let saved=await repo.appendConversation(owner,'personal',[message('u'),message('a',{role:'assistant',content:'本月餐饮支出35元',query:plan})],0,clarification);
+  let saved=await repo.appendConversation(owner,'personal',[message('u'),message('a',{role:'assistant',content:'本月餐饮支出35元',query:plan,clarification})],0,clarification);
   saved=await repo.upsertPreference(owner,'personal',rule(),saved.revision);
-  assert.deepEqual(await createAssistantMemoryRepository({indexedDB}).read(owner,'personal'),saved);
+  assert.deepEqual(saved.clarification,clarification);
+  assert.deepEqual(await createAssistantMemoryRepository({indexedDB,now:fixedNow}).read(owner,'personal'),saved);
   for(const kind of ['family','travel'])assert.deepEqual((await repo.read(owner,kind)).conversation,[]);
   assert.deepEqual((await repo.read(other,'personal')).preferences,[]);
   await repo.appendConversation(owner,'family',[message('u',{content:'家庭对话'})],0);
@@ -62,7 +66,7 @@ test('replace and clear conversation preserve preferences and clear pending clar
 });
 
 test('same-scope simultaneous writers conflict atomically and other scopes remain independent',async()=>{
-  const {repo,indexedDB}=fixture();const second=createAssistantMemoryRepository({indexedDB});
+  const {repo,indexedDB}=fixture();const second=createAssistantMemoryRepository({indexedDB,now:fixedNow});
   const results=await Promise.allSettled([repo.appendConversation(owner,'personal',[message('a')],0),second.upsertPreference(owner,'personal',rule(),0)]);
   assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
   assert.match(results.find(r=>r.status==='rejected').reason.message,/其他页面更新/);
@@ -146,10 +150,10 @@ test('v1 IndexedDB upgrades without changing identity or history and blocks old 
   const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('xiaoman-assistant-memory-db',1);r.onupgradeneeded=()=>r.result.createObjectStore('memory');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
   const old={version:1,ownerId:owner,ledgerKind:'personal',revision:9,conversation:Array.from({length:40},(_,i)=>message(`old-${i}`)),preferences:[rule()],clarification:{originalText:'午饭',question:'金额？'}};
   await new Promise((resolve,reject)=>{const t=db.transaction('memory','readwrite');t.objectStore('memory').put(owner,'localOwnerId');t.objectStore('memory').put(old,JSON.stringify([owner,'personal']));t.oncomplete=resolve;t.onabort=()=>reject(t.error);});db.close();
-  const repo=createAssistantMemoryRepository({indexedDB});assert.equal(await repo.getLocalOwnerId(),owner);
-  const upgraded=await repo.read(owner,'personal');assert.equal(upgraded.version,2);assert.equal(upgraded.revision,9);
+  const repo=createAssistantMemoryRepository({indexedDB,now:fixedNow});assert.equal(await repo.getLocalOwnerId(),owner);
+  const upgraded=await repo.read(owner,'personal');assert.equal(upgraded.version,2);assert.equal(upgraded.revision,10);assert.equal(upgraded.clarification,null,'legacy unproven pending raw text is cleared');
   assert.deepEqual(upgraded.conversation,old.conversation);assert.deepEqual(upgraded.preferences,old.preferences);assert.deepEqual(upgraded.companion,DEFAULT_COMPANION_PREFERENCES);
-  const saved=await repo.appendConversation(owner,'personal',[message('next')],9);assert.equal(saved.conversation.length,41);
+  const saved=await repo.appendConversation(owner,'personal',[message('next')],upgraded.revision);assert.equal(saved.conversation.length,41);
   await assert.rejects(new Promise((resolve,reject)=>{const r=indexedDB.open('xiaoman-assistant-memory-db',1);r.onsuccess=()=>{r.result.close();resolve();};r.onerror=()=>reject(r.error);}),{name:'VersionError'});
   assert.deepEqual((await repo.read(owner,'personal')).conversation,saved.conversation);
 });
@@ -157,7 +161,7 @@ test('v1 IndexedDB upgrades without changing identity or history and blocks old 
 test('companion preferences are scoped, durable, portable, and preserved by conversation-only clearing',async()=>{
   const {repo,indexedDB}=fixture(),prefs={tone:'gentle',remindersEnabled:false,dailyExpenseTarget:80.25,lunchReference:28.5,mutedUntil:'2026-11-01'};
   let saved=await repo.setCompanionPreferences(owner,'personal',prefs,0);prefs.tone='plain';
-  assert.equal(saved.companion.tone,'gentle');assert.deepEqual((await createAssistantMemoryRepository({indexedDB}).read(owner,'personal')).companion,saved.companion);
+  assert.equal(saved.companion.tone,'gentle');assert.deepEqual((await createAssistantMemoryRepository({indexedDB,now:fixedNow}).read(owner,'personal')).companion,saved.companion);
   assert.deepEqual((await repo.read(owner,'family')).companion,DEFAULT_COMPANION_PREFERENCES);assert.deepEqual((await repo.read(other,'personal')).companion,DEFAULT_COMPANION_PREFERENCES);
   saved=await repo.appendConversation(owner,'personal',[message('u'),message('reminder',{role:'assistant',reminderId:'personal:daily:2026-10-24',replyTo:'u'})],saved.revision);
   const backup=await repo.exportOwner(owner);assert.equal(backup.version,2);
@@ -171,7 +175,7 @@ test('companion preferences are scoped, durable, portable, and preserved by conv
 test('blocked v1 upgrade explains how to recover and closes its abandoned late connection',async()=>{
   const indexedDB=new IDBFactory();
   const old=await new Promise((resolve,reject)=>{const r=indexedDB.open('xiaoman-assistant-memory-db',1);r.onupgradeneeded=()=>r.result.createObjectStore('memory');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
-  const repo=createAssistantMemoryRepository({indexedDB});
+  const repo=createAssistantMemoryRepository({indexedDB,now:fixedNow});
   await assert.rejects(repo.read(owner,'personal'),/关闭旧页面后重试/);
   old.close();
   // deleteDatabase queues after the abandoned upgrade. It must not be blocked
@@ -254,4 +258,166 @@ test('natural-language preference recognition requires explicit future intent an
     assert.equal(applied.draft.nature_suggestion,'投资',text);assert.equal(applied.preferenceId,'confirmed');
   }
   for(const text of ['健身课200算投资','把今天的健身课记为投资','不要记住健身课算投资','以后健身课不算投资','以后把健身课记为投资吗？','记住今天健身课200算投资','记住所有支出算投资'])assert.equal(parsePreferenceProposal(text),null,text);
+});
+
+async function rawRead(indexedDB,key) {
+  const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('xiaoman-assistant-memory-db');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  try{return await new Promise((resolve,reject)=>{const tx=db.transaction('memory','readonly');let result;const request=tx.objectStore('memory').get(key);request.onsuccess=()=>{result=request.result;};tx.oncomplete=()=>resolve(result);tx.onabort=()=>reject(tx.error);});}finally{db.close();}
+}
+const retentionContents=(conversation,extra={})=>normalizeMemoryContents({version:2,conversation,preferences:[rule()],clarification:{originalText:'旧的待补充原文',question:'还差金额？'},companion:{...DEFAULT_COMPANION_PREFERENCES,tone:'gentle',dailyExpenseTarget:60,lunchReference:14},...extra});
+const retentionState=(kind,conversation,extra={})=>({ownerId:owner,ledgerKind:kind,revision:4,...retentionContents(conversation),...extra});
+
+test('90-day retention is an exact UTC instant, removes expired embedded context and dangling replies, and never mutates preferences',()=>{
+  assert.equal(CONVERSATION_RETENTION_DAYS,90);
+  const input=retentionContents([
+    message('old',{role:'assistant',createdAt:expiredAt,query:plan,clarification:{originalText:'到期原文',question:'金额？'}}),
+    message('boundary',{createdAt:cutoff}),
+    message('reply',{role:'assistant',replyTo:'old'}),
+    message('valid-reply',{role:'assistant',replyTo:'boundary'}),
+    message('orphan',{role:'assistant',replyTo:'missing'}),
+    message('future',{createdAt:'2027-01-01T00:00:00.000Z'}),
+  ]), before=structuredClone(input);
+  const result=pruneExpiredMemoryContents(input,fixedNow());
+  assert.equal(result.changed,true);
+  assert.deepEqual(result.contents.conversation.map(item=>item.id),['boundary','reply','valid-reply','orphan','future']);
+  assert.equal(result.contents.conversation[1].replyTo,undefined);
+  assert.equal(result.contents.conversation[2].replyTo,'boundary');
+  assert.equal(result.contents.conversation[3].replyTo,undefined);
+  assert.equal(result.contents.clarification,null);
+  assert.deepEqual(result.contents.preferences,before.preferences);
+  assert.deepEqual(result.contents.companion,before.companion);
+  assert.deepEqual(input,before);
+  assert.equal(pruneExpiredMemoryContents(result.contents,fixedNow()).changed,false);
+  assert.throws(()=>pruneExpiredMemoryContents(input,new Date('bad')));
+  const orphanOnly=retentionContents([message('orphan',{role:'assistant',replyTo:'missing'})]);
+  assert.equal(pruneExpiredMemoryContents(orphanOnly,fixedNow()).contents.clarification,null,'an untimestamped pending question requires a retained source');
+});
+
+test('local read aliases physically prune once, preserve preferences, and stale writers cannot restore expired content',async()=>{
+  for(const method of ['read','getConversation','getPreferences']) {
+    const {repo,indexedDB}=fixture();await repo.read(owner,'personal');
+    const key=JSON.stringify([owner,'personal']), stored=retentionState('personal',[message('old',{createdAt:expiredAt}),message('boundary',{createdAt:cutoff})]);
+    await rawWrite(indexedDB,key,stored);
+    const result=await repo[method](owner,'personal');
+    assert.equal(result.revision,5);assert.deepEqual(result.conversation.map(item=>item.id),['boundary']);
+    assert.equal(result.clarification,null);assert.deepEqual(result.preferences,stored.preferences);assert.deepEqual(result.companion,stored.companion);
+    assert.deepEqual(await rawRead(indexedDB,key),result,'expired originals are deleted from IndexedDB');
+    assert.deepEqual(await repo[method](owner,'personal'),result,'no revision changes when nothing expired');
+    await assert.rejects(repo.replaceConversation(owner,'personal',stored.conversation,4),/更新/);
+    assert.deepEqual(await rawRead(indexedDB,key),result);
+  }
+});
+
+test('local readOwner and export clean every owned book atomically without writing empty books or other owners',async()=>{
+  let instant=fixedNow();const {repo,indexedDB}=fixture(()=>instant);await repo.read(owner,'personal');
+  const personal=retentionState('personal',[message('old',{createdAt:expiredAt}),message('boundary',{createdAt:cutoff})]);
+  const family=retentionState('family',[message('recent')],{clarification:null});
+  const otherState={...personal,ownerId:other};
+  await rawWrite(indexedDB,JSON.stringify([owner,'personal']),personal);
+  await rawWrite(indexedDB,JSON.stringify([owner,'family']),family);
+  await rawWrite(indexedDB,JSON.stringify([other,'personal']),otherState);
+  const all=await repo.readOwner(owner);
+  assert.deepEqual(revisions(all),{personal:5,family:4,travel:0});
+  assert.equal(await rawRead(indexedDB,JSON.stringify([owner,'travel'])),undefined);
+  assert.deepEqual(await rawRead(indexedDB,JSON.stringify([other,'personal'])),otherState);
+  instant=new Date(instant.getTime()+1);
+  const backup=await repo.exportOwner(owner);
+  assert.deepEqual(backup.ledgers.personal.conversation,[]);
+  assert.deepEqual(backup.ledgers.family.conversation,family.conversation);
+  assert.equal((await rawRead(indexedDB,JSON.stringify([owner,'personal']))).revision,6);
+  assert.equal((await rawRead(indexedDB,JSON.stringify([owner,'family']))).revision,4);
+  assert.deepEqual(backup.ledgers.personal.preferences,personal.preferences);
+  assert.deepEqual(backup.ledgers.personal.companion,personal.companion);
+});
+
+test('local write prunes against the original expected revision in the same commit and cannot import expired raw text',async()=>{
+  const {repo,indexedDB}=fixture();await repo.read(owner,'personal');
+  const key=JSON.stringify([owner,'personal']);
+  await rawWrite(indexedDB,key,retentionState('personal',[message('expired',{createdAt:expiredAt})]));
+  const appended=await repo.appendConversation(owner,'personal',[message('fresh'),message('incoming-old',{createdAt:expiredAt})],4,{originalText:'旧原文',question:'金额？'});
+  assert.equal(appended.revision,5,'cleanup does not create a self-conflict or a second revision');
+  assert.deepEqual(appended.conversation.map(item=>item.id),['fresh']);assert.equal(appended.clarification,null);
+  const replaced=await repo.replaceConversation(owner,'personal',[message('old-replacement',{createdAt:expiredAt}),message('boundary',{createdAt:cutoff})],5,{originalText:'旧原文',question:'金额？'});
+  assert.equal(replaced.revision,6);assert.deepEqual(replaced.conversation.map(item=>item.id),['boundary']);assert.equal(replaced.clarification,null);
+  const all=await repo.readOwner(owner);
+  const backup={app:'xiaoman-assistant-memory',version:2,exportedAt:fixedNow().toISOString(),ledgers:Object.fromEntries(kinds.map(kind=>[kind,retentionContents([message(`${kind}-old`,{createdAt:expiredAt}),message(`${kind}-boundary`,{createdAt:cutoff})])]))};
+  const imported=await repo.importOwner(owner,backup,revisions(all));
+  for(const kind of kinds) {
+    assert.equal(imported[kind].revision,all[kind].revision+1);
+    assert.deepEqual(imported[kind].conversation.map(item=>item.id),[`${kind}-boundary`]);assert.equal(imported[kind].clarification,null);
+    assert.deepEqual(imported[kind].preferences,backup.ledgers[kind].preferences);assert.deepEqual(imported[kind].companion,backup.ledgers[kind].companion);
+    assert.deepEqual(await rawRead(indexedDB,JSON.stringify([owner,kind])),imported[kind]);
+  }
+});
+
+test('failed local mutations and stale multi-book imports roll back cleanup as well as writes',async()=>{
+  const {repo,indexedDB}=fixture();await repo.read(owner,'personal');
+  const key=JSON.stringify([owner,'personal']), stored=retentionState('personal',[message('old',{createdAt:expiredAt})]);
+  await rawWrite(indexedDB,key,stored);
+  await assert.rejects(repo.deletePreference(owner,'personal','missing',4),/不存在/);
+  assert.deepEqual(await rawRead(indexedDB,key),stored,'failed business change cannot return success or partially prune');
+  const backup={app:'xiaoman-assistant-memory',version:2,exportedAt:fixedNow().toISOString(),ledgers:Object.fromEntries(kinds.map(kind=>[kind,retentionContents([message(`${kind}-new`)])]))};
+  await assert.rejects(repo.importOwner(owner,backup,{personal:4,family:99,travel:0}),/更新/);
+  assert.deepEqual(await rawRead(indexedDB,key),stored);
+  assert.equal(await rawRead(indexedDB,JSON.stringify([owner,'family'])),undefined);
+  assert.equal((await repo.read(owner,'personal')).revision,5,'the next successful read still cleans expired content');
+});
+
+test('concurrent local cleanup and append either serialize one CAS write or reject the stale writer without resurrecting history',async()=>{
+  const {repo,indexedDB}=fixture();await repo.read(owner,'personal');
+  await rawWrite(indexedDB,JSON.stringify([owner,'personal']),retentionState('personal',[message('old',{createdAt:expiredAt})]));
+  const second=createAssistantMemoryRepository({indexedDB,now:fixedNow});
+  const [reading,writing]=await Promise.allSettled([repo.read(owner,'personal'),second.appendConversation(owner,'personal',[message('new')],4)]);
+  assert.equal(reading.status,'fulfilled');
+  const saved=await repo.read(owner,'personal');
+  assert.equal(saved.revision,5);assert.ok(saved.conversation.every(item=>item.id!=='old'));
+  if(writing.status==='fulfilled')assert.deepEqual(saved.conversation.map(item=>item.id),['new']);
+  else {assert.match(writing.reason.message,/更新/);assert.deepEqual(saved.conversation,[]);}
+});
+
+test('pending clarification requires an exact retained assistant source, not a reused generic question',()=>{
+  const pending={originalText:'昨天和朋友吃饭',question:'花了多少元？'};
+  const source=message('source',{role:'assistant',createdAt:cutoff,clarification:pending});
+  const valid=retentionContents([message('unrelated-old',{createdAt:expiredAt}),source],{clarification:pending});
+  const pruned=pruneExpiredMemoryContents(valid,fixedNow());
+  assert.deepEqual(pruned.contents.clarification,pending,'unrelated expiry does not erase a still-valid follow-up');
+  assert.deepEqual(pruned.contents.conversation.map(item=>item.id),['source']);
+  assert.equal(pruneExpiredMemoryContents(pruned.contents,fixedNow()).changed,false);
+  for(const conversation of [[],[message('recent')],[{...source,createdAt:expiredAt}],
+    [{...source,clarification:{...pending,originalText:'另一笔支出'}}],
+    [{...source,clarification:{...pending,question:'哪一天？'}}],
+    [{...source,createdAt:expiredAt},message('generic',{role:'assistant',clarification:{originalText:'另一笔支出',question:pending.question}})]]) {
+    const input=retentionContents(conversation,{clarification:pending}),result=pruneExpiredMemoryContents(input,fixedNow());
+    assert.equal(result.contents.clarification,null);assert.equal(result.changed,true);
+    assert.deepEqual(result.contents.preferences,input.preferences);assert.deepEqual(result.contents.companion,input.companion);
+  }
+});
+
+test('local cleanup removes unproven top-level raw text physically even with an empty conversation',async()=>{
+  const {repo,indexedDB}=fixture();await repo.read(owner,'personal');
+  const key=JSON.stringify([owner,'personal']),stored=retentionState('personal',[]);
+  await rawWrite(indexedDB,key,stored);
+  const cleaned=await repo.read(owner,'personal');
+  assert.equal(cleaned.revision,5);assert.equal(cleaned.clarification,null);assert.deepEqual(cleaned.conversation,[]);
+  assert.deepEqual(await rawRead(indexedDB,key),cleaned);assert.equal((await repo.read(owner,'personal')).revision,5);
+  const backup={app:'xiaoman-assistant-memory',version:2,exportedAt:fixedNow().toISOString(),ledgers:Object.fromEntries(kinds.map(kind=>[kind,retentionContents([])]))};
+  const imported=await repo.importOwner(owner,backup,revisions(await repo.readOwner(owner)));
+  for(const kind of kinds)assert.equal(imported[kind].clarification,null,'an old backup cannot restore raw text without a source');
+  const exported=await repo.exportOwner(owner);
+  for(const kind of kinds)assert.equal(exported.ledgers[kind].clarification,null);
+});
+
+test('local append replacement and import retain a valid new clarification while unrelated old messages expire',async()=>{
+  const pending={originalText:'今天午饭',question:'多少钱？'},source=message('source',{role:'assistant',clarification:pending});
+  for(const method of ['appendConversation','replaceConversation']) {
+    const {repo,indexedDB}=fixture();await repo.read(owner,'personal');
+    await rawWrite(indexedDB,JSON.stringify([owner,'personal']),retentionState('personal',[message('old',{createdAt:expiredAt})]));
+    const saved=await repo[method](owner,'personal',[source],4,pending);
+    assert.equal(saved.revision,5);assert.deepEqual(saved.clarification,pending);assert.deepEqual(saved.conversation,[source]);
+  }
+  const {repo,indexedDB}=fixture();await repo.read(owner,'personal');
+  for(const kind of kinds)await rawWrite(indexedDB,JSON.stringify([owner,kind]),retentionState(kind,[message(`${kind}-old`,{createdAt:expiredAt})]));
+  const backup={app:'xiaoman-assistant-memory',version:2,exportedAt:fixedNow().toISOString(),ledgers:Object.fromEntries(kinds.map(kind=>[kind,retentionContents([source],{clarification:pending})]))};
+  const saved=await repo.importOwner(owner,backup,{personal:4,family:4,travel:4});
+  for(const kind of kinds){assert.equal(saved[kind].revision,5);assert.deepEqual(saved[kind].clarification,pending);}
 });

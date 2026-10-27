@@ -17,6 +17,7 @@ export function createCloudMemoryRepository(client: CloudClient, accountId: stri
     transport.assertCurrent();
     if (owner !== accountId || (kind !== undefined && !LEDGER_KINDS.includes(kind))) throw new Error("账号或账本已变化，请重新载入后操作");
   }
+  // Server triggers and scheduled cleanup own retention; a fast device clock must never delete cloud history.
   function decode(rows: CloudRow[], kind: LedgerKind): MemoryState {
     const row = rows.find(row => row.resource === resource(kind));
     return { ownerId: accountId, ledgerKind: kind, revision: row?.revision ?? 0,
