@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "mode": "live_browser_end_to_end_check",
+  "case_id": "question-smoke-19",
+  "evidence_basis": "Browser operator record and review of the consent and final-answer screenshots; no raw network response was captured.",
+  "observed_at": {
+    "hkt": "2026-10-10 01:09",
+    "utc": "2026-10-09 17:09",
+    "precision": "approximate minute"
+  },
+  "deployment": {
+    "frontend_url": "https://molly-gith.github.io/xiaoman-ledger/previews/pr-24/",
+    "frontend_commit": "d5ed4aee7943edfb8b622250e7fef0fd0cfde969",
+    "api_url": "https://xiaoman-ai-beta.vercel.app/api/ai/question",
+    "api_code_commit": "0f5ead8db2fc570b018c5016e29c45ee3b261e07",
+    "vercel_deployment_id": "dpl_EdTHzZJ8xUcnGY991JQMNUFDMkNr",
+    "vercel_state": "READY",
+    "dify_published_version": 4,
+    "configured_workflow_version": "xiaoman-question-v0.4",
+    "response_workflow_version": null
+  },
+  "test_environment": {
+    "browser": "Chrome",
+    "isolation": "The deployed PR Preview was loaded inside a guarded localhost page using an iframe with the credentialless attribute and temporary isolated IndexedDB/localStorage.",
+    "data_source": "Synthetic ledger created through the UI in the isolated frame; no existing real ledger used.",
+    "secret_values_recorded": false
+  },
+  "synthetic_ledger": {
+    "cycle_type": "calendar_month",
+    "cycle": "2026-10",
+    "available_funds": 10000,
+    "investment_target": 2500,
+    "consent_dialog_summary": {
+      "as_of_date": "2026-10-10",
+      "safe_to_spend": 7500,
+      "consumption_spend": 0,
+      "waste_spend": 0,
+      "investment_spend": 0,
+      "investment_gap": 2500,
+      "investment_account_count": 0,
+      "unresolved_count": 0
+    }
+  },
+  "interaction": {
+    "question": "和上个周期相比，我这期有什么变化？",
+    "explicit_consent_given": true,
+    "consent_and_send_clicks": 1,
+    "additional_submission_or_retry": false
+  },
+  "observed_result": {
+    "displayed_answer": "本次收到的摘要没有上个周期的数据，暂时无法比较变化。",
+    "visible_next_actions_count": 0,
+    "input_cleared": true,
+    "loading_finished": true,
+    "visible_error": false,
+    "safe_to_spend_after": 7500,
+    "recent_transactions_empty_after": true,
+    "raw_network_response_captured": false,
+    "exact_http_status": null,
+    "response_confidence": null,
+    "response_referenced_facts": null,
+    "transport_inference": "The frontend success path displays an answer only after response.ok and response-schema validation. This supports an accepted response, but does not establish the exact HTTP status or unobserved response fields."
+  },
+  "semantic_review": {
+    "method": "Independent AI review of the displayed answer and recorded UI state",
+    "status": "passed",
+    "reason": "The answer limits the missing-history statement to the received snapshot, does not claim that the entire ledger lacks historical records, invents no trend or amount, and proposes no unsupported action.",
+    "user_acceptance": "not_established",
+    "scope": "One targeted browser end-to-end case; not a full v0.4 smoke regression or a Beta readiness verdict."
+  },
+  "screenshots": {
+    "consent_before_entry": "web-ai-consent-v04.png",
+    "final_answer": "web-ai-answer-v04.png"
+  },
+  "cleanup_reported_by_operator": {
+    "ai_disabled": true,
+    "ui_returned_to_first_send_consent_notice": true,
+    "isolated_parent_page_closed": true,
+    "localhost_4179_server_stopped": true,
+    "temporary_ledger": "Discarded when the credentialless frame's parent document was unloaded; storage was not reread."
+  },
+  "release_checks_reported_by_operator": {
+    "ci_152": "success",
+    "preview_deploy_51": "success",
+    "tested_frontend_checkout": "d5ed4aee7943edfb8b622250e7fef0fd0cfde969",
+    "main_pr23_pr24_documents_and_js_css": "HTTP 200",
+    "bundled_ai_api_url": "Present only in PR #24; absent from main and PR #23"
+  },
+  "additional_authorization_budget": {
+    "scope": "Additional model-request allowance after the initial v0.1 run",
+    "authorized": 25,
+    "used_v0_2": 20,
+    "used_v0_3": 4,
+    "used_v0_4_browser": 1,
+    "remaining": 0,
+    "note": "No further model request is authorized by this allowance. Provider-side billing logs were not inspected."
+  },
+  "remaining_limits": [
+    "The latest v0.4 prompt has not been rerun against all 20 smoke cases.",
+    "The 180-case live evaluation has not run.",
+    "AI bookkeeping and AI cycle review remain disabled.",
+    "Historical failed runs remain unchanged and are not combined into a fabricated latest-version pass rate."
+  ]
+}

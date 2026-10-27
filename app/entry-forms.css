@@ -1,0 +1,40 @@
+/* Compact entry uses one scroll area and keeps its save action in view. */
+.sheet:has(.entry-form) { overflow: hidden; }
+.sheet:has(.entry-form)>.app-content { display: flex; flex-direction: column; min-height: 0; }
+.entry-form { display: flex; flex-direction: column; min-height: 0; max-height: calc(var(--modal-viewport-height, 100dvh) - 104px); }
+.entry-form-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 2px 4px 8px 0; scrollbar-width: thin; scrollbar-color: #99aa83 #f0f2e4; }
+.entry-form .sheet-head { margin-bottom: 16px; }
+.entry-form .sheet-head p { font-size: 13px; }
+.entry-form .type-tabs { margin-bottom: 12px; }
+.sheet .entry-form .entry-amount { margin-top: 8px; }
+.sheet .entry-form .entry-amount input { font-size: 28px; font-variant-numeric: tabular-nums; height: 56px; }
+.sheet .entry-form .entry-category { display: flex; gap: 12px; align-items: center; margin-top: 16px; }
+.sheet .entry-form .entry-category select { flex: 1; min-width: 0; height: 44px; margin: 0; padding: 8px 12px; background: #fffffa; color: #34422d; border-color: #d9dfc7; font-size: 16px; }
+.entry-nature { margin-top: 16px; }
+.entry-nature legend { font-size: 13px; color: var(--xm-muted); }
+.entry-nature .nature-picker { margin-top: 8px; }
+.entry-nature .nature-picker button { min-height: 44px; padding: 8px; font-size: 13px; }
+.entry-more { margin-top: 16px; border-top: 1px solid var(--line); }
+.entry-more summary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 14px; min-height: 48px; padding: 10px 0; cursor: pointer; color: #4f653f; font-size: 13px; }
+.entry-more summary>.story-icon { flex: none; width: 17px; height: 17px; transform: rotate(90deg); }
+.entry-more[open] summary>.story-icon { transform: rotate(-90deg); }
+.entry-more summary span { margin-left: auto; color: #63705a; font-size: 12px; }
+.entry-form .entry-more label { margin-top: 12px; }
+.entry-form-footer { position: sticky; bottom: 0; flex: none; padding: 10px 0 0; background: #fcfbf3; border-top: 1px solid var(--line); }
+.entry-form-footer .primary { margin-top: 0; }
+.entry-form-footer .error-message { margin: 0 0 10px; }
+.voice-input { min-width: 0; }
+.voice-input-actions { display: flex; align-items: center; gap: 6px; }
+.voice-input-button,.voice-input-cancel { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 8px 12px; border: 1px solid #d5dec5; border-radius: 13px; background: #fffdf5; color: #3c6440; font-size: 13px; }
+.voice-input-button>.story-icon { width: 19px; height: 19px; }
+.voice-input-button:hover:not(:disabled),.voice-input-cancel:hover { background: #e8edda; }
+.voice-input[data-state="listening"] .voice-input-button { background: #f1e5cb; border-color: #a15a29; color: var(--xm-ink); }
+.voice-stop-mark { display: block; width: 12px; height: 12px; border-radius: 2px; background: currentColor; }
+.voice-input-cancel { border-color: transparent; background: transparent; }
+.voice-input-message { margin: 6px 0 0; max-width: 65ch; color: #63705a; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.voice-input-message:empty { display: none; }
+@media (max-height: 520px) {
+  .entry-form .sheet-head { margin-bottom: 10px; }
+  .entry-form .sheet-head>span,.entry-form .sheet-head p { display: none; }
+  .entry-form .sheet-head h2 { font-size: 17px; }
+}

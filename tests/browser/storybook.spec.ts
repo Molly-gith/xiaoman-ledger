@@ -1,85 +1,26 @@
-import { test, expect } from '@playwright/test';
-const today = new Date('2026-09-15T04:00:00Z');
-
-test('70 5 25 suggestions preserve explicit investment edits and persist new structure', async ({page}) => {
-  await page.clock.install({time:today});
-  await page.goto('./');
-  await page.getByRole('button',{name:/按发薪日/}).click();
-  await page.locator('[name="availableIncome"]').fill('3000');
-  await expect(page.locator('[name="plannedSavings"]')).toHaveValue('750');
-  await expect(page.locator('[name="necessaryReserve"]')).toHaveCount(0);
-  await expect(page.getByTestId('budget-preview')).toHaveText('¥2,250.00');
-  await expect(page.getByTestId('ratio-consume')).toContainText('70%');
-  await expect(page.getByTestId('ratio-consume')).toContainText('消费');
-  await expect(page.getByTestId('ratio-invest')).toContainText('25%');
-  await expect(page.getByTestId('ratio-invest')).toContainText('投资');
-  await expect(page.getByTestId('ratio-waste')).toContainText('≤5%');
-  await expect(page.getByTestId('ratio-waste')).toContainText('浪费');
-  await page.locator('[name="plannedSavings"]').fill('0');
-  await page.locator('[name="availableIncome"]').fill('4000');
-  await expect(page.locator('[name="plannedSavings"]')).toHaveValue('0');
-  await expect(page.getByTestId('budget-preview')).toHaveText('¥4,000.00');
-  await page.getByRole('button',{name:'开始这个周期',exact:true}).click();
-  await expect(page.getByTestId('safe-to-spend')).toHaveText('¥4,000.00');
-  await page.getByTestId('home-action-bills').click();
-  await page.getByRole('button',{name:'调整结构',exact:true}).click();
-  await page.locator('[name="availableIncome"]').fill('6000');
-  await expect(page.locator('[name="plannedSavings"]')).toHaveValue('0');
-  await page.getByRole('button',{name:'恢复默认 25%'}).click();
-  await expect(page.locator('[name="plannedSavings"]')).toHaveValue('1500');
-  await page.getByRole('button',{name:'保存这个周期',exact:true}).click();
-  await expect(page.getByText(/周期结构已保存/)).toBeVisible();
-  await page.reload();
-  await expect(page.getByTestId('safe-to-spend')).toHaveText('¥4,500.00');
-  await page.clock.setSystemTime(new Date('2026-09-20T04:00:00Z'));
-  await page.reload();
-  await page.getByRole('button',{name:'确认收入，开启新周期'}).click();
-  await page.locator('[name="availableIncome"]').fill('3000');
-  await expect(page.locator('[name="plannedSavings"]')).toHaveValue('750');
-  await expect(page.locator('[name="necessaryReserve"]')).toHaveCount(0);
+import { test, expect } from "@playwright/test";
+import { expandInvestmentTarget, exportLedger, openCycle, openLedger, saveCycle } from "./ledger-helpers";
+test("optional budget settings keep blank distinct from zero and do not alter recorded income", async ({ page }) => {
+  await openLedger(page); await openCycle(page);
+  const income=page.locator('[name="availableIncome"]'), target=page.locator('[name="plannedSavings"]');
+  await expect(income).toHaveValue(""); await expect(income).not.toHaveAttribute("required","");
+  await expect(target).toBeHidden(); await income.fill("3000"); await expandInvestmentTarget(page);
+  await expect(target).toHaveValue(""); await page.getByRole("button",{name:/^采用 25% 参考/}).click();
+  await expect(target).toHaveValue("750"); await target.fill("0"); await income.fill("4000");
+  await expect(target).toHaveValue("0"); await saveCycle(page);
+  const state=(await exportLedger(page)).state;
+  expect(state.budgets[0]).toMatchObject({availableIncome:4000,plannedSavings:0}); expect(state.transactions).toEqual([]);
 });
-
-test('conversation-first v3 keeps chat primary, removes visible tabbar and keeps four actions one tap away', async ({page})=>{
-  await page.clock.install({time:today});
-  await page.goto('./');
-  await page.locator('[name="availableIncome"]').fill('3000');
-  await page.getByRole('button',{name:'开始这个周期',exact:true}).click();
-  await expect(page.getByTestId('assistant-conversation')).toBeVisible();
-  await expect(page.getByPlaceholder('问小满：我这个月还能花多少？')).toBeVisible();
-  await expect(page.getByText('AI 分析暂未启用',{exact:false})).toBeVisible();
-  await expect(page.locator('.bottom-nav')).toBeHidden();
-  await expect(page.getByTestId('home-action-add')).toBeVisible();
-  await expect(page.getByTestId('home-action-bills')).toBeVisible();
-  await expect(page.getByTestId('home-action-assets')).toBeVisible();
-  await expect(page.getByTestId('home-action-review')).toBeVisible();
-
-  await page.getByTestId('home-action-add').click();
-  await expect(page.getByRole('dialog',{name:'记账'})).toBeVisible();
-  await page.getByRole('button',{name:'关闭'}).click();
-
-  await page.getByTestId('home-action-bills').click();
-  await expect(page.getByRole('heading',{name:'财务',exact:true})).toBeVisible();
-  await page.reload();
-
-  await page.getByTestId('home-action-assets').click();
-  await expect(page.getByText('投资账户',{exact:true}).first()).toBeVisible();
-  await page.reload();
-
-  await page.getByTestId('home-action-review').click();
-  await expect(page.getByRole('heading',{name:'周期复盘',exact:true})).toBeVisible();
-});
-
-test('manual entry remains usable after v3 navigation changes',async({page})=>{
-  await page.clock.install({time:today});
-  await page.goto('./');
-  await page.locator('[name="availableIncome"]').fill('3000');
-  await page.getByRole('button',{name:'开始这个周期',exact:true}).click();
-  await page.getByTestId('home-action-add').click();
-  await page.locator('[name="note"]').fill('手动记录');
-  await page.locator('[name="amount"]').fill('10');
-  await page.getByRole('button',{name:'消费',exact:true}).click();
-  await page.getByRole('button',{name:'记好了',exact:true}).click();
-  await expect(page.getByTestId('safe-to-spend')).toHaveText('¥2,240.00');
-  await page.reload();
-  await expect(page.getByTestId('safe-to-spend')).toHaveText('¥2,240.00');
+test("manual entry needs only an amount and keeps category, nature, date and note editable", async ({page})=>{
+  await openLedger(page); await page.getByRole("button",{name:"手动记一笔",exact:true}).click();
+  await expect(page.locator('[name="amount"]')).toHaveAttribute("required","");
+  await expect(page.locator('[name="category"]')).toHaveValue("其他");
+  await expect(page.getByRole("button",{name:"消费",exact:true})).toHaveAttribute("aria-pressed","true");
+  await expect(page.locator('[name="note"]')).toBeHidden();
+  await page.getByRole("button",{name:"记好了",exact:true}).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.locator('[name="amount"]').fill("10"); await page.getByRole("button",{name:"记好了",exact:true}).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const state=(await exportLedger(page)).state;
+  expect(state.transactions[0]).toMatchObject({amount:10,category:"其他",nature:"消费",date:"2026-09-15",cycleId:null});
 });

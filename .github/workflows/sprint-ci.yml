@@ -34,9 +34,21 @@ jobs:
         run: exit 1
       - run: npm run lint
       - run: npm test
+      - name: Validate Dify V2 workflow and authored fixtures offline
+        run: node --experimental-strip-types evals/check-assistant-v2.mjs
+      - name: Validate companion workflow offline
+        run: node --experimental-strip-types evals/check-companion.mjs
       - run: npm run build:github
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
+      - name: Build AI assistant test fixture
+        run: npm run build:github
+        env:
+          VITE_AI_API_URL: https://xiaoman-ai-test.example/api/ai/question
+      - name: Verify AI entry, fallback and voice in browser
+        run: npm run test:browser -- tests/browser/ai-question.spec.ts tests/browser/voice-input.spec.ts tests/browser/multi-ledger.spec.ts tests/browser/conversation.spec.ts tests/browser/account.spec.ts tests/browser/period-review-assistant.spec.ts tests/browser/companion-chat.spec.ts tests/browser/chat-retention.spec.ts
+        env:
+          AI_BROWSER_TEST: "1"
       - run: npm run eval -- --fixture-provider
       - uses: actions/upload-artifact@v4
         if: always()

@@ -13,10 +13,10 @@ const cycle=salaryCycle('2026-09-16',15);
 const plan={cycleId:cycle.id,availableIncome:20000,plannedSavings:5000,necessaryReserve:0,model:'nature'};
 const account={id:'etf',name:'纳指 + 标普',openingNetContribution:70000,currentMarketValue:78724.8,marketValueUpdatedAt:'2026-09-16',createdAt:'2026-09-16'};
 
-test('v1/v2 backups migrate to v3 with empty investment collections',()=>{
+test('v1/v2 backups migrate to v4 with empty investment collections',()=>{
   const v2={...defaultState(),version:2,investmentAccounts:undefined,investmentFlows:undefined,marketValueSnapshots:undefined};
   const migrated=normalizeBackup(JSON.parse(JSON.stringify(v2)));
-  assert.equal(migrated.version,3);
+  assert.equal(migrated.version,4);
   assert.deepEqual(migrated.investmentAccounts,[]);
   assert.deepEqual(migrated.investmentFlows,[]);
   assert.deepEqual(migrated.marketValueSnapshots,[]);

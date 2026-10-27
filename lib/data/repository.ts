@@ -1,6 +1,8 @@
-import type { BudgetPlan, FinancialCycle, InvestmentAccount, InvestmentFlow, LedgerState, Transaction } from "../domain/types.ts";
-import { calculateFinance, cents, parseDate, transactionDay } from "../domain/finance.ts";
-import { normalizeBackup, normalizeInvestmentAccount, normalizeInvestmentFlow, normalizeMarketValueSnapshot, normalizeTransaction } from "./schema.ts";
+import type { BudgetPlan, FinancialCycle, InvestmentAccount, InvestmentFlow, LedgerKind, LedgerState, SalaryBudgetSettings, Transaction } from "../domain/types.ts";
+import { normalizeSalaryBudgetSettings } from "../domain/salary-budget.ts";
+import { prepareRecurringSalarySettings, reconcileRecurringSalary, recurringSalaryToday } from "../domain/recurring-salary.ts";
+import { calendarMonthCycle, cents, parseDate, transactionDay } from "../domain/finance.ts";
+import { LEDGER_KINDS, ledgerDataOf, normalizeBackup, normalizeInvestmentAccount, normalizeInvestmentFlow, normalizeMarketValueSnapshot, normalizeTransaction } from "./schema.ts";
 
 export interface LedgerStore {
   read(): Promise<LedgerState>;
@@ -9,67 +11,165 @@ export interface LedgerStore {
 }
 export interface LedgerRepository {
   read(): Promise<LedgerState>;
+  switchLedger(kind: LedgerKind, revision: number): Promise<LedgerState>;
+  saveSalaryBudget(settings: SalaryBudgetSettings | null, revision: number, today?: string): Promise<LedgerState>;
+  ensureRecurringSalary(today: string): Promise<LedgerState>;
+  ensureCurrentCycle(today: string): Promise<LedgerState>;
   saveCycle(cycle: FinancialCycle, plan: BudgetPlan, revision: number): Promise<LedgerState>;
+  replaceCurrentCycle(cycle: FinancialCycle, plan: BudgetPlan, revision: number): Promise<LedgerState>;
   saveTransaction(tx: Transaction, revision: number, editing?: boolean): Promise<LedgerState>;
+  saveTransactions(transactions: readonly Transaction[], revision: number): Promise<LedgerState>;
   deleteTransaction(id: string, revision: number): Promise<LedgerState>;
+  deleteTransactions(ids: readonly string[], revision: number): Promise<LedgerState>;
   saveInvestmentAccount(account: InvestmentAccount, revision: number, editing?: boolean): Promise<LedgerState>;
   saveInvestmentFlow(flow: InvestmentFlow, revision: number): Promise<LedgerState>;
   saveMarketValue(accountId: string, marketValue: number, date: string, revision: number): Promise<LedgerState>;
   replace(state: LedgerState, revision: number): Promise<LedgerState>;
 }
 export function validateLedger(state: LedgerState): LedgerState {
-  const normalized = normalizeBackup(state);
-  for (const tx of normalized.transactions) {
-    if (tx.cycleId) {
-      const cycle = normalized.cycles.find(c => c.id === tx.cycleId)!;
-      const day = transactionDay(tx);
-      if (tx.dateNeedsConfirmation) {
-        // Preserve the previously confirmed cycle and original instant. Missing
-        // source timezone cannot be reconstructed safely; ask for a calendar date.
-        const instant = Date.parse(tx.date);
-        const first = Date.parse(`${cycle.startDate}T00:00:00Z`) - 14 * 3600000;
-        const last = Date.parse(`${cycle.nextSalaryDate}T00:00:00Z`) + 12 * 3600000;
-        if (instant < first || instant >= last) throw new Error("旧账时间与原财务周期不一致，请核对备份");
-      } else if (day < cycle.startDate || day > cycle.endDate) throw new Error("账目日期不属于所选周期");
-    }
-  }
-  for (const cycle of normalized.cycles) {
-    const metrics = calculateFinance(cycle, normalized.budgets.find(b => b.cycleId === cycle.id)!, normalized.transactions, normalized.investmentFlows);
-    // Legacy periods keep their original reserve invariant. Nature-based periods no
-    // longer have a reserve bucket at all.
-    if (metrics.model === "legacy" && metrics.reserveRemaining < 0) throw new Error("必要预留额度不足，请先调整预算，或将超出部分另记为可变支出");
-  }
-  return normalized;
+  return normalizeBackup(state);
 }
 export function createRepository(store: LedgerStore): LedgerRepository {
+  function prepareTransaction(value: Transaction): Transaction {
+    const tx = normalizeTransaction(value);
+    tx.date = transactionDay(tx);
+    delete tx.dateNeedsConfirmation;
+    if (tx.type === "expense" && !tx.nature) throw new Error("请确认消费性质");
+    // A cycle is optional. The legacy spend kind is retained for old clients;
+    // any explicit cycle still receives the full date and budget validation.
+    if (tx.type === "expense" && !tx.spendKind) tx.spendKind = "variable";
+    if (tx.type === "income" && (tx.nature !== null || tx.spendKind !== null)) throw new Error("收入不设置消费性质或支出来源");
+    return tx;
+  }
   async function mutate(revision: number, change: (state: LedgerState) => LedgerState) {
-    const state = await store.read();
+    const state = validateLedger(await store.read());
     if (state.revision !== revision) throw new Error("账本已在其他页面更新，请重新载入后重试");
-    const next = validateLedger({ ...change(structuredClone(state)), version: 3, revision: revision + 1 });
+    const next = validateLedger({ ...change(structuredClone(state)), version: 4, revision: revision + 1 });
     await store.commit(next, revision); return next;
+  }
+  async function ensureRecurringSalary(today: string): Promise<LedgerState> {
+    parseDate(today);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const state = validateLedger(await store.read());
+      let changed = false;
+      const next = structuredClone(state);
+      for (const kind of LEDGER_KINDS) {
+        const book = kind === next.ledgerKind ? next : next.otherLedgers[kind];
+        if (!book) continue;
+        const due = reconcileRecurringSalary(book.salaryBudget, book.transactions, today);
+        if (!due.changed) continue;
+        book.salaryBudget = due.settings;
+        book.transactions = due.transactions;
+        changed = true;
+      }
+      if (!changed) return state;
+      next.revision = state.revision + 1;
+      const validated = validateLedger(next);
+      try { await store.commit(validated, state.revision); return validated; }
+      catch (error) {
+        // A lost reply or a concurrent tab may have committed already. Reread and
+        // reconcile the durable cursor; never append a second salary blindly.
+        if ((await store.read()).revision === state.revision) throw error;
+      }
+    }
+    throw new Error("账本正在其他页面更新，自动工资会在下次打开时再核对");
+  }
+  async function ensureCurrentCycle(today: string): Promise<LedgerState> {
+    const month = calendarMonthCycle(today);
+    // Deterministic IDs plus the store's atomic revision guard prevent two tabs
+    // from creating duplicate months or overwriting a user's concurrent edit.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const state = validateLedger(await store.read());
+      const active = state.cycles.find(item => item.id === state.activeCycleId);
+      if (active && (active.cycleType !== "calendar_month" || today <= active.endDate)) return state;
+      const overlap = state.cycles.find(item => item.startDate <= month.endDate && item.endDate >= month.startDate);
+      // Never reshape historical/custom periods to make room for an automatic month.
+      if (overlap && overlap.id !== month.id) return state;
+      const next = validateLedger({ ...state, revision: state.revision + 1,
+        profile: null, activeCycleId: month.id,
+        cycles: overlap ? state.cycles : [...state.cycles, month],
+        budgets: overlap ? state.budgets : [...state.budgets, { cycleId: month.id, model: "nature",
+          availableIncome: null, plannedSavings: null, necessaryReserve: 0, fundingSources: [] }],
+      });
+      try { await store.commit(next, state.revision); return next; }
+      catch (error) {
+        // Retry only a real concurrent revision change; storage failures stay visible.
+        if ((await store.read()).revision === state.revision) throw error;
+      }
+    }
+    throw new Error("账本已在其他页面更新，请重新载入后重试");
   }
   return {
     read: () => store.read().then(validateLedger),
+    switchLedger: (kind, revision) => mutate(revision, state => {
+      if (!LEDGER_KINDS.includes(kind)) throw new Error("账本用途无效");
+      if (kind === state.ledgerKind) return state;
+      const destination = state.otherLedgers[kind];
+      if (!destination) throw new Error("目标账本不存在，请重新载入");
+      const otherLedgers = { ...state.otherLedgers, [state.ledgerKind]: ledgerDataOf(state) };
+      delete otherLedgers[kind];
+      return { ...state, ...destination, ledgerKind: kind, otherLedgers };
+    }),
+    ensureCurrentCycle,
+    ensureRecurringSalary,
+    saveSalaryBudget: (settings, revision, today = recurringSalaryToday()) => mutate(revision, state => {
+      const previous = reconcileRecurringSalary(state.salaryBudget, state.transactions, today);
+      const prepared = prepareRecurringSalarySettings(previous.settings, normalizeSalaryBudgetSettings(settings), today);
+      const due = reconcileRecurringSalary(prepared, previous.transactions, today);
+      return { ...state, salaryBudget: due.settings, transactions: due.transactions };
+    }),
     saveCycle: (cycle, plan, revision) => mutate(revision, state => ({ ...state,
       profile: (cycle.cycleType ?? "salary_based") === "salary_based" ? { salaryDay: cycle.salaryDay } : null,
       activeCycleId: cycle.id,
-      cycles: [...state.cycles.filter(c => c.id !== cycle.id), cycle], budgets: [...state.budgets.filter(b => b.cycleId !== cycle.id), plan] })),
+      cycles: [...state.cycles.filter(c => c.id !== cycle.id), cycle],
+      budgets: [...state.budgets.filter(b => b.cycleId !== cycle.id), plan],
+    })),
+    replaceCurrentCycle: (cycle, plan, revision) => mutate(revision, state => {
+      const active = state.cycles.find(item => item.id === state.activeCycleId);
+      if (!active) throw new Error("当前周期不存在，请重新载入后重试");
+      if (active.id !== cycle.id && state.transactions.some(tx => tx.cycleId === active.id && (tx.dateNeedsConfirmation || tx.date.length > 10))) {
+        throw new Error("旧账日期待核对，请先核对后再更换周期日期或方式");
+      }
+      // validateLedger verifies the canonical ID, every retained date, other
+      // periods and budget invariants before any durable write takes place.
+      return { ...state,
+        profile: (cycle.cycleType ?? "salary_based") === "salary_based" ? { salaryDay: cycle.salaryDay } : null,
+        activeCycleId: cycle.id,
+        cycles: state.cycles.map(item => item.id === active.id ? cycle : item),
+        budgets: state.budgets.map(item => item.cycleId === active.id ? plan : item),
+        transactions: state.transactions.map(tx => tx.cycleId === active.id ? { ...tx, cycleId: cycle.id } : tx),
+        investmentFlows: state.investmentFlows.map(flow => flow.cycleId === active.id ? { ...flow, cycleId: cycle.id } : flow),
+      };
+    }),
     saveTransaction: (value, revision, editing = false) => mutate(revision, state => {
-      const tx = normalizeTransaction(value);
-      tx.date = transactionDay(tx);
-      delete tx.dateNeedsConfirmation;
+      const tx = prepareTransaction(value);
       const exists = state.transactions.some(item => item.id === tx.id);
       if (editing !== exists) throw new Error(editing ? "账目已不存在" : "账目编号重复");
-      if (!tx.cycleId || (tx.type === "expense" && !tx.nature)) throw new Error("请确认财务周期和消费性质");
-      // spendKind is retained only for legacy schema compatibility. Users no longer
-      // choose it; missing legacy values are safely normalized to variable spending.
-      if (tx.type === "expense" && !tx.spendKind) tx.spendKind = "variable";
-      if (tx.type === "income" && (tx.nature !== null || tx.spendKind !== null)) throw new Error("收入不设置消费性质或支出来源");
       return { ...state, transactions: [tx, ...state.transactions.filter(item => item.id !== tx.id)].sort((a, b) => b.date.localeCompare(a.date)) };
+    }),
+    saveTransactions: (values, revision) => mutate(revision, state => {
+      if (!Array.isArray(values) || values.length === 0) throw new Error("请先确认要保存的账目");
+      const transactions = values.map(prepareTransaction);
+      const ids = new Set(state.transactions.map(tx => tx.id));
+      for (const tx of transactions) {
+        if (ids.has(tx.id)) throw new Error("账目编号重复");
+        ids.add(tx.id);
+      }
+      // One revision and one durable commit: invalid drafts never partially save.
+      return { ...state, transactions: [...transactions, ...state.transactions].sort((a, b) => b.date.localeCompare(a.date)) };
     }),
     deleteTransaction: (id, revision) => mutate(revision, state => {
       if (!state.transactions.some(tx => tx.id === id)) throw new Error("账目已不存在");
       return { ...state, transactions: state.transactions.filter(tx => tx.id !== id) };
+    }),
+    deleteTransactions: (ids, revision) => mutate(revision, state => {
+      if (!Array.isArray(ids) || ids.length === 0 || new Set(ids).size !== ids.length) throw new Error("撤销账目列表无效");
+      const existing = new Set(state.transactions.map(tx => tx.id));
+      if (ids.some(id => !existing.has(id))) throw new Error("账目已不存在");
+      const removed = new Set(ids);
+      // For undo, pass the revision returned by saveTransactions. Any intervening
+      // edit makes it stale instead of silently deleting the newer user changes.
+      return { ...state, transactions: state.transactions.filter(tx => !removed.has(tx.id)) };
     }),
     saveInvestmentAccount: (value, revision, editing = false) => mutate(revision, state => {
       const account = normalizeInvestmentAccount(value);

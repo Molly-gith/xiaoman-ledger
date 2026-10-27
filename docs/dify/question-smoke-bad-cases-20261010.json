@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "source_report": "question-smoke-live-20261010.json",
+  "source_runtime_commit": "0f5ead8db2fc570b018c5016e29c45ee3b261e07",
+  "source_workflow_version": "xiaoman-question-v0.1",
+  "review_method": "AI semantic review against each synthetic snapshot, expected behavior, and repository financial rules",
+  "scope": "Only confirmed failures 01 and 09; not the complete 20-case verdict",
+  "fix_status": "Prompt changes prepared locally; live regression not yet verified",
+  "cases": [
+    {
+      "case_id": "question-smoke-01",
+      "semantic_status": "failed",
+      "structure_status": "passed",
+      "required_facts_status": "passed",
+      "evidence": [
+        "本周期消费支出8000，高于安全可花金额7000；其中浪费支出500。",
+        "整体来看，消费略超安全额度，投资已按计划执行。"
+      ],
+      "reason": "safeToSpend=7000 is the remaining spendable amount after the program applies its financial rules, not an original budget ceiling. Comparing already-recorded consumptionSpend=8000 with that remainder cannot establish overspending. wasteSpend=500 is a separate category, not a subset of consumptionSpend.",
+      "domain_evidence": [
+        "lib/domain/finance.ts: calculateFinance calculates consumption and waste separately, then deducts their sum and protected investment to produce safeToSpend.",
+        "lib/domain/assistant-context.ts: buildAssistantContext exports separate consumption and waste amounts."
+      ],
+      "prompt_fix": "Define remaining spendable amount explicitly; prohibit comparing historical spending to the remainder or deducting spending again; keep consumption, waste, and investment categories separate.",
+      "regression_expectation": "Report remaining spendable 7000, consumption 8000, waste 500, and investment progress from the snapshot; do not infer overspending from 8000 versus 7000 or describe waste as part of consumption."
+    },
+    {
+      "case_id": "question-smoke-09",
+      "semantic_status": "failed",
+      "structure_status": "passed",
+      "required_facts_status": "passed",
+      "evidence": [
+        "此数字为账本中的净投入总额，不包含账户间转账或市值涨跌。"
+      ],
+      "reason": "The reported net contribution 105000 is correct, and market-value movements are correctly excluded. However, excluding all account transfers from investment net contribution is unsupported: recorded investment contributions and withdrawals change net contribution. The rule that a transfer is not automatically new income cannot be generalized to investment net contribution.",
+      "domain_evidence": [
+        "lib/domain/investment.ts: netContribution uses openingNetContribution plus recorded contributions minus withdrawals.",
+        "docs/CR_002_INVESTMENT_ACCOUNTS.md: the documented net-contribution formula includes cumulative contributions and withdrawals."
+      ],
+      "prompt_fix": "Distinguish investment net contribution from income and forbid blanket exclusion of transfers; report the program's supplied net contribution without recalculation.",
+      "regression_expectation": "Report cumulative net contribution 105000 and distinguish it from current market value; do not claim all account transfers are excluded from net contribution."
+    }
+  ]
+}

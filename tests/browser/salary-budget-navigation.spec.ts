@@ -1,0 +1,51 @@
+import { test, expect } from "@playwright/test";
+import { addEntry, emptyLedger, openBills, openLedger, seedLedger } from "./ledger-helpers";
+function state(salaryDay: number | null = 31) {
+  const empty = emptyLedger();
+  const data = { profile: null, activeCycleId: null, cycles: [], budgets: [], transactions: [], investmentAccounts: [], investmentFlows: [], marketValueSnapshots: [], settings: empty.settings };
+  return { ...empty, version: 4, otherLedgers: { family: data, travel: data }, salaryBudget: { enabled: true, salaryDay, periodMode: "calendar_month", expectedSalary: 100, percentages: { 消费: 60, 浪费: 10, 投资: 20 }, periodOverride: null } };
+}
+test("salary-date bill filtering is optional and clips month-end paydays without changing month or custom reports", async ({ page }) => {
+  await seedLedger(page, state()); await openLedger(page);
+  await addEntry(page, { amount: "7", date: "2026-08-31", note: "本工资周期" });
+  await addEntry(page, { amount: "3", date: "2026-08-30", note: "上工资周期" });
+  await openBills(page);
+  await expect(page.getByRole("button", { name: "按月查看", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "发薪周期", exact: true }).click();
+  const range = page.getByRole("region", { name: "统计日期筛选" });
+  await expect(range).toContainText("2026-08-31 — 2026-09-29");
+  await expect(page.locator(".bill-list")).toContainText("本工资周期");
+  await expect(page.locator(".bill-list")).not.toContainText("上工资周期");
+  await page.getByRole("button", { name: "下个发薪周期", exact: true }).click();
+  await expect(range).toContainText("2026-09-30 — 2026-10-30");
+  await page.getByRole("button", { name: "本期", exact: true }).click();
+  await page.getByRole("button", { name: "上个发薪周期", exact: true }).click();
+  await expect(range).toContainText("2026-07-31 — 2026-08-30");
+  await expect(page.locator(".bill-list")).toContainText("上工资周期");
+  await page.getByTestId("current-ledger").click();
+  await page.getByRole("button", { name: "家庭账本", exact: true }).click();
+  await expect(page.getByRole("button", { name: "发薪周期", exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("查看月份", { exact: true })).toBeVisible();
+});
+test("budget reminders occur on threshold crossings, edits and deletions recalculate, zero waste is a limit", async ({ page }) => {
+  const saved = state(null); saved.salaryBudget.percentages.浪费 = 0;
+  await seedLedger(page, saved); await openLedger(page);
+  await addEntry(page, { amount: "40", note: "第一笔" });
+  await expect(page.locator(".toast")).not.toContainText("80%");
+  await addEntry(page, { amount: "8", note: "到八成" });
+  await expect(page.locator(".toast")).toContainText("80%");
+  await addEntry(page, { amount: "1", note: "仍在八成" });
+  await expect(page.locator(".toast")).not.toContainText("80%");
+  await addEntry(page, { amount: "12", note: "刚超出" });
+  await expect(page.locator(".toast")).toContainText("消费超出预算 ¥1.00");
+  await addEntry(page, { amount: "1", note: "继续记账" });
+  await expect(page.locator(".toast")).not.toContainText("超出预算");
+  const panel = page.getByTestId("salary-budget");
+  if (!(await panel.getAttribute("open") !== null)) await panel.locator(":scope > summary").click();
+  await expect(panel.locator(".salary-budget-row").filter({ has: page.locator("dt").filter({hasText:"消费"}) })).toContainText("¥62.00");
+  await page.locator(".tx-row").filter({ hasText: "刚超出" }).getByRole("button", { name: "删除", exact: true }).click();
+  await page.getByRole("button", { name: "确认删除", exact: true }).click();
+  await expect(panel.locator(".salary-budget-row").first()).toContainText("¥50.00");
+  await addEntry(page, { amount: "1", note: "零浪费额度", nature: "浪费" });
+  await expect(page.locator(".toast")).toContainText("浪费超出预算 ¥1.00");
+});

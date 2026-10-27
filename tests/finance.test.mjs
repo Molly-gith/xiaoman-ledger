@@ -108,6 +108,32 @@ test('integer fen avoids floating-point financial drift', () => {
   assert.equal(calculateFinance(cycle,p,[tx({amount:0.1}),tx({id:'b',amount:0.2})]).safeToSpend,0);
 });
 
+test('unknown funds do not create a zero balance or overspending signal', () => {
+  const result=calculateFinance(cycle,{...naturePlan,availableIncome:null,plannedSavings:null},[tx({amount:268})]);
+  assert.equal(result.safeToSpend,null);
+  assert.equal(result.variableBudget,null);
+  assert.equal(result.budgetPercent,null);
+  assert.equal(result.consumptionReference,null);
+  assert.equal(result.wasteLimit,null);
+  assert.equal(result.investmentTarget,null);
+  assert.equal(result.totalExpense,268);
+  assert.equal(result.variableSpend,268);
+  assert.equal(result.unresolvedCount,0);
+  assert.equal(calculateFinance(cycle,{...naturePlan,availableIncome:0,plannedSavings:null},[tx({amount:268})]).safeToSpend,-268);
+});
+
+test('an unset investment target reserves nothing but actual investments are still deducted', () => {
+  const expenses=[tx({amount:1000}),tx({id:'w',nature:'浪费',amount:200}),tx({id:'i',nature:'投资',amount:300})];
+  const flows=[{id:'flow',accountId:'fund',type:'contribution',amount:500,date:'2026-09-15',cycleId:cycle.id}];
+  const result=calculateFinance(cycle,{...naturePlan,plannedSavings:null},expenses,flows);
+  assert.equal(result.safeToSpend,8000);
+  assert.equal(result.variableBudget,10000);
+  assert.equal(result.investmentSpend,800);
+  assert.equal(result.investmentTarget,null);
+  assert.equal(calculateFinance(cycle,{...naturePlan,availableIncome:null},expenses,flows).safeToSpend,null);
+  assert.equal(calculateFinance(cycle,{...naturePlan,plannedSavings:2500},expenses,flows).safeToSpend,6300);
+});
+
 test('other cycles excluded; legacy uncertainty retained; nature proportions deterministic', () => {
   const result=calculateFinance(cycle,plan,[tx(),tx({id:'b',nature:'投资',amount:300}),tx({id:'c',cycleId:'other',amount:900}),tx({id:'old',cycleId:null,spendKind:null,nature:null})]);
   assert.equal(result.variableSpend,400); assert.equal(result.unresolvedCount,1);

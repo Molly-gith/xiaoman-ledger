@@ -1,0 +1,322 @@
+{
+  "mode": "targeted_live_regression",
+  "workflow_version": "xiaoman-question-v0.3",
+  "max_attempts": 4,
+  "attempted_requests": 4,
+  "automatic_retries": 0,
+  "semantic_status": "pending_review",
+  "rows": [
+    {
+      "case_id": "question-smoke-01",
+      "input": {
+        "question": "我现在整体财务情况怎么样？",
+        "consent": true,
+        "context": {
+          "today": "2026-10-10",
+          "timezone": "Asia/Hong_Kong"
+        },
+        "snapshot": {
+          "asOfDate": "2026-10-10",
+          "readiness": "ready",
+          "unresolvedCount": 0,
+          "period": {
+            "safeToSpend": 7000,
+            "consumptionSpend": 8000,
+            "wasteSpend": 500,
+            "investmentSpend": 5000,
+            "investmentTarget": 5000,
+            "investmentGap": 0
+          },
+          "investmentAssets": {
+            "accountCount": 2,
+            "totalMarketValue": 117107.09,
+            "totalNetContribution": 105000,
+            "totalFloatingPnL": 12107.09,
+            "hasUnknownCost": false
+          },
+          "referencedFacts": [
+            "as_of:2026-10-10",
+            "readiness:ready",
+            "unresolved_count:0",
+            "safe_to_spend:7000",
+            "consumption_spend:8000",
+            "waste_spend:500",
+            "investment_spend:5000",
+            "investment_target:5000",
+            "investment_gap:0",
+            "investment_market_value:117107.09",
+            "investment_net_contribution:105000",
+            "investment_floating_pnl:12107.09",
+            "investment_account_count:2"
+          ]
+        }
+      },
+      "expected_behavior": "概括当前可支出、消费与投资完成情况，最多给出 3 个重点。",
+      "forbidden_behavior": [
+        "编造未提供的关键数字"
+      ],
+      "execution_status": "completed",
+      "semantic_status": "pending_review",
+      "started_at": "2026-10-09T16:51:29.387Z",
+      "http_status": 200,
+      "structure_status": "passed",
+      "output": {
+        "status": "suggestion",
+        "value": {
+          "answer": "根据当前记录，你的整体财务状况：本周期剩余可支出 7000 元；消费支出 8000 元，浪费支出 500 元，投资支出 5000 元，投资目标 5000 元已达成（投资缺口 0）；投资资产有 2 个账户，总市值 117107.09 元，净投入 105000 元，浮动盈利 12107.09 元。数据当前完整，可作参考。",
+          "next_actions": [
+            "查看本周期消费与浪费分类明细",
+            "核对投资账户投入和取出记录"
+          ],
+          "referenced_facts": [
+            "as_of:2026-10-10",
+            "readiness:ready",
+            "unresolved_count:0",
+            "safe_to_spend:7000",
+            "consumption_spend:8000",
+            "waste_spend:500",
+            "investment_spend:5000",
+            "investment_target:5000",
+            "investment_gap:0",
+            "investment_market_value:117107.09",
+            "investment_net_contribution:105000",
+            "investment_floating_pnl:12107.09",
+            "investment_account_count:2"
+          ],
+          "confidence": 0.95
+        },
+        "requiresConfirmation": true,
+        "confirmationReasons": [
+          "user_review"
+        ],
+        "modelVersion": "deepseek-v4-pro",
+        "workflowVersion": "xiaoman-question-v0.3"
+      },
+      "elapsed_ms": 16342
+    },
+    {
+      "case_id": "question-smoke-07",
+      "input": {
+        "question": "我的基金和 ETF 现在总市值是多少？",
+        "consent": true,
+        "context": {
+          "today": "2026-10-10",
+          "timezone": "Asia/Hong_Kong"
+        },
+        "snapshot": {
+          "asOfDate": "2026-10-10",
+          "readiness": "ready",
+          "unresolvedCount": 0,
+          "period": {
+            "safeToSpend": 7000,
+            "consumptionSpend": 8000,
+            "wasteSpend": 500,
+            "investmentSpend": 5000,
+            "investmentTarget": 5000,
+            "investmentGap": 0
+          },
+          "investmentAssets": {
+            "accountCount": 2,
+            "totalMarketValue": 117107.09,
+            "totalNetContribution": 105000,
+            "totalFloatingPnL": 12107.09,
+            "hasUnknownCost": false
+          },
+          "referencedFacts": [
+            "as_of:2026-10-10",
+            "readiness:ready",
+            "unresolved_count:0",
+            "safe_to_spend:7000",
+            "consumption_spend:8000",
+            "waste_spend:500",
+            "investment_spend:5000",
+            "investment_target:5000",
+            "investment_gap:0",
+            "investment_market_value:117107.09",
+            "investment_net_contribution:105000",
+            "investment_floating_pnl:12107.09",
+            "investment_account_count:2"
+          ]
+        }
+      },
+      "expected_behavior": "回答投资账户总市值 117107.09。",
+      "forbidden_behavior": [
+        "编造未提供的关键数字"
+      ],
+      "execution_status": "completed",
+      "semantic_status": "pending_review",
+      "started_at": "2026-10-09T16:51:45.738Z",
+      "http_status": 200,
+      "structure_status": "passed",
+      "output": {
+        "status": "suggestion",
+        "value": {
+          "answer": "根据当前记录，投资账户合计市值为 117107.09 元。但摘要没有按基金、ETF 等分类拆分，无法单独给出基金和 ETF 的总市值。",
+          "next_actions": [
+            "核对投资账户明细，确认基金和 ETF 的分类记录"
+          ],
+          "referenced_facts": [
+            "investment_market_value:117107.09"
+          ],
+          "confidence": 0.9
+        },
+        "requiresConfirmation": true,
+        "confirmationReasons": [
+          "user_review"
+        ],
+        "modelVersion": "deepseek-v4-pro",
+        "workflowVersion": "xiaoman-question-v0.3"
+      },
+      "elapsed_ms": 20477
+    },
+    {
+      "case_id": "question-smoke-09",
+      "input": {
+        "question": "我累计净投入投资账户多少钱？",
+        "consent": true,
+        "context": {
+          "today": "2026-10-10",
+          "timezone": "Asia/Hong_Kong"
+        },
+        "snapshot": {
+          "asOfDate": "2026-10-10",
+          "readiness": "ready",
+          "unresolvedCount": 0,
+          "period": {
+            "safeToSpend": 7000,
+            "consumptionSpend": 8000,
+            "wasteSpend": 500,
+            "investmentSpend": 5000,
+            "investmentTarget": 5000,
+            "investmentGap": 0
+          },
+          "investmentAssets": {
+            "accountCount": 2,
+            "totalMarketValue": 117107.09,
+            "totalNetContribution": 105000,
+            "totalFloatingPnL": 12107.09,
+            "hasUnknownCost": false
+          },
+          "referencedFacts": [
+            "as_of:2026-10-10",
+            "readiness:ready",
+            "unresolved_count:0",
+            "safe_to_spend:7000",
+            "consumption_spend:8000",
+            "waste_spend:500",
+            "investment_spend:5000",
+            "investment_target:5000",
+            "investment_gap:0",
+            "investment_market_value:117107.09",
+            "investment_net_contribution:105000",
+            "investment_floating_pnl:12107.09",
+            "investment_account_count:2"
+          ]
+        }
+      },
+      "expected_behavior": "回答净投入 105000，并与当前市值区分。",
+      "forbidden_behavior": [
+        "编造未提供的关键数字"
+      ],
+      "execution_status": "completed",
+      "semantic_status": "pending_review",
+      "started_at": "2026-10-09T16:52:06.227Z",
+      "http_status": 200,
+      "structure_status": "passed",
+      "output": {
+        "status": "suggestion",
+        "value": {
+          "answer": "根据当前记录，累计净投入投资账户为105000。",
+          "next_actions": [],
+          "referenced_facts": [
+            "investment_net_contribution:105000"
+          ],
+          "confidence": 1
+        },
+        "requiresConfirmation": true,
+        "confirmationReasons": [
+          "user_review"
+        ],
+        "modelVersion": "deepseek-v4-pro",
+        "workflowVersion": "xiaoman-question-v0.3"
+      },
+      "elapsed_ms": 7247
+    },
+    {
+      "case_id": "question-smoke-19",
+      "input": {
+        "question": "和上个周期相比，我这期有什么变化？",
+        "consent": true,
+        "context": {
+          "today": "2026-10-10",
+          "timezone": "Asia/Hong_Kong"
+        },
+        "snapshot": {
+          "asOfDate": "2026-10-10",
+          "readiness": "ready",
+          "unresolvedCount": 0,
+          "period": {
+            "safeToSpend": 7000,
+            "consumptionSpend": 8000,
+            "wasteSpend": 500,
+            "investmentSpend": 5000,
+            "investmentTarget": 5000,
+            "investmentGap": 0
+          },
+          "investmentAssets": {
+            "accountCount": 2,
+            "totalMarketValue": 117107.09,
+            "totalNetContribution": 105000,
+            "totalFloatingPnL": 12107.09,
+            "hasUnknownCost": false
+          },
+          "referencedFacts": [
+            "as_of:2026-10-10",
+            "readiness:ready",
+            "unresolved_count:0",
+            "safe_to_spend:7000",
+            "consumption_spend:8000",
+            "waste_spend:500",
+            "investment_spend:5000",
+            "investment_target:5000",
+            "investment_gap:0",
+            "investment_market_value:117107.09",
+            "investment_net_contribution:105000",
+            "investment_floating_pnl:12107.09",
+            "investment_account_count:2"
+          ]
+        }
+      },
+      "expected_behavior": "明确缺少上期数据，无法比较变化；不得编造趋势、差值、百分比或变化原因。",
+      "forbidden_behavior": [
+        "编造历史金额或趋势",
+        "将本期数字当作上期数字",
+        "无证据断言变化原因"
+      ],
+      "execution_status": "completed",
+      "semantic_status": "pending_review",
+      "started_at": "2026-10-09T16:52:17.239Z",
+      "http_status": 200,
+      "structure_status": "passed",
+      "output": {
+        "status": "suggestion",
+        "value": {
+          "answer": "根据当前记录，暂时无法比较和上个周期的变化，因为账本中只有本期数据，没有上个周期的记录。小满无法推测历史趋势。",
+          "next_actions": [
+            "查看账本中上个周期的消费、浪费和投资记录"
+          ],
+          "referenced_facts": [],
+          "confidence": 0.9
+        },
+        "requiresConfirmation": true,
+        "confirmationReasons": [
+          "user_review"
+        ],
+        "modelVersion": "deepseek-v4-pro",
+        "workflowVersion": "xiaoman-question-v0.3"
+      },
+      "elapsed_ms": 10895
+    }
+  ],
+  "stopped_reason": null
+}

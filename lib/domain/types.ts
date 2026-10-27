@@ -5,16 +5,33 @@ export type CycleType = "calendar_month" | "salary_based" | "custom";
 export type FundingSourceType = "salary" | "bonus" | "freelance" | "business" | "family_transfer" | "savings_draw" | "other";
 export type FundingSource = { id: string; type: FundingSourceType; amount: number; note?: string };
 export type DateOnly = string;
+export type SalaryBudgetPercentages = Record<ExpenseNature, number>;
+export type SalaryBudgetAmounts = Record<ExpenseNature, number>;
+export type SalaryAutoIncome = { enabled: boolean; startDate: DateOnly; lastProcessedMonth: string | null };
+export type SalaryBudgetSettings = {
+  enabled: boolean; periodMode: "calendar_month" | "salary_based"; salaryDay: number | null;
+  /** Planned take-home salary, not a recorded income or account balance. */
+  expectedSalary: number;
+  /** Legacy ratio allocation, used only when exact amounts are absent. */
+  percentages: SalaryBudgetPercentages;
+  /** Editable yuan amounts with exact cents; authoritative when present. */
+  amounts?: SalaryBudgetAmounts;
+  autoIncome?: SalaryAutoIncome;
+  periodOverride: { startDate: DateOnly; endDate: DateOnly; salary: number } | null;
+};
 export type UserProfile = { salaryDay: number };
 export type FinancialCycle = { id: string; salaryDay: number; startDate: DateOnly; endDate: DateOnly; nextSalaryDate: DateOnly; cycleType?: CycleType };
 // All persisted amounts are yuan with at most two decimals. Arithmetic uses integer fen.
 // `plannedSavings` is kept for backwards compatibility. In the `nature` model it is the
 // protected investment/savings target amount shown to users as “投资目标”.
-export type BudgetPlan = { cycleId: string; availableIncome: number; plannedSavings: number; necessaryReserve: number; model?: BudgetModel; fundingSources?: FundingSource[] };
+// Null means not configured; an explicit zero remains a known amount.
+export type BudgetPlan = { cycleId: string; availableIncome: number | null; plannedSavings: number | null; necessaryReserve: number; model?: BudgetModel; fundingSources?: FundingSource[] };
 export type Transaction = {
   id: string; type: "expense" | "income"; amount: number; date: string;
   category: string; note: string; icon: string; source: "text" | "voice" | "import";
   cycleId: string | null; nature: ExpenseNature | null; spendKind: SpendKind | null;
+  /** A scheduled entry, not proof of bank receipt. Edits may change its actual date. */
+  autoSalary?: { month: string; scheduledDate: DateOnly };
   /** Pre-date-only records retain their original timestamp/cycle until date confirmation. */
   dateNeedsConfirmation?: boolean;
   aiSuggestion?: { nature: ExpenseNature; confidence: number; reason: string; modelVersion: string; promptVersion: string };
@@ -43,13 +60,19 @@ export type MarketValueSnapshot = {
   marketValue: number;
   date: DateOnly;
 };
-export type LedgerState = {
-  app: "xiaoman-ledger"; version: 3; revision: number;
-  ledgerKind: "personal" | "family" | "travel";
+export type LedgerKind = "personal" | "family" | "travel";
+export type LedgerData = {
+  salaryBudget: SalaryBudgetSettings | null;
   profile: UserProfile | null; activeCycleId: string | null;
   cycles: FinancialCycle[]; budgets: BudgetPlan[]; transactions: Transaction[];
   investmentAccounts: InvestmentAccount[];
   investmentFlows: InvestmentFlow[];
   marketValueSnapshots: MarketValueSnapshot[];
   settings: { monthlyBudget: number; savingsCurrent: number; savingsGoal: number };
+};
+export type LedgerState = LedgerData & {
+  app: "xiaoman-ledger"; version: 4; revision: number;
+  ledgerKind: LedgerKind;
+  /** Exactly the two inactive ledgers. Each value contains data only, never metadata or nesting. */
+  otherLedgers: Partial<Record<LedgerKind, LedgerData>>;
 };

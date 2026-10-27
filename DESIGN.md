@@ -181,6 +181,23 @@ The main scene is `public/art/xiaoman-forest.png`, with provenance in its adjace
 余额图采用 cover：手机右侧居中，桌面中心（59%）；工资设置页插图裁切到中心（70%），初始设置与桌面外背景复用场景。外背景有浅色覆盖层；图片不包含 UI 文字。场景更新须同时检查左侧金额可读性、右侧伙伴和来源记录。
 The balance uses cover, right-center on mobile and center (59%) on desktop. The cycle-form crop is center (70%); setup and desktop outer backgrounds reuse the scene. The outer background has a pale overlay. Artwork contains no UI text. Replacements require checking left-side amount legibility, the right-side companion and provenance.
 
+### Everyday interface / 当前日常界面（局部更新，2026-10-26）
+
+本节只记录当前「记账／账单／我的」扩展，以 app/everyday-ledger.css 及 salary-budget、period-review、account-panel 的组件和专用样式为准。沿用奶油纸面、森林绿、中文系统字体和（820px）页内顶部导航容器；（720px）及以下收紧留白。前文旧浮动导航和工资周期布局不约束本节，不改写原有世界或全局 token。
+This scoped extension follows the current everyday-ledger shell and component styles: cream paper, forest green, Chinese system type, an (820px) container and inline top navigation. Earlier floating-navigation and salary-cycle layouts do not govern these components; the original world and global tokens remain intact.
+
+主信息常用（14px）、入口与小标题（15px）、输入与复盘结论（16px），辅助说明多为（12px），金额采用等宽数字。预算控件沿用（10px）圆角、复盘入口（12px）、账号字段（13px）。细线和留白组织内容，明细行保持紧凑，提示条可换行并限制在视口内；这些是现有局部取值，不是新的全局字阶或圆角系统。
+Common local sizes are (14px) for information, (15px) for entry headings, (16px) for inputs and review conclusions, and (12px) for supporting copy. Budget controls use (10px) corners, review entry (12px), and inherited account fields (13px). Flat separators, compact record rows and wrapping toasts preserve the everyday style; these are local implementation values.
+
+「记账」的薪资预算默认只占一行「薪资预算 · 选填」；启用后重新进入仍收起，摘要提示已启用、有提醒或待核对，保存成功可展开一次。展开后仅保留本期范围、薪资及消费／浪费／投资三行「已用／额度」，设置、本期调整和说明按需展开；标签括号显示比例，三项输入直接编辑金额；未填工资时为0，首次按70%/5%/25%预估，手改金额按分保留。发薪与周期选项内按需开启自动工资，执行方式以当前实际能力说明。临近或超额只作温和提醒，待核对日期与性质统一说明，不阻止记账；停用保留设置和账目。
+Salary budget defaults to one collapsed optional row, including on later visits after activation. Its summary exposes status; a successful save may expand it once. The expanded panel shows period, salary and three used/allowance rows. Settings, current-period overrides and explanations stay optional; allocation amounts preview beside percentages. Reminders never block recording, and disabling preserves settings and records.
+
+复盘展开先给一句已记录事实，再提供「查看收支／与上一段比较／花在哪里」三个互斥折叠项；分类／性质共用分布位置。助手复用同一组件并默认展开。依据仍在组件内，每页（5笔）、列表最高（330px）；打开时滚动并聚焦，收起时恢复来源折叠项并归还焦点。金额标签包含时段、金额及相应笔数，长内容换行，减少动态效果偏好生效。
+Expanded review starts with one factual conclusion, followed by mutually exclusive totals, equal-length comparison and distribution disclosures. The assistant reuses it expanded. Evidence stays inline, (5 records) per page with a (330px) list cap; opening scrolls and focuses it, and closing restores the source disclosure and focus. Labels retain period, amount and relevant counts; long content wraps and reduced motion is respected.
+
+「我的」将账号、同步和迁移工具收在账号入口，隐私说明单独折叠；迁移保留预览和明确确认，读取失败时恢复操作可直接展开。所选时段无账目时，不显示三个零金额，也不显示空比较和三项复盘折叠；仅呈现简短空态。支出性质只在有支出时提供折叠入口。缺少记录不等于实际零收支，收支差额、可用预算、账户余额与投资收益继续明确区分。
+My collapses account, synchronization and migration tools, with privacy in a separate disclosure; migration retains preview and explicit confirmation, while load recovery may open directly. Empty periods show a short message instead of three zero totals or empty review sections. Expense nature appears only when expenses exist. Missing records do not establish real zero cash flow; recorded balance, budget, account balance and investment return remain distinct.
+
 ## Do's and Don'ts
 
 ### Do:
@@ -194,3 +211,9 @@ The balance uses cover, right-center on mobile and center (59%) on desktop. The 
 - **Don't** 用已有影视角色替换原创种子伙伴。 / Replace the original seed companion with an existing franchise character.
 - **Don't** 把装饰字体、插画文字或持续环境动画加入日常记账控件。 / Add decorative type, text baked into artwork or continuous ambient animation to bookkeeping controls.
 - **Don't** 把未实现的着色器、养成奖励或游戏机制写成当前能力。 / Describe unimplemented shaders, progression rewards or game mechanics as current features.
+
+### Companion mobile layout / 对话首屏适配（2026-10-27）
+
+沿用奶油纸面与森林绿。空对话按真实内容自然收缩，欢迎语、两个快捷操作与输入栏连续排列，不预占半屏高度。聊天有内容后自然增长，长历史才受视口相关的最大高度约束；输入栏仍在正常文档流内，缩小视口时可滚动操作。语音、手动记账、发送均保留文字和至少44px点击高度。用户消息用深绿、助手消息用浅鼠尾草色区分。没有账目时不再重复显示第二个空状态；账单入口始终保留。
+
+The empty conversation follows content height rather than reserving half a viewport. Long histories retain bounded internal scrolling; the composer remains in document flow. Existing controls, ownership and confirmation semantics stay unchanged. No-record home states omit the duplicated recent-transactions placeholder.

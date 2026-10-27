@@ -1,0 +1,269 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "intent": {
+      "type": "string",
+      "enum": [
+        "transactions",
+        "query",
+        "preference",
+        "clarification",
+        "question"
+      ]
+    },
+    "transactions": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "income",
+              "expense"
+            ]
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 999999999999.99
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "餐饮",
+              "购物",
+              "交通",
+              "居住",
+              "健康",
+              "医疗",
+              "学习",
+              "娱乐",
+              "其他",
+              "收入"
+            ]
+          },
+          "occurred_at": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "nature_suggestion": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "消费",
+              "浪费",
+              "投资",
+              null
+            ]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "ambiguous": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "type",
+          "amount",
+          "category",
+          "occurred_at",
+          "note",
+          "nature_suggestion",
+          "confidence",
+          "ambiguous"
+        ]
+      }
+    },
+    "query": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "range": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "startDate": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "endDate": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          "required": [
+            "startDate",
+            "endDate"
+          ]
+        },
+        "ledgerKind": {
+          "type": "string",
+          "enum": [
+            "personal",
+            "family",
+            "travel"
+          ]
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "income",
+            "expense",
+            "all"
+          ]
+        },
+        "categories": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "餐饮",
+              "购物",
+              "交通",
+              "居住",
+              "健康",
+              "医疗",
+              "学习",
+              "娱乐",
+              "其他",
+              "收入"
+            ]
+          }
+        },
+        "natures": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "消费",
+              "浪费",
+              "投资",
+              "未分类"
+            ]
+          }
+        },
+        "comparison": {
+          "type": "string",
+          "enum": [
+            "previous_month",
+            "previous_period"
+          ]
+        },
+        "metric": {
+          "type": "string",
+          "enum": [
+            "total",
+            "count",
+            "breakdown"
+          ]
+        },
+        "breakdownBy": {
+          "type": "string",
+          "enum": [
+            "category",
+            "nature"
+          ]
+        }
+      },
+      "required": [
+        "range",
+        "type",
+        "metric"
+      ]
+    },
+    "preference": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "keyword": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 40
+        },
+        "category": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "餐饮",
+            "购物",
+            "交通",
+            "居住",
+            "健康",
+            "医疗",
+            "学习",
+            "娱乐",
+            "其他",
+            null
+          ]
+        },
+        "nature": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "消费",
+            "浪费",
+            "投资",
+            null
+          ]
+        }
+      },
+      "required": [
+        "keyword",
+        "category",
+        "nature"
+      ]
+    },
+    "answer": {
+      "type": "string",
+      "maxLength": 1200
+    },
+    "clarification": {
+      "type": "string",
+      "maxLength": 300
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    }
+  },
+  "required": [
+    "intent",
+    "transactions",
+    "query",
+    "preference",
+    "answer",
+    "clarification",
+    "confidence"
+  ]
+}
+

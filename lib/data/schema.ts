@@ -1,10 +1,20 @@
-import { calendarMonthCycle, cents, customCycle, parseDate, salaryCycle } from "../domain/finance.ts";
-import type { FundingSource, FundingSourceType, InvestmentAccount, InvestmentFlow, LedgerState, MarketValueSnapshot, Transaction } from "../domain/types.ts";
+import { normalizeSalaryBudgetSettings } from "../domain/salary-budget.ts";
+import { calendarMonthCycle, calculateFinance, cents, customCycle, parseDate, salaryCycle, transactionDay } from "../domain/finance.ts";
+import type { FundingSource, FundingSourceType, InvestmentAccount, InvestmentFlow, LedgerData, LedgerKind, LedgerState, MarketValueSnapshot, Transaction } from "../domain/types.ts";
 
-export function defaultState(): LedgerState {
-  return { app: "xiaoman-ledger", version: 3, revision: 0, ledgerKind: "personal", profile: null, activeCycleId: null,
-    cycles: [], budgets: [], transactions: [], investmentAccounts: [], investmentFlows: [], marketValueSnapshots: [],
+export const LEDGER_KINDS: readonly LedgerKind[] = ["personal", "family", "travel"];
+const REQUIRED_DATA_FIELDS = ["profile", "activeCycleId", "cycles", "budgets", "transactions", "investmentAccounts", "investmentFlows", "marketValueSnapshots", "settings"] as const;
+const DATA_FIELDS = ["salaryBudget", "profile", "activeCycleId", "cycles", "budgets", "transactions", "investmentAccounts", "investmentFlows", "marketValueSnapshots", "settings"] as const;
+export function defaultLedgerData(): LedgerData {
+  return { salaryBudget: null, profile: null, activeCycleId: null, cycles: [], budgets: [], transactions: [], investmentAccounts: [], investmentFlows: [], marketValueSnapshots: [],
     settings: { monthlyBudget: 15000, savingsCurrent: 0, savingsGoal: 100000 } };
+}
+export function defaultState(): LedgerState {
+  return { app: "xiaoman-ledger", version: 4, revision: 0, ledgerKind: "personal", ...defaultLedgerData(),
+    otherLedgers: { family: defaultLedgerData(), travel: defaultLedgerData() } };
+}
+export function ledgerDataOf(state: LedgerData): LedgerData {
+  return Object.fromEntries(DATA_FIELDS.map(field => [field, state[field]])) as LedgerData;
 }
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("账本数据格式无效，原数据已保留");
@@ -13,6 +23,15 @@ function record(value: unknown): Record<string, unknown> {
 function amount(value: unknown): number {
   if (typeof value !== "number") throw new Error("账本金额格式无效");
   cents(value); return value;
+}
+function optionalAmount(value: unknown, known: unknown): number | null {
+  if (known !== undefined && typeof known !== "boolean") throw new Error("预算金额状态无效");
+  if (known === false) {
+    // The zero is a legacy storage placeholder, never the newer app's amount.
+    if (value !== 0) throw new Error("未知预算金额的兼容字段无效");
+    return null;
+  }
+  return value === null && known !== true ? null : amount(value);
 }
 function string(value: unknown, limit = 200): string {
   if (typeof value !== "string" || value.length > limit) throw new Error("账本字段格式无效");
@@ -50,6 +69,13 @@ export function normalizeTransaction(value: unknown, legacy = false): Transactio
     cycleId: legacy || v.cycleId === null ? null : string(v.cycleId), nature, spendKind };
   if (!tx.id || tx.amount <= 0) throw new Error("账目编号或金额无效");
   if (tx.cycleId && date.length > 10) tx.dateNeedsConfirmation = true;
+  if (v.autoSalary !== undefined) {
+    const auto = record(v.autoSalary);
+    if (tx.type !== "income" || Object.keys(auto).length !== 2 || Object.keys(auto).some(key => key !== "month" && key !== "scheduledDate")) throw new Error("自动工资标记无效");
+    const scheduledDate = dateOnly(auto.scheduledDate), month = string(auto.month, 7);
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || scheduledDate.slice(0, 7) !== month) throw new Error("自动工资月份与计划日期不一致");
+    tx.autoSalary = { month, scheduledDate };
+  }
   if (v.aiSuggestion !== undefined) {
     const suggestion = record(v.aiSuggestion);
     if (!["消费", "浪费", "投资"].includes(String(suggestion.nature)) || typeof suggestion.confidence !== "number" || !Number.isFinite(suggestion.confidence) || suggestion.confidence < 0 || suggestion.confidence > 1) throw new Error("AI 建议格式无效");
@@ -81,17 +107,15 @@ export function normalizeMarketValueSnapshot(value: unknown): MarketValueSnapsho
   if (!snapshot.id || !snapshot.accountId) throw new Error("市值快照无效");
   return snapshot;
 }
-export function normalizeBackup(value: unknown): LedgerState {
-  const v = record(value);
-  if (v.app !== "xiaoman-ledger" || (v.version !== 1 && v.version !== 2 && v.version !== 3) || !Array.isArray(v.transactions) || v.transactions.length > 5000) throw new Error("请选择有效的小满 JSON 备份（最多 5000 笔）");
-  const state = defaultState(), settings = record(v.settings);
-  state.ledgerKind = v.ledgerKind === "family" || v.ledgerKind === "travel" ? v.ledgerKind : "personal";
+function normalizeLedgerData(v: Record<string, unknown>, version: number): LedgerData {
+  if (!Array.isArray(v.transactions) || v.transactions.length > 5000) throw new Error("请选择有效的小满 JSON 备份（每本最多 5000 笔）");
+  const state = defaultLedgerData(), settings = record(v.settings);
+  if (version === 4) state.salaryBudget = normalizeSalaryBudgetSettings(v.salaryBudget);
   state.settings = { monthlyBudget: amount(settings.monthlyBudget), savingsCurrent: amount(settings.savingsCurrent), savingsGoal: amount(settings.savingsGoal) };
-  state.transactions = v.transactions.map(tx => normalizeTransaction(tx, v.version === 1));
+  state.transactions = v.transactions.map(tx => normalizeTransaction(tx, version === 1));
   if (new Set(state.transactions.map(tx => tx.id)).size !== state.transactions.length) throw new Error("账目编号重复");
-  if (v.version === 1) return state;
-  if (!Number.isSafeInteger(v.revision) || Number(v.revision) < 0 || !Array.isArray(v.cycles) || !Array.isArray(v.budgets)) throw new Error("周期数据格式无效");
-  state.revision = Number(v.revision);
+  if (version === 1) return state;
+  if (!Array.isArray(v.cycles) || !Array.isArray(v.budgets)) throw new Error("周期数据格式无效");
   if (v.profile !== null) {
     const p = record(v.profile); salaryCycle("2026-01-01", Number(p.salaryDay));
     state.profile = { salaryDay: Number(p.salaryDay) };
@@ -111,7 +135,7 @@ export function normalizeBackup(value: unknown): LedgerState {
   state.budgets = v.budgets.map(value => {
     const b = record(value);
     const model = b.model === "nature" ? "nature" as const : "legacy" as const;
-    return { cycleId: string(b.cycleId), availableIncome: amount(b.availableIncome), plannedSavings: amount(b.plannedSavings), necessaryReserve: amount(b.necessaryReserve), model, fundingSources: normalizeFundingSources(b.fundingSources) };
+    return { cycleId: string(b.cycleId), availableIncome: optionalAmount(b.availableIncome, b.availableIncomeKnown), plannedSavings: optionalAmount(b.plannedSavings, b.plannedSavingsKnown), necessaryReserve: amount(b.necessaryReserve), model, fundingSources: normalizeFundingSources(b.fundingSources) };
   });
   if (state.budgets.length !== state.cycles.length || new Set(state.budgets.map(b => b.cycleId)).size !== state.budgets.length || state.budgets.some(b => !state.cycles.some(c => c.id === b.cycleId))) throw new Error("周期预算缺失或重复");
   state.activeCycleId = v.activeCycleId === null ? null : string(v.activeCycleId);
@@ -119,7 +143,7 @@ export function normalizeBackup(value: unknown): LedgerState {
   for (const tx of state.transactions) {
     if (tx.cycleId && !state.cycles.some(c => c.id === tx.cycleId)) throw new Error("账目所属周期不存在");
   }
-  if (v.version === 3) {
+  if (version >= 3) {
     if (!Array.isArray(v.investmentAccounts) || !Array.isArray(v.investmentFlows) || !Array.isArray(v.marketValueSnapshots) || v.investmentAccounts.length > 100 || v.investmentFlows.length > 10000 || v.marketValueSnapshots.length > 10000) throw new Error("投资账户数据格式无效");
     state.investmentAccounts = v.investmentAccounts.map(normalizeInvestmentAccount);
     state.investmentFlows = v.investmentFlows.map(normalizeInvestmentFlow);
@@ -135,5 +159,54 @@ export function normalizeBackup(value: unknown): LedgerState {
       if (!cycle || flow.date < cycle.startDate || flow.date > cycle.endDate) throw new Error("投资资金流不属于所选周期");
     }
   }
+  validateLedgerData(state);
   return state;
+}
+
+function validateLedgerData(state: LedgerData): void {
+  for (const tx of state.transactions) {
+    if (!tx.cycleId) continue;
+    const cycle = state.cycles.find(item => item.id === tx.cycleId)!;
+    const day = transactionDay(tx);
+    if (tx.dateNeedsConfirmation) {
+      const instant = Date.parse(tx.date);
+      const first = Date.parse(`${cycle.startDate}T00:00:00Z`) - 14 * 3600000;
+      const last = Date.parse(`${cycle.nextSalaryDate}T00:00:00Z`) + 12 * 3600000;
+      if (instant < first || instant >= last) throw new Error("旧账时间与原财务周期不一致，请核对备份");
+    } else if (day < cycle.startDate || day > cycle.endDate) throw new Error("账目日期不属于所选周期");
+  }
+  for (const cycle of state.cycles) {
+    const metrics = calculateFinance(cycle, state.budgets.find(plan => plan.cycleId === cycle.id)!, state.transactions, state.investmentFlows);
+    if (metrics.model === "legacy" && metrics.reserveRemaining < 0) throw new Error("必要预留额度不足，请先调整预算，或将超出部分另记为可变支出");
+  }
+}
+
+export function normalizeBackup(value: unknown): LedgerState {
+  const v = record(value);
+  if (v.app !== "xiaoman-ledger" || ![1, 2, 3, 4].includes(Number(v.version)) || typeof v.version !== "number") throw new Error("请选择有效的小满 JSON 备份");
+  if (v.version !== 1 && (!Number.isSafeInteger(v.revision) || Number(v.revision) < 0)) throw new Error("账本版本格式无效");
+  if (v.version === 4 && !LEDGER_KINDS.includes(v.ledgerKind as LedgerKind)) throw new Error("当前账本用途无效");
+  const ledgerKind: LedgerKind = v.ledgerKind === "family" || v.ledgerKind === "travel" ? v.ledgerKind : "personal";
+  const inactiveKinds = LEDGER_KINDS.filter(kind => kind !== ledgerKind);
+  const otherLedgers: LedgerState["otherLedgers"] = {};
+  if (v.version === 4) {
+    const others = record(v.otherLedgers);
+    if (Object.keys(others).length !== 2 || Object.keys(others).some(kind => !inactiveKinds.includes(kind as LedgerKind))) throw new Error("其他账本必须恰好包含另两个用途，不能重复当前账本");
+    for (const kind of inactiveKinds) {
+      const data = record(others[kind]);
+      if (REQUIRED_DATA_FIELDS.some(field => !Object.hasOwn(data, field)) || Object.keys(data).some(field => !DATA_FIELDS.includes(field as typeof DATA_FIELDS[number]))) throw new Error("其他账本只能包含独立数据，不能嵌套账本或版本信息");
+      otherLedgers[kind] = normalizeLedgerData(data, 4);
+    }
+  } else {
+    // A legacy purpose was only a label. Preserve every record under that exact
+    // label; there is no reliable evidence to assign historical records elsewhere.
+    for (const kind of inactiveKinds) otherLedgers[kind] = defaultLedgerData();
+  }
+  return { app: "xiaoman-ledger", version: 4, revision: v.version === 1 ? 0 : Number(v.revision), ledgerKind,
+    ...normalizeLedgerData(v, v.version), otherLedgers };
+}
+
+/** v4 deliberately blocks old writers, which cannot preserve inactive ledgers. */
+export function encodeBackup(state: LedgerState): LedgerState {
+  return normalizeBackup(state);
 }

@@ -1,0 +1,37 @@
+{
+  "type": "object",
+  "properties": {
+    "answer": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200,
+      "description": "针对用户问题的简洁中文回答，只依据输入事实"
+    },
+    "next_actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 3
+    },
+    "referenced_facts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "逐字引用snapshot.referencedFacts中的条目"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    }
+  },
+  "required": [
+    "answer",
+    "next_actions",
+    "referenced_facts",
+    "confidence"
+  ],
+  "additionalProperties": false
+}

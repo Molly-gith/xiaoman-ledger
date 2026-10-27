@@ -98,30 +98,32 @@ export function InvestmentAccounts({ state, today, onBack, onCreateAccount, onFl
           <button onClick={() => { setAction({ accountId: account.id, mode: "flow" }); setFlowType("contribution"); setError(""); }}>投入 / 取出</button>
           <button onClick={() => { setAction({ accountId: account.id, mode: "value" }); setNewMarketValue(String(account.currentMarketValue)); setError(""); }}>更新市值</button>
         </div>
-        {action?.accountId === account.id && action.mode === "flow" && <form className="category-card" onSubmit={event => void submitFlow(event, account.id)}>
+        {action?.accountId === account.id && action.mode === "flow" && <form className="investment-inline-form" onSubmit={event => void submitFlow(event, account.id)}>
           <h3>记录资金变化</h3>
-          <div className="recent-filters" aria-label="资金变化类型">
+          <div className="recent-filters" role="group" aria-label="资金变化类型（必选，默认投入）">
             <button type="button" className={flowType === "contribution" ? "active" : ""} aria-pressed={flowType === "contribution"} onClick={() => setFlowType("contribution")}>投入</button>
             <button type="button" className={flowType === "withdrawal" ? "active" : ""} aria-pressed={flowType === "withdrawal"} onClick={() => setFlowType("withdrawal")}>取出</button>
           </div>
-          <label>金额<input name="investmentFlowAmount" inputMode="decimal" value={flowAmount} onChange={event => setFlowAmount(event.target.value)} placeholder="例如 5000" /></label>
-          <p className="helper">{flowType === "contribution" ? "实际投入会计入本周期投资完成额，但不是一笔新的收入。" : "取出资金不会被算成工资收入，也不会倒扣已经完成的投资目标。"}</p>
-          <button className="primary" type="submit">保存资金变化</button>
+          <label>金额（必填）<input name="investmentFlowAmount" type="number" inputMode="decimal" required min="0.01" max="999999999999.99" step="0.01" value={flowAmount} onChange={event => setFlowAmount(event.target.value)} placeholder="例如 5000" /></label>
+          <p className="helper">记录日期：{today}{cycleId ? " · 计入当前周期" : " · 当前没有覆盖今天的周期"}</p>
+          <p className="helper">{flowType === "contribution" ? cycleId ? "实际投入会计入本周期投资完成额，但不是一笔新的收入。" : "本笔会记录到账户投入；当前没有对应周期，暂不计入本周期投资完成额。" : "取出资金不会被算成工资收入，也不会倒扣已经完成的投资目标。"}</p>
+          <div className="form-actions"><button type="button" onClick={() => { setAction(null); setError(""); }}>取消</button><button className="primary" type="submit">保存资金变化</button></div>
         </form>}
-        {action?.accountId === account.id && action.mode === "value" && <form className="category-card" onSubmit={event => void submitValue(event, account.id)}>
+        {action?.accountId === account.id && action.mode === "value" && <form className="investment-inline-form" onSubmit={event => void submitValue(event, account.id)}>
           <h3>更新当前市值</h3>
-          <label>当前市值<input name="marketValueUpdate" inputMode="decimal" value={newMarketValue} onChange={event => setNewMarketValue(event.target.value)} /></label>
+          <label>当前市值（必填）<input name="marketValueUpdate" type="number" inputMode="decimal" required min="0" max="999999999999.99" step="0.01" value={newMarketValue} onChange={event => setNewMarketValue(event.target.value)} /></label>
           <p className="helper">这里只更新资产价值，不会计入本周期收入或支出。</p>
-          <button className="primary" type="submit">保存当前市值</button>
+          <div className="form-actions"><button type="button" onClick={() => { setAction(null); setError(""); }}>取消</button><button className="primary" type="submit">保存当前市值</button></div>
         </form>}
       </section>;
     })}
 
     {adding ? <form className="section-block category-card" onSubmit={event => void submitAccount(event)}>
       <div className="section-title"><h2>新建投资账户</h2>{state.investmentAccounts.length > 0 && <button type="button" onClick={() => setAdding(false)}>取消</button>}</div>
-      <label>账户名称<input name="investmentAccountName" value={name} onChange={event => setName(event.target.value)} placeholder="例如 纳指 + 标普" /></label>
-      <label>当前市值<input name="investmentMarketValue" inputMode="decimal" value={marketValue} onChange={event => setMarketValue(event.target.value)} placeholder="例如 78724.80" /></label>
-      <label>历史累计净投入（可选）<input name="investmentOpeningContribution" inputMode="decimal" value={opening} onChange={event => setOpening(event.target.value)} placeholder="不知道可以先不填" /></label>
+      <label>账户名称（必填）<input name="investmentAccountName" required maxLength={40} value={name} onChange={event => setName(event.target.value)} placeholder="例如 纳指 + 标普" /></label>
+      <label>当前市值（必填）<input name="investmentMarketValue" type="number" inputMode="decimal" required min="0" max="999999999999.99" step="0.01" value={marketValue} onChange={event => setMarketValue(event.target.value)} placeholder="例如 78724.80" /></label>
+      <label>历史累计净投入（选填）<input name="investmentOpeningContribution" type="number" inputMode="decimal" min="0" max="999999999999.99" step="0.01" value={opening} onChange={event => setOpening(event.target.value)} placeholder="不知道可以先不填" /></label>
+      <p className="helper">留空表示还不知道投入了多少，不会按 0 元计算盈亏。</p>
       <p className="helper">只需要抄投资 App 里的当前总市值。有需要时更新即可，不要求每天维护。</p>
       <button className="primary" type="submit">保存投资账户</button>
     </form> : <button className="primary" onClick={() => { setAdding(true); setError(""); }}>新建投资账户</button>}
